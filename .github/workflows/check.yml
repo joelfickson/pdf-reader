@@ -1,0 +1,23 @@
+name: Check
+on: [push, pull_request]
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: astral-sh/setup-uv@v6
+      - uses: Swatinem/rust-cache@v2
+      - if: runner.os == 'macOS'
+        run: xcodebuild -downloadComponent MetalToolchain
+      - run: uv run scripts/setup_pdfium.py
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: cargo test --locked -- --ignored
