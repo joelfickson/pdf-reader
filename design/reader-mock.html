@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Reader - Local design preview</title>
+<style>
+:root{color-scheme:light;--ink:#292c30;--muted:#646970;--rule:#d9d9d5;--canvas:#eaeae6;--accent:#2857a5;--chrome:#f8f8f5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:"Avenir Next","Segoe UI",sans-serif;font-size:13px}
+button{font:inherit;color:inherit;border:0;background:transparent;cursor:pointer;border-radius:4px;height:32px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+button:hover{background:#e8e8e3}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{opacity:.3;cursor:default}
+button:disabled:hover{background:transparent}
+svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.app{height:calc(100vh - 35px);display:flex;flex-direction:column}
+.toolbar{min-height:64px;padding:12px 22px;display:flex;align-items:center;gap:20px;background:var(--chrome);border-bottom:1px solid var(--rule)}
+.file{display:flex;align-items:center;gap:11px;min-width:0;flex:1}
+.file-icon{color:var(--muted);flex:none}
+.filename{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.file-detail{font-size:11px;color:var(--muted);margin-top:3px}
+.open{color:var(--accent);font-weight:600}
+.controls{display:flex;align-items:center;gap:3px}
+.page-count{min-width:74px;text-align:center;font-variant-numeric:tabular-nums;color:var(--muted)}
+.page-count strong{color:var(--ink);font-weight:600}
+.divider{height:20px;width:1px;background:var(--rule);flex:none}
+.zoom-value{min-width:50px;font-variant-numeric:tabular-nums}
+.reading-area{display:flex;flex:1;min-height:0}
+.sidebar{width:184px;flex:none;background:#f2f3ee;border-right:1px solid var(--rule);display:flex;flex-direction:column}
+.sidebar-heading{display:flex;justify-content:space-between;align-items:center;padding:21px 20px 15px;font-weight:600;font-size:12px}
+.sidebar-heading span{font-weight:400;color:var(--muted);font-size:11px}
+.thumbnails{overflow:auto;min-height:0;padding:0 10px 20px}
+.thumbnail{display:flex;flex-direction:column;width:100%;height:auto;padding:14px 10px 10px;gap:9px;border-radius:0;margin-bottom:7px}
+.thumbnail[aria-current=page]{background:#e1e7ef;color:var(--accent)}
+.thumbnail:hover{background:#e7e9e3}
+.thumbnail[aria-current=page]:hover{background:#dae2ed}
+.mini-sheet{width:132px;height:171px;overflow:hidden;pointer-events:none;background:#fffefa;white-space:normal;text-align:left;color:var(--ink)}
+.mini-sheet .paper{width:660px;min-height:854px;transform:scale(.2);transform-origin:top left;margin:0}
+.thumbnail-label{font-size:11px;font-variant-numeric:tabular-nums}
+.thumbnail[aria-current=page] .thumbnail-label{font-weight:600}
+.sidebar-toggle[aria-expanded=true]{color:var(--accent);background:#e8edf3}
+.viewport{flex:1;min-width:0;min-height:0;overflow:auto;padding:38px 48px 52px;scrollbar-color:#b5b7b1 transparent}
+.paper{width:660px;min-height:854px;margin:0 auto;background:#fffefa;padding:65px 68px 48px;display:flex;flex-direction:column;transform-origin:top center}
+.paper-top{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6d706a;border-bottom:1px solid #d7d8d1;padding-bottom:15px}
+.kicker{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#5c6a57;margin-top:55px}
+h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,serif;font-weight:400;font-size:48px;line-height:1.06;letter-spacing:-1.8px;margin:18px 0 22px;max-width:450px}
+.deck{font-family:"Iowan Old Style","Palatino Linotype",Palatino,serif;font-size:19px;line-height:1.55;color:#61645e;margin:0 0 30px;max-width:445px}
+.byline{font-size:10px;letter-spacing:.04em;color:#62665e;margin-bottom:38px}
+.body-copy{font-family:"Iowan Old Style","Palatino Linotype",Palatino,serif;font-size:15px;line-height:1.75;color:#373e35}
+.body-copy p{margin:0 0 18px}
+.body-copy h2{font-size:20px;font-weight:400;margin:26px 0 12px}
+.page-footer{margin-top:auto;padding-top:40px;display:flex;justify-content:space-between;font-size:10px;color:#777b73}
+.status{height:28px;flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 22px;border-top:1px solid var(--rule);background:var(--chrome);font-size:11px;color:var(--muted)}
+.empty{height:100%;max-width:530px;margin:auto;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding-bottom:80px}
+.empty small{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.empty h1{font-size:48px;line-height:1.15;margin:20px 0 14px}
+.empty p{font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 25px}
+.primary{background:var(--accent);color:#fff;height:38px;padding:0 18px}
+.primary:hover{background:#1e468b}
+.shortcut{font-size:11px;color:var(--muted);margin-top:16px}
+.preview-bar{height:35px;display:flex;align-items:center;justify-content:space-between;background:#dedfd9;padding:0 18px;font-size:11px;color:#545a51}
+.preview-bar button{font-size:11px;height:25px}
+.preview-bar button[aria-pressed=true]{color:var(--accent);font-weight:600}
+.preview-options{display:flex;gap:5px}
+[hidden]{display:none!important}
+@media(max-width:850px){.toolbar{padding:10px 12px;gap:8px}.file-detail{display:none}.filename{max-width:165px}.viewport{padding:24px 20px}.paper{width:min(660px,100%);min-height:800px;padding:42px}.fit-label{display:none}.controls{gap:0}.divider{margin:0 2px}}
+@media(max-width:620px){.toolbar{flex-wrap:wrap;justify-content:space-between}.file{flex-basis:60%}.filename{max-width:230px}.toolbar>.divider{display:none}.paper{padding:30px 24px}.paper h1{font-size:38px}.empty{padding:30px 8px}.preview-bar{padding:0 8px}.preview-note{max-width:45%;font-size:10px}}
+.mini-sheet .paper{width:660px;min-height:854px;padding:65px 68px 48px}
+.mini-sheet .paper h1{font-size:48px}
+@media(max-width:620px){.sidebar{width:156px}.sidebar-heading{padding:18px 12px 12px}.thumbnails{padding:0 2px 12px}.thumbnail{padding:10px 6px}.toolbar .file{flex-basis:50%}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="toolbar">
+<button class="sidebar-toggle" id="sidebar-toggle" title="Hide page sidebar" aria-label="Toggle page sidebar" aria-expanded="true" aria-controls="sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M9 4v16M5.5 8h1M5.5 12h1M5.5 16h1"/></svg></button>
+<div class="file"><svg class="file-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6v18h12V7zM14 3v5h4M9 12h6M9 16h6"/></svg><div><div class="filename" id="filename">The art of paying attention.pdf</div><div class="file-detail" id="file-detail">Sample document</div></div></div>
+<button class="open" id="open" title="Open PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19V5h6l2 3h9v3M3 19l3-8h16l-3 8z"/></svg>Open PDF</button>
+<span class="divider"></span>
+<div class="controls" aria-label="Page navigation"><button id="previous" title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg></button><span class="page-count" id="page-count"><strong>1</strong> / 3</span><button id="next" title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg></button></div>
+<span class="divider"></span>
+<div class="controls" aria-label="Zoom"><button id="zoom-out" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button><span class="zoom-value" id="zoom">100%</span><button id="zoom-in" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button><button id="fit" title="Fit to width"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14M21 5v14M6 12h12m-9-3-3 3 3 3m6-6 3 3-3 3"/></svg><span class="fit-label">Fit</span></button></div>
+</header>
+<div class="reading-area">
+<aside class="sidebar" id="sidebar" aria-label="Page sidebar"><div class="sidebar-heading">Pages <span>3 pages</span></div><nav class="thumbnails" id="thumbnails" aria-label="Choose a page"></nav></aside>
+<main class="viewport" id="viewport">
+<article class="paper" id="paper" aria-label="Sample document page"></article>
+<section class="empty" id="empty" hidden><small>PDF Reader</small><h1>A little room<br>to read.</h1><p>Open a PDF and settle into the page.</p><button class="primary" id="empty-open">Open PDF</button><span class="shortcut">Command + O on Mac · Ctrl + O on Windows</span></section>
+</main>
+</div>
+<footer class="status"><span id="status-left">Page 1 of 3</span><span id="status-right">Fit to width available</span></footer>
+</div>
+<aside class="preview-bar" aria-label="Design preview controls"><span class="preview-note">Local design preview · Sample content</span><div class="preview-options"><button id="show-empty" aria-pressed="false">Empty state</button><button id="show-document" aria-pressed="true">Document state</button></div></aside>
+<script>
+const pages=[
+{section:'On observation',title:'The art of<br>paying attention',deck:'A few thoughts on reading slowly, noticing more, and making space for the things that matter.',body:'<p>There is a particular kind of quiet that arrives when we begin to read. The room stays exactly as it was, but our attention shifts. A sentence takes the place of a notification. An idea has a little longer to settle.</p><p>Good tools make this transition easy. They open the door, then step aside. They give us a clear page, comfortable space, and the freedom to find our own pace.</p><h2>Begin with the page</h2><p>The most useful reading space asks very little of us. It keeps the words close and the distractions at a distance. Everything else can wait until it is needed.</p>'},
+{section:'On rhythm',title:'Leave room<br>in the margins',deck:'Understanding often happens in the pause between one paragraph and the next.',body:'<p>A page is more than the words printed on it. Space gives those words a rhythm. A generous margin creates a place to rest, and a well-chosen line length makes it easier to return for another sentence.</p><h2>Find your own pace</h2><p>Some pages invite a quick glance. Others ask us to slow down, move backward, or linger over a single thought. A reader should make all of these movements feel natural.</p><p>The controls belong within reach, but the document deserves our attention. We return to the page because it holds something we want to understand.</p>'},
+{section:'On simplicity',title:'Keep what<br>helps you read',deck:'The best reading tools are the ones that become familiar enough to disappear.',body:'<p>Open a document. Find your place. Make the words a little larger. Turn to the next page. These small actions form the foundation of a reading experience.</p><h2>A place to return to</h2><p>When the essentials are clear, the interface needs very little explanation. Its purpose is to support the document and make the next action feel obvious.</p><p>Start with a page and a little room around it. Let everything else earn its place.</p>'}
+];
+let page=0;
+let zoom=100;
+let loaded=true;
+let sidebarOpen=true;
+const byId=id=>document.getElementById(id);
+function pageMarkup(data,index){return `<div class="paper-top"><span>Notes on everyday things</span><span>Reading series</span></div><div class="kicker">${data.section}</div><h1>${data.title}</h1><p class="deck">${data.deck}</p><div class="byline">A SAMPLE ESSAY · OCTOBER 2026</div><div class="body-copy">${data.body}</div><div class="page-footer"><span>The art of paying attention</span><span>${String(index+1).padStart(2,'0')}</span></div>`}
+byId('thumbnails').innerHTML=pages.map((data,index)=>`<button class="thumbnail" data-page="${index}" aria-label="Go to page ${index+1}"><span class="mini-sheet" aria-hidden="true"><span class="paper">${pageMarkup(data,index)}</span></span><span class="thumbnail-label">${index+1}</span></button>`).join('');
+function render(){
+byId('paper').innerHTML=pageMarkup(pages[page],page);
+byId('sidebar').hidden=!loaded||!sidebarOpen;
+byId('sidebar-toggle').disabled=!loaded;
+byId('sidebar-toggle').setAttribute('aria-expanded',String(loaded&&sidebarOpen));
+byId('sidebar-toggle').title=sidebarOpen?'Hide page sidebar':'Show page sidebar';
+document.querySelectorAll('.thumbnail').forEach((thumbnail,index)=>{if(index===page)thumbnail.setAttribute('aria-current','page');else thumbnail.removeAttribute('aria-current')});
+byId('paper').hidden=!loaded;
+byId('empty').hidden=loaded;
+byId('paper').style.zoom=zoom/100;
+byId('filename').textContent=loaded?'The art of paying attention.pdf':'PDF Reader';
+byId('file-detail').textContent=loaded?'Sample document':'No document open';
+byId('page-count').innerHTML=loaded?`<strong>${page+1}</strong> / ${pages.length}`:'No PDF';
+byId('previous').disabled=!loaded||page===0;
+byId('next').disabled=!loaded||page===pages.length-1;
+byId('zoom-out').disabled=!loaded||zoom<=50;
+byId('zoom-in').disabled=!loaded||zoom>=175;
+byId('fit').disabled=!loaded;
+byId('zoom').textContent=`${zoom}%`;
+byId('status-left').textContent=loaded?`Page ${page+1} of ${pages.length}`:'Ready to open a PDF';
+byId('status-right').textContent=loaded?'Arrow keys to turn pages':'';
+byId('show-empty').setAttribute('aria-pressed',String(!loaded));
+byId('show-document').setAttribute('aria-pressed',String(loaded));
+}
+function openSample(){loaded=true;page=0;zoom=100;render();byId('viewport').scrollTop=0}
+function changePage(delta){if(!loaded)return;page=Math.max(0,Math.min(pages.length-1,page+delta));render();byId('viewport').scrollTop=0}
+byId('open').onclick=openSample;
+byId('empty-open').onclick=openSample;
+byId('show-document').onclick=openSample;
+byId('show-empty').onclick=()=>{loaded=false;render()};
+byId('previous').onclick=()=>changePage(-1);
+byId('next').onclick=()=>changePage(1);
+byId('sidebar-toggle').onclick=()=>{sidebarOpen=!sidebarOpen;render()};
+byId('thumbnails').onclick=event=>{const thumbnail=event.target.closest('[data-page]');if(thumbnail)changePage(Number(thumbnail.dataset.page)-page)};
+byId('zoom-in').onclick=()=>{zoom=Math.min(175,zoom+25);render()};
+byId('zoom-out').onclick=()=>{zoom=Math.max(50,zoom-25);render()};
+byId('fit').onclick=()=>{zoom=Math.max(50,Math.min(175,Math.round((byId('viewport').clientWidth-96)/660*100)));render()};
+document.addEventListener('keydown',event=>{if(event.key==='ArrowRight')changePage(1);if(event.key==='ArrowLeft')changePage(-1);if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='o'){event.preventDefault();openSample()}});
+render();
+</script>
+</body>
+</html>

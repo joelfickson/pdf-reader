@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Reader - Tabs and text selection</title>
+<style>
+:root{color-scheme:light;--ink:#292c30;--muted:#646970;--rule:#d9d9d5;--canvas:#eaeae6;--accent:#2857a5;--chrome:#f8f8f5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:"Avenir Next","Segoe UI",sans-serif;font-size:13px}
+button{font:inherit;color:inherit;border:0;background:transparent;cursor:pointer;border-radius:4px;height:32px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+button:hover{background:#e8e8e3}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{opacity:.3;cursor:default}
+button:disabled:hover{background:transparent}
+svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.app{height:calc(100vh - 35px);display:flex;flex-direction:column}
+.toolbar{min-height:64px;padding:12px 22px;display:flex;align-items:center;gap:20px;background:var(--chrome);border-bottom:1px solid var(--rule)}
+.file{display:flex;align-items:center;gap:11px;min-width:0;flex:1}
+.file-icon{color:var(--muted);flex:none}
+.filename{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.file-detail{font-size:11px;color:var(--muted);margin-top:3px}
+.open{color:var(--accent);font-weight:600}
+.controls{display:flex;align-items:center;gap:3px}
+.page-count{min-width:74px;text-align:center;font-variant-numeric:tabular-nums;color:var(--muted)}
+.page-count strong{color:var(--ink);font-weight:600}
+.divider{height:20px;width:1px;background:var(--rule);flex:none}
+.zoom-value{min-width:50px;font-variant-numeric:tabular-nums}
+.reading-area{display:flex;flex:1;min-height:0}
+.sidebar{width:184px;flex:none;background:#f2f3ee;border-right:1px solid var(--rule);display:flex;flex-direction:column}
+.sidebar-heading{display:flex;justify-content:space-between;align-items:center;padding:21px 20px 15px;font-weight:600;font-size:12px}
+.sidebar-heading span{font-weight:400;color:var(--muted);font-size:11px}
+.thumbnails{overflow:auto;min-height:0;padding:0 10px 20px}
+.thumbnail{display:flex;flex-direction:column;width:100%;height:auto;padding:14px 10px 10px;gap:9px;border-radius:0;margin-bottom:7px}
+.thumbnail[aria-current=page]{background:#e1e7ef;color:var(--accent)}
+.thumbnail:hover{background:#e7e9e3}
+.thumbnail[aria-current=page]:hover{background:#dae2ed}
+.mini-sheet{width:132px;height:171px;overflow:hidden;pointer-events:none;background:#fffefa;white-space:normal;text-align:left;color:var(--ink)}
+.mini-sheet .paper{width:660px;min-height:854px;transform:scale(.2);transform-origin:top left;margin:0}
+.thumbnail-label{font-size:11px;font-variant-numeric:tabular-nums}
+.thumbnail[aria-current=page] .thumbnail-label{font-weight:600}
+.sidebar-toggle[aria-expanded=true]{color:var(--accent);background:#e8edf3}
+.viewport{flex:1;min-width:0;min-height:0;overflow:auto;padding:38px 48px 52px;scrollbar-color:#b5b7b1 transparent}
+.paper{width:660px;min-height:854px;margin:0 auto;background:#fffefa;padding:65px 68px 48px;display:flex;flex-direction:column;transform-origin:top center}
+.paper-top{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6d706a;border-bottom:1px solid #d7d8d1;padding-bottom:15px}
+.kicker{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#5c6a57;margin-top:55px}
+h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,serif;font-weight:400;font-size:48px;line-height:1.06;letter-spacing:-1.8px;margin:18px 0 22px;max-width:450px}
+.deck{font-family:"Iowan Old Style","Palatino Linotype",Palatino,serif;font-size:19px;line-height:1.55;color:#61645e;margin:0 0 30px;max-width:445px}
+.byline{font-size:10px;letter-spacing:.04em;color:#62665e;margin-bottom:38px}
+.body-copy{font-family:"Iowan Old Style","Palatino Linotype",Palatino,serif;font-size:15px;line-height:1.75;color:#373e35}
+.body-copy p{margin:0 0 18px}
+.body-copy h2{font-size:20px;font-weight:400;margin:26px 0 12px}
+.page-footer{margin-top:auto;padding-top:40px;display:flex;justify-content:space-between;font-size:10px;color:#777b73}
+.status{height:28px;flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 22px;border-top:1px solid var(--rule);background:var(--chrome);font-size:11px;color:var(--muted)}
+.empty{height:100%;max-width:530px;margin:auto;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding-bottom:80px}
+.empty small{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.empty h1{font-size:48px;line-height:1.15;margin:20px 0 14px}
+.empty p{font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 25px}
+.primary{background:var(--accent);color:#fff;height:38px;padding:0 18px}
+.primary:hover{background:#1e468b}
+.shortcut{font-size:11px;color:var(--muted);margin-top:16px}
+.preview-bar{height:35px;display:flex;align-items:center;justify-content:space-between;background:#dedfd9;padding:0 18px;font-size:11px;color:#545a51}
+.preview-bar button{font-size:11px;height:25px}
+.preview-bar button[aria-pressed=true]{color:var(--accent);font-weight:600}
+.preview-options{display:flex;gap:5px}
+[hidden]{display:none!important}
+@media(max-width:850px){.toolbar{padding:10px 12px;gap:8px}.file-detail{display:none}.filename{max-width:165px}.viewport{padding:24px 20px}.paper{width:min(660px,100%);min-height:800px;padding:42px}.fit-label{display:none}.controls{gap:0}.divider{margin:0 2px}}
+@media(max-width:620px){.toolbar{flex-wrap:wrap;justify-content:space-between}.file{flex-basis:60%}.filename{max-width:230px}.toolbar>.divider{display:none}.paper{padding:30px 24px}.paper h1{font-size:38px}.empty{padding:30px 8px}.preview-bar{padding:0 8px}.preview-note{max-width:45%;font-size:10px}}
+.mini-sheet .paper{width:660px;min-height:854px;padding:65px 68px 48px}
+.mini-sheet .paper h1{font-size:48px}
+@media(max-width:620px){.sidebar{width:156px}.sidebar-heading{padding:18px 12px 12px}.thumbnails{padding:0 2px 12px}.thumbnail{padding:10px 6px}.toolbar .file{flex-basis:50%}}
+
+.app{height:calc(100vh - 42px)}
+.tab-strip{display:flex;align-items:stretch;min-height:43px;background:#eeefe9;border-bottom:1px solid var(--rule);padding:0 12px;gap:4px;overflow-x:auto;flex:none}
+.tab-item{display:flex;align-items:center;position:relative;flex:0 0 auto;max-width:285px;min-width:155px;border-bottom:2px solid transparent}
+.tab-item.active{background:var(--chrome);border-bottom-color:var(--accent)}
+.tab-item.active .tab-name{color:var(--accent)}
+.tab-name{min-width:0;overflow:hidden;text-overflow:ellipsis;justify-content:flex-start;display:block;height:40px;border-radius:0;padding:0 12px;font-size:12px;text-align:left;flex:1}
+.tab-close{width:28px;height:28px;padding:0;margin-right:6px;color:var(--muted);font-size:19px;flex:none}
+.new-tab{width:34px;height:40px;font-size:22px;color:var(--muted);flex:none}
+.toolbar{min-height:58px;padding-top:10px;padding-bottom:10px;gap:16px}
+.file{font-size:13px;font-weight:600}
+.copy-slot{min-width:105px;display:flex;justify-content:flex-end}
+#copy{font-size:12px;color:var(--accent)}
+#copy[aria-disabled=true]{visibility:hidden}
+.reading-area{position:relative}
+.paper{user-select:text;cursor:text}
+.paper ::selection{background:#bed3f3;color:#243a58}
+.selection-demo{background:#c9dbf5;color:#263e60;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.drop-layer{position:absolute;inset:0;z-index:5;background:rgba(237,241,247,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#254f91;pointer-events:none}
+.drop-layer svg{width:40px;height:40px;margin-bottom:24px;stroke-width:1.1}
+.drop-layer h2{font-family:"Iowan Old Style",Palatino,serif;font-size:38px;letter-spacing:-.7px;font-weight:400;margin:0 0 12px}
+.drop-layer p{margin:0;color:#536782;font-size:14px}
+.preview-bar{height:42px;gap:16px}
+.preview-options{gap:7px}
+.preview-options button{padding:0 8px}
+.scan-page{user-select:none;cursor:default}
+.scan-page .body-copy{filter:blur(.35px);opacity:.78;transform:rotate(-.3deg)}
+.scan-note{color:#6a655a}
+.empty p{max-width:405px}
+@media(max-width:920px){.toolbar{gap:7px}.file{display:none}.open{margin-right:auto}.copy-slot{min-width:88px}.preview-note{max-width:190px;line-height:1.4}.viewport{padding:28px 28px 45px}.paper{padding:48px 50px}.tab-item{max-width:250px}}
+@media(max-width:620px){.preview-bar{height:auto;min-height:68px;flex-wrap:wrap;gap:2px;padding:7px 10px}.preview-note{max-width:none}.preview-options{flex-wrap:wrap}.app{height:calc(100vh - 68px)}.copy-slot{min-width:82px}.tab-item{min-width:145px}.paper{padding:28px}.viewport{padding:20px 14px}.toolbar{gap:3px}}
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="tab-strip" id="tabs" role="tablist" aria-label="Open documents"></nav>
+<header class="toolbar">
+<button class="sidebar-toggle" id="sidebar-toggle" title="Hide page sidebar" aria-label="Toggle page sidebar" aria-expanded="true" aria-controls="sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M9 4v16M5.5 8h1M5.5 12h1M5.5 16h1"/></svg></button>
+<div class="file">PDF Reader</div>
+<div class="copy-slot"><button id="copy" aria-disabled="false" title="Copy selected text">Copy text</button></div>
+<button class="open" id="open" title="Open PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19V5h6l2 3h9v3M3 19l3-8h16l-3 8z"/></svg>Open PDF</button>
+<span class="divider"></span>
+<div class="controls" aria-label="Page navigation"><button id="previous" title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg></button><span class="page-count" id="page-count"><strong>1</strong> / 3</span><button id="next" title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg></button></div>
+<span class="divider"></span>
+<div class="controls" aria-label="Zoom"><button id="zoom-out" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button><span class="zoom-value" id="zoom">100%</span><button id="zoom-in" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button><button id="fit" title="Fit to width"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14M21 5v14M6 12h12m-9-3-3 3 3 3m6-6 3 3-3 3"/></svg><span class="fit-label">Fit</span></button></div>
+</header>
+<div class="reading-area" id="reading-area">
+<div class="drop-layer" id="drop-layer" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6v18h12V7zM14 3v5h4M9 13h6m-3-3v6"/></svg><h2>Drop PDFs to open</h2><p>Each file opens in a new tab. Your place stays saved.</p></div>
+<aside class="sidebar" id="sidebar" aria-label="Page sidebar"><div class="sidebar-heading">Pages <span id="total-pages">3 pages</span></div><nav class="thumbnails" id="thumbnails" aria-label="Choose a page"></nav></aside>
+<main class="viewport" id="viewport">
+<article class="paper" id="paper" aria-label="Sample document page"></article>
+<section class="empty" id="empty" hidden><small>PDF Reader</small><h1>A little room<br>to read.</h1><p>Drop a PDF here, or choose a file to start reading.</p><button class="primary" id="empty-open">Open PDF</button><span class="shortcut">Command + O on Mac · Ctrl + O on Windows</span></section>
+</main>
+</div>
+<footer class="status"><span id="status-left">Page 1 of 3</span><span id="status-right" role="status" aria-live="polite">Text selected · Command/Ctrl + C to copy</span></footer>
+</div>
+<aside class="preview-bar" aria-label="Design preview controls"><span class="preview-note">Local design mock · Sample content, not PDF rendering</span><div class="preview-options"><button data-state="document" aria-pressed="false">Reading</button><button data-state="selection" aria-pressed="true">Selection</button><button data-state="drop" aria-pressed="false">File drop</button><button data-state="scan" aria-pressed="false">Image-only page</button><button data-state="empty" aria-pressed="false">Empty</button></div></aside>
+<input id="file-picker" type="file" accept="application/pdf,.pdf" multiple hidden>
+<script>
+const pages=[
+{section:'On observation',title:'The art of<br>paying attention',deck:'A few thoughts on reading slowly, noticing more, and making space for the things that matter.',body:'<p>There is a particular kind of quiet that arrives when we begin to read. The room stays exactly as it was, but our attention shifts. A sentence takes the place of a notification. An idea has a little longer to settle.</p><p>Good tools make this transition easy. They open the door, then step aside. They give us a clear page, comfortable space, and the freedom to find our own pace.</p><h2>Begin with the page</h2><p>The most useful reading space asks very little of us. It keeps the words close and the distractions at a distance. Everything else can wait until it is needed.</p>'},
+{section:'On rhythm',title:'Leave room<br>in the margins',deck:'Understanding often happens in the pause between one paragraph and the next.',body:'<p>A page is more than the words printed on it. Space gives those words a rhythm. A generous margin creates a place to rest, and a well-chosen line length makes it easier to return for another sentence.</p><h2>Find your own pace</h2><p>Some pages invite a quick glance. Others ask us to slow down, move backward, or linger over a single thought. A reader should make all of these movements feel natural.</p><p>The controls belong within reach, but the document deserves our attention. We return to the page because it holds something we want to understand.</p>'},
+{section:'On simplicity',title:'Keep what<br>helps you read',deck:'The best reading tools are the ones that become familiar enough to disappear.',body:'<p>Open a document. Find your place. Make the words a little larger. Turn to the next page. These small actions form the foundation of a reading experience.</p><h2>A place to return to</h2><p>When the essentials are clear, the interface needs very little explanation. Its purpose is to support the document and make the next action feel obvious.</p><p>Start with a page and a little room around it. Let everything else earn its place.</p>'}
+];
+
+let documents = [
+{id:1,name:'The art of paying attention.pdf',page:0,zoom:100,scroll:0,scan:false},
+{id:2,name:'Field notes.pdf',page:1,zoom:100,scroll:0,scan:false},
+{id:3,name:'Reading list.pdf',page:2,zoom:100,scroll:0,scan:false}
+];
+let activeId=1;
+let nextId=4;
+let sidebarOpen=true;
+let previewState='selection';
+let selectedText='';
+const byId=id=>document.getElementById(id);
+const current=()=>documents.find(item=>item.id===activeId);
+const selectionSentence='Good tools make this transition easy. They open the door, then step aside.';
+function pageMarkup(data,index,highlight=false){
+const body=highlight?data.body.replace(selectionSentence,`<span class="selection-demo">${selectionSentence}</span>`):data.body;
+return `<div class="paper-top"><span>Notes on everyday things</span><span>Reading series</span></div><div class="kicker">${data.section}</div><h1>${data.title}</h1><p class="deck">${data.deck}</p><div class="byline">A SAMPLE ESSAY · OCTOBER 2026</div><div class="body-copy">${body}</div><div class="page-footer"><span>The art of paying attention</span><span>${String(index+1).padStart(2,'0')}</span></div>`;
+}
+function selectionStatus(text){
+selectedText=text;
+byId('copy').setAttribute('aria-disabled',String(!text));
+byId('copy').disabled=!text;
+byId('status-right').textContent=text?'Text selected · Command/Ctrl + C to copy':current()?.scan?'No selectable text on this page':'Drag across text to select · Drop PDFs to open';
+}
+function savePosition(){const doc=current();if(doc)doc.scroll=byId('viewport').scrollTop}
+function switchTab(id){savePosition();activeId=id;previewState='document';window.getSelection()?.removeAllRanges();render();byId('viewport').scrollTop=current()?.scroll??0}
+function closeTab(id){const index=documents.findIndex(doc=>doc.id===id);if(index<0)return;savePosition();documents.splice(index,1);if(id===activeId)activeId=documents[Math.min(index,documents.length-1)]?.id??null;previewState=documents.length?'document':'empty';render();byId('viewport').scrollTop=current()?.scroll??0}
+function renderTabs(){
+const tabs=byId('tabs');tabs.replaceChildren();
+for(const doc of documents){
+const item=document.createElement('div');item.className='tab-item'+(doc.id===activeId?' active':'');
+const button=document.createElement('button');button.className='tab-name';button.textContent=doc.name;button.title=doc.name;button.setAttribute('role','tab');button.setAttribute('aria-selected',String(doc.id===activeId));button.tabIndex=doc.id===activeId?0:-1;button.onclick=()=>switchTab(doc.id);button.onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const index=documents.findIndex(item=>item.id===doc.id);const next=event.key==='Home'?0:event.key==='End'?documents.length-1:(index+(event.key==='ArrowRight'?1:-1)+documents.length)%documents.length;switchTab(documents[next].id);byId('tabs').querySelector('[aria-selected=true]').focus()};
+const close=document.createElement('button');close.className='tab-close';close.textContent='×';close.setAttribute('aria-label',`Close ${doc.name}`);close.onclick=()=>closeTab(doc.id);
+item.append(button,close);tabs.append(item);
+}
+const add=document.createElement('button');add.className='new-tab';add.textContent='+';add.title='Open PDFs in new tabs';add.setAttribute('aria-label','Open PDFs in new tabs');add.onclick=()=>byId('file-picker').click();tabs.append(add);
+}
+function render(){
+const doc=current();const loaded=!!doc;
+renderTabs();
+byId('paper').hidden=!loaded;byId('empty').hidden=loaded;byId('sidebar').hidden=!loaded||!sidebarOpen;
+byId('sidebar-toggle').disabled=!loaded;byId('sidebar-toggle').setAttribute('aria-expanded',String(loaded&&sidebarOpen));
+byId('drop-layer').hidden=previewState!=='drop';
+if(doc){
+byId('paper').innerHTML=pageMarkup(pages[doc.page],doc.page,previewState==='selection');
+byId('paper').style.zoom=doc.zoom/100;byId('paper').classList.toggle('scan-page',doc.scan);
+byId('paper').setAttribute('aria-label',`Sample page ${doc.page+1} of ${doc.name}`);
+byId('thumbnails').innerHTML=pages.map((data,index)=>`<button class="thumbnail" data-page="${index}" aria-label="Go to page ${index+1}" ${index===doc.page?'aria-current="page"':''}><span class="mini-sheet" aria-hidden="true"><span class="paper">${pageMarkup(data,index)}</span></span><span class="thumbnail-label">${index+1}</span></button>`).join('');
+}
+byId('page-count').innerHTML=doc?`<strong>${doc.page+1}</strong> / 3`:'No PDF';
+byId('previous').disabled=!doc||doc.page===0;byId('next').disabled=!doc||doc.page===2;
+byId('zoom-out').disabled=!doc||doc.zoom<=50;byId('zoom-in').disabled=!doc||doc.zoom>=175;byId('fit').disabled=!doc;
+byId('zoom').textContent=doc?`${doc.zoom}%`:'Fit';
+byId('status-left').textContent=doc?`Page ${doc.page+1} of 3`:'Ready to open a PDF';
+selectionStatus(previewState==='selection'?selectionSentence:'');
+if(!doc)byId('status-right').textContent='Command + O on Mac · Ctrl + O on Windows';
+document.querySelectorAll('[data-state]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.state===previewState)));
+}
+function changePage(delta){const doc=current();if(!doc)return;doc.page=Math.max(0,Math.min(2,doc.page+delta));doc.scroll=0;previewState=doc.scan?'scan':'document';window.getSelection()?.removeAllRanges();render();byId('viewport').scrollTop=0}
+function setPreview(state){
+if(state==='empty'){documents=[];activeId=null}
+else if(!documents.length){documents=[{id:nextId++,name:'The art of paying attention.pdf',page:0,zoom:100,scroll:0,scan:false}];activeId=documents[0].id}
+const doc=current();if(doc){doc.scan=state==='scan';if(state==='selection'){doc.page=0;doc.scroll=0;byId('viewport').scrollTop=0}}
+previewState=state;window.getSelection()?.removeAllRanges();render();
+}
+function openFiles(files){
+savePosition();let count=0;
+for(const file of files){if(!file.name.toLowerCase().endsWith('.pdf'))continue;let doc=documents.find(doc=>doc.name===file.name);if(!doc){doc={id:nextId++,name:file.name,page:0,zoom:100,scroll:0,scan:false};documents.push(doc)}activeId=doc.id;count++}
+previewState='document';render();byId('viewport').scrollTop=current()?.scroll??0;
+if(!count)byId('status-right').textContent='Choose a PDF file';
+}
+byId('open').onclick=()=>byId('file-picker').click();byId('empty-open').onclick=()=>byId('file-picker').click();
+byId('file-picker').onchange=event=>{openFiles(event.target.files);event.target.value=''};
+byId('previous').onclick=()=>changePage(-1);byId('next').onclick=()=>changePage(1);
+byId('sidebar-toggle').onclick=()=>{sidebarOpen=!sidebarOpen;render()};
+byId('thumbnails').onclick=event=>{const button=event.target.closest('[data-page]');if(button&&current())changePage(Number(button.dataset.page)-current().page)};
+byId('zoom-in').onclick=()=>{const doc=current();if(doc){doc.zoom=Math.min(175,doc.zoom+25);render()}};
+byId('zoom-out').onclick=()=>{const doc=current();if(doc){doc.zoom=Math.max(50,doc.zoom-25);render()}};
+byId('fit').onclick=()=>{const doc=current();if(doc){doc.zoom=Math.max(50,Math.min(175,Math.round((byId('viewport').clientWidth-96)/660*100)));render()}};
+document.querySelectorAll('[data-state]').forEach(button=>button.onclick=()=>setPreview(button.dataset.state));
+byId('paper').onpointerdown=()=>{byId('paper').querySelectorAll('.selection-demo').forEach(span=>span.classList.remove('selection-demo'));selectionStatus('')};
+document.addEventListener('selectionchange',()=>{const selection=window.getSelection();if(current()?.scan)return;if(selection&&byId('paper').contains(selection.anchorNode)&&byId('paper').contains(selection.focusNode))selectionStatus(selection.toString())});
+byId('copy').onpointerdown=event=>event.preventDefault();
+byId('copy').onclick=async()=>{if(!selectedText)return;try{await navigator.clipboard.writeText(selectedText);byId('status-right').textContent='Text copied'}catch{byId('status-right').textContent='Use Command/Ctrl + C to copy selected text'}};
+let dragDepth=0;
+document.addEventListener('dragenter',event=>{if(!event.dataTransfer.types.includes('Files'))return;event.preventDefault();dragDepth++;byId('drop-layer').hidden=false});
+document.addEventListener('dragover',event=>{if(event.dataTransfer.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect='copy'}});
+document.addEventListener('dragleave',()=>{dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)byId('drop-layer').hidden=true});
+document.addEventListener('drop',event=>{event.preventDefault();dragDepth=0;openFiles(event.dataTransfer.files);byId('drop-layer').hidden=true});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'){previewState='document';byId('drop-layer').hidden=true;window.getSelection()?.removeAllRanges();selectionStatus('')}if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='o'){event.preventDefault();byId('file-picker').click()}});
+render();
+</script>
+</body>
+</html>

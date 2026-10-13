@@ -1,0 +1,81 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 0 /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 520 >>
+stream
+0.16 0.18 0.17 rg
+BT /F2 9 Tf 64 724 Td (NOTES ON EVERYDAY THINGS) Tj ET
+0.82 0.83 0.80 RG 64 708 m 548 708 l S
+BT /F1 30 Tf 64 632 Td (Selection and copying) Tj ET
+BT /F1 19 Tf 64 573 Td (A page for interaction tests) Tj ET
+BT /F1 13 Tf 21 TL 64 525 Td
+(Café and naïve text keep their accents.) Tj T*
+(Copy these lines in their original order.) Tj T*
+() Tj T*
+(Returning to this tab should preserve your place.) Tj T*
+ET
+0.16 0.34 0.64 rg 64 248 80 5 re f
+BT /F2 10 Tf 64 52 Td (PDF Reader sample) Tj 460 0 Td (1) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 90 /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 440 >>
+stream
+0.16 0.18 0.17 rg
+BT /F2 9 Tf 64 724 Td (NOTES ON EVERYDAY THINGS) Tj ET
+0.82 0.83 0.80 RG 64 708 m 548 708 l S
+BT /F1 30 Tf 64 632 Td (Rotated page) Tj ET
+BT /F1 19 Tf 64 573 Td (Text coordinates follow the page) Tj ET
+BT /F1 13 Tf 21 TL 64 525 Td
+(This page has a ninety-degree rotation.) Tj T*
+(Select these words and copy them.) Tj T*
+ET
+0.16 0.34 0.64 rg 64 248 80 5 re f
+BT /F2 10 Tf 64 52 Td (PDF Reader sample) Tj 460 0 Td (2) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 0 /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 10 0 R >>
+endobj
+10 0 obj
+<< /Length 70 >>
+stream
+0.9 0.9 0.85 rg 60 400 490 300 re f
+0.4 0.5 0.6 rg 90 450 300 180 re f
+endstream
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000226 00000 n 
+0000000323 00000 n 
+0000000469 00000 n 
+0000001040 00000 n 
+0000001187 00000 n 
+0000001678 00000 n 
+0000001825 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+1946
+%%EOF

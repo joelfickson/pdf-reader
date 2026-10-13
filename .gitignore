@@ -1,0 +1,9 @@
+/target/
+/vendor/
+/.local/
+.DS_Store
+
+/design/*-preview.png
+__pycache__/
+.env
+.env.*

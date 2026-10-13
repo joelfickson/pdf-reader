@@ -1,0 +1,27 @@
+[package]
+name = "pdf-reader"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/joelfickson/pdf-reader"
+description = "A lightweight desktop PDF reader for macOS and Windows"
+default-run = "pdf-reader"
+
+[dependencies]
+anyhow = "1"
+async-channel = "2"
+gpui = { version = "=0.2.2", default-features = false, features = ["font-kit", "windows-manifest"] }
+image = { version = "0.25", default-features = false }
+parking_lot = "0.12"
+pdfium-render = { version = "=0.9.4", default-features = false, features = ["pdfium_7881", "thread_safe"] }
+smallvec = "1"
+
+[dev-dependencies]
+gpui = { version = "=0.2.2", default-features = false, features = ["test-support"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.dev]
+debug = 1
