@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to package and release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: macos-arm64
+          - os: macos-15-intel
+            platform: macos-x64
+          - os: windows-2022
+            platform: windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v6
+      - uses: Swatinem/rust-cache@v2
+      - if: runner.os == 'macOS'
+        run: xcodebuild -downloadComponent MetalToolchain
+      - run: uv run scripts/setup_pdfium.py
+      - if: runner.os == 'macOS'
+        run: uv run scripts/package_macos.py
+      - if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "target/release/PDF Reader.app" "pdf-reader-${{ matrix.platform }}.zip"
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build --locked --release
+          $stage = "release-stage"
+          New-Item -ItemType Directory -Force -Path $stage, "$stage\licenses\pdfium" | Out-Null
+          Copy-Item "target\release\pdf-reader.exe" "$stage\pdf-reader.exe"
+          Copy-Item "vendor\pdfium\bin\pdfium.dll" "$stage\pdfium.dll"
+          Copy-Item "LICENSE" "$stage\licenses\Application-LICENSE"
+          Copy-Item "vendor\pdfium\LICENSE" "$stage\licenses\PDFium-LICENSE"
+          Copy-Item "vendor\pdfium\licenses\*" "$stage\licenses\pdfium" -Recurse
+          Compress-Archive -Path "$stage\*" -DestinationPath "pdf-reader-${{ matrix.platform }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-reader-${{ matrix.platform }}
+          path: pdf-reader-${{ matrix.platform }}.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pdf-reader-*
+          path: release-assets
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: gh release create "$RELEASE_TAG" release-assets/*.zip --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "$RELEASE_TAG"

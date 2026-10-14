@@ -29,6 +29,8 @@ uv run scripts/package_macos.py
 open "target/release/PDF Reader.app"
 ```
 
+Tagged commits matching `v*` are packaged by GitHub Actions for macOS arm64, macOS x64, and Windows x64. The workflow publishes release assets containing the application, PDFium, and dependency license notices.
+
 Use this release app for normal reading and performance checks. `--debug` creates a separate `PDF Reader Debug.app` for development. The bundles are unsigned local builds.
 
 Open a document immediately:
