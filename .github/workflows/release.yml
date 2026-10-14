@@ -35,8 +35,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v6
       - uses: Swatinem/rust-cache@v2
-      - if: runner.os == 'macOS'
-        run: xcodebuild -downloadComponent MetalToolchain
       - run: uv run scripts/setup_pdfium.py
       - if: runner.os == 'macOS'
         run: uv run scripts/package_macos.py
