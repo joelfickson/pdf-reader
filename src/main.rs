@@ -1,6 +1,7 @@
 mod app;
 mod pdf;
 mod reader;
+mod ui;
 
 use std::path::PathBuf;
 

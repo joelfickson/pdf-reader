@@ -187,3 +187,69 @@ fn drop_selection_clipboard_and_tabs(cx: &mut TestAppContext) {
         assert!(reader.text.is_none());
     });
 }
+
+#[gpui::test]
+fn palette_find_and_dismiss_keyboard_flow(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.open_paths(vec![root.join("tests/fixtures/reading.pdf")], window, cx);
+            let generation = reader.generation;
+            reader.receive(
+                Event::Metadata {
+                    generation,
+                    count: 5,
+                },
+                window,
+                cx,
+            );
+            reader.focus.focus(window);
+        })
+    });
+    cx.run_until_parked();
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let page = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| reader.read(cx).tabs.current().unwrap().page)
+    };
+
+    cx.simulate_keystrokes(&format!("{modifier}-k 3->3 enter"));
+    cx.read(|cx| assert_eq!(reader.read(cx).chrome.overlay, chrome::Overlay::None));
+    assert_eq!(page(cx), 2);
+
+    cx.simulate_keystrokes(&format!("{modifier}-f a->a left"));
+    assert_eq!(page(cx), 2);
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.chrome.find_open);
+        assert_eq!(reader.chrome.find.text, "a");
+    });
+
+    cx.simulate_keystrokes("escape left");
+    cx.read(|cx| assert!(!reader.read(cx).chrome.find_open));
+    assert_eq!(page(cx), 1);
+
+    cx.simulate_keystrokes(&format!("{modifier}-g 5->5 enter"));
+    assert_eq!(page(cx), 4);
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-a"));
+    cx.read(|cx| assert_eq!(reader.read(cx).chrome.mode, chrome::Mode::Annotate));
+    cx.simulate_keystrokes("escape");
+    cx.read(|cx| assert_eq!(reader.read(cx).chrome.mode, chrome::Mode::Read));
+
+    cx.simulate_keystrokes(&format!("{modifier}-d"));
+    cx.read(|cx| {
+        let toast = reader.read(cx).chrome.toast.clone().unwrap();
+        assert_eq!(
+            toast.title.as_ref(),
+            "Bookmarking pages is not available yet"
+        );
+    });
+}

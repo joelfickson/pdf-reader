@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Reader Overhaul</title>
+<style>
+:root{
+  --radius:8px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:"SF Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --script:"Snell Roundhand","Segoe Script","Brush Script MT",cursive;
+  --paper:#ffffff;
+  --paper-ink:#1d2024;
+  --paper-muted:#5b6168;
+  --paper-rule:#e3e5e8;
+  --hl-yellow:rgba(255,212,59,.55);
+  --hl-green:rgba(105,219,124,.5);
+  --hl-blue:rgba(116,192,252,.55);
+  --hl-pink:rgba(250,162,193,.6);
+  --dot-yellow:#f2c230;
+  --dot-green:#4fc26b;
+  --dot-blue:#5aaef5;
+  --dot-pink:#f28cb0;
+  --ink-stroke:#d6336c;
+  --sig-ink:#1c3d8f;
+  --stamp-ok:#1f883d;
+  --stamp-fail:#cf222e;
+  --field:#eef4ff;
+  --present-bg:#000000;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --canvas:#0b0d10;
+  --chrome:#111418;
+  --raised:#171b20;
+  --hover:#1e232a;
+  --pressed:#252b33;
+  --hairline:#22272e;
+  --ink:#e7eaee;
+  --muted:#8a929c;
+  --faint:#5d646d;
+  --accent:#5b9dff;
+  --accent-soft:#16243a;
+  --accent-strong:#8fbcff;
+  --on-accent:#06101f;
+  --ok:#4fc26b;--ok-soft:#12291a;
+  --warn:#f2c230;--warn-soft:#2b2410;
+  --fail:#ff6b6b;--fail-soft:#331616;
+  --select:rgba(91,157,255,.28);
+  --match:rgba(255,196,77,.45);
+  --match-current:rgba(255,166,0,.75);
+  --shadow:0 12px 32px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.4);
+  --scrim:rgba(5,6,8,.6);
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --canvas:#e9eaec;
+  --chrome:#f6f7f8;
+  --raised:#ffffff;
+  --hover:#eceef1;
+  --pressed:#e2e5e9;
+  --hairline:#dadde2;
+  --ink:#1b1e22;
+  --muted:#626973;
+  --faint:#9aa1aa;
+  --accent:#1f6feb;
+  --accent-soft:#e3edfd;
+  --accent-strong:#1553b8;
+  --on-accent:#ffffff;
+  --ok:#1f883d;--ok-soft:#e3f6e8;
+  --warn:#9a6700;--warn-soft:#fff4d6;
+  --fail:#cf222e;--fail-soft:#ffe9ea;
+  --select:rgba(31,111,235,.22);
+  --match:rgba(255,196,77,.55);
+  --match-current:rgba(255,150,0,.7);
+  --shadow:0 12px 32px rgba(20,24,30,.16),0 2px 6px rgba(20,24,30,.1);
+  --scrim:rgba(20,24,30,.3);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font:13px/1.4 var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;border:0;background:transparent;cursor:pointer;border-radius:var(--radius);height:28px;min-width:28px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;flex:none}
+button:hover{background:var(--hover)}
+button:active{background:var(--pressed)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12px}
+kbd{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--hover);border-radius:var(--radius);padding:1px 6px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none;background:currentColor}
+.status{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:var(--radius);font-size:12px;white-space:nowrap}
+.status.ok{color:var(--ok);background:var(--ok-soft)}
+.status.warn{color:var(--warn);background:var(--warn-soft)}
+.status.fail{color:var(--fail);background:var(--fail-soft)}
+.status.info{color:var(--accent-strong);background:var(--accent-soft)}
+.primary,.primary:hover{background:var(--accent);color:var(--on-accent);font-weight:600;height:32px;padding:0 14px}
+.primary:hover{background:var(--accent-strong)}
+.quiet{color:var(--muted);height:32px;padding:0 12px}
+.quiet:hover{color:var(--ink)}
+.label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+input.text,select.text{height:32px;background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--radius);color:var(--ink);font:inherit;padding:0 10px;width:100%}
+.swatch{width:28px;padding:0}
+.swatch .dot{width:12px;height:12px}
+.sep-v{width:1px;height:16px;background:var(--hairline);margin:0 4px;flex:none}
+.floating{background:var(--raised);border-radius:var(--radius);box-shadow:var(--shadow)}
+
+.preview{height:38px;display:flex;align-items:center;gap:6px;padding:0 12px;background:#2a2d31;color:#c9cdd2;font-size:12px}
+.preview b{font-weight:600;margin-right:4px}
+.preview select{height:26px;background:#3a3e44;color:#fff;border:0;border-radius:var(--radius);font:inherit;padding:0 8px;max-width:60vw}
+.preview button{height:26px;color:#c9cdd2;padding:0 8px}
+.preview button:hover{background:#3a3e44}
+.preview button[aria-pressed="true"]{background:#454a51;color:#fff}
+.preview .spacer{flex:1}
+.preview .desc{color:#9aa0a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+.app{height:calc(100vh - 38px);display:flex;flex-direction:column}
+.app[data-present] .titlebar{display:none}
+
+.titlebar{height:40px;flex:none;display:flex;align-items:center;background:var(--chrome);padding:0 8px 0 0;gap:4px}
+.lights{width:76px;flex:none;display:flex;gap:8px;padding-left:14px}
+.lights i{width:12px;height:12px;border-radius:50%;background:var(--pressed);display:block}
+.tabs{display:flex;align-items:center;gap:2px;min-width:0;flex:1;overflow-x:auto;scrollbar-width:none}
+.tab{display:flex;align-items:center;height:30px;min-width:110px;max-width:240px;flex:0 1 220px;border-radius:var(--radius);color:var(--muted);padding:0 4px 0 10px;gap:6px;cursor:default}
+.tab:hover{background:var(--hover)}
+.tab.active{background:var(--raised);color:var(--ink)}
+.tab .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab .close{width:22px;min-width:22px;height:22px;padding:0;color:var(--faint);visibility:hidden}
+.tab:hover .close,.tab.active .close{visibility:visible}
+.tab .close:hover{color:var(--ink)}
+.tab .edited{display:none;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.tab.modified .close{visibility:visible}
+.tab.modified .close svg{display:none}
+.tab.modified .close .edited{display:block}
+.tab.modified .close:hover svg{display:block}
+.tab.modified .close:hover .edited{display:none}
+.new-tab{color:var(--muted)}
+.title-actions{display:flex;gap:2px;flex:none;align-items:center}
+.title-actions>button{color:var(--muted)}
+.title-actions>button:hover{color:var(--ink)}
+.title-actions>button[aria-pressed="true"]{color:var(--accent-strong);background:var(--accent-soft)}
+.title-actions .palette-trigger{gap:8px;padding:0 8px 0 10px;background:var(--raised);color:var(--muted);min-width:170px;justify-content:space-between;margin-left:4px}
+
+.banner{flex:none;display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--warn-soft);color:var(--ink);font-size:13px}
+.banner .text{flex:1;min-width:0;color:var(--muted)}
+.banner .text b{color:var(--ink);font-weight:600}
+.banner button{height:28px}
+
+.body{flex:1;min-height:0;display:flex;position:relative}
+
+.sidebar{width:220px;flex:none;background:var(--chrome);display:flex;flex-direction:column;min-height:0}
+.rail{display:flex;gap:2px;padding:8px 8px 4px}
+.rail button{flex:1;min-width:0;height:30px;padding:0;color:var(--faint)}
+.rail button:hover{color:var(--ink)}
+.rail button[aria-selected="true"]{background:var(--raised);color:var(--ink)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:8px 14px 6px;min-height:34px}
+.panel-head .label{color:var(--muted)}
+.panel-head button{height:24px;color:var(--muted);font-size:12px;padding:0 6px}
+.panel-head button:hover{color:var(--ink)}
+.panel{flex:1;min-height:0;overflow:auto;scrollbar-width:thin;display:flex;flex-direction:column}
+.panel-body{flex:1;overflow:auto;scrollbar-width:thin}
+.thumbs{padding:6px 0 16px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.thumb{height:auto;padding:0;flex-direction:column;gap:6px;background:transparent;position:relative}
+.thumb:hover{background:transparent}
+.sheet{width:108px;height:140px;background:var(--paper);border-radius:3px;padding:12px 10px;display:flex;flex-direction:column;gap:4px;outline:2px solid transparent;outline-offset:3px;position:relative}
+.thumb:hover .sheet{outline-color:var(--hairline)}
+.thumb[aria-current="page"] .sheet{outline-color:var(--accent)}
+.sheet i{display:block;height:3px;background:#d4d7dc;border-radius:1px}
+.sheet i.h{height:6px;width:70%;background:#9aa0a8;margin:4px 0}
+.sheet i.s{width:60%}
+.sheet i.y{background:var(--dot-yellow)}
+.sheet i.g{background:var(--dot-green)}
+.thumb .num{color:var(--faint);font-size:11px;display:flex;gap:4px;align-items:center}
+.thumb[aria-current="page"] .num{color:var(--accent)}
+.thumb .bm{color:var(--accent);width:12px;height:12px}
+.list{padding:0 6px 16px}
+.row-btn{width:100%;justify-content:flex-start;height:32px;color:var(--muted);font-size:12px;gap:8px;padding:0 8px}
+.row-btn:hover{color:var(--ink)}
+.row-btn .num{margin-left:auto;color:var(--faint);font-size:11px}
+.row-btn.sub{padding-left:26px}
+.row-btn[aria-current="true"]{color:var(--ink);background:var(--raised)}
+.row-btn svg{color:var(--faint)}
+.row-btn .meta{margin-left:auto;color:var(--faint);font-size:11px}
+.note{display:block;width:100%;height:auto;text-align:left;padding:10px;color:var(--ink);white-space:normal}
+.note .row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:4px}
+.note .row .num{margin-left:auto;color:var(--faint);font-size:11px}
+.note q{display:block;font-size:12px;line-height:1.45;quotes:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.note p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.note[aria-current="true"]{background:var(--raised)}
+.note .ctx mark{background:var(--match);color:inherit;border-radius:2px}
+.filter{display:flex;gap:6px;align-items:center}
+
+.inspector{width:280px;flex:none;background:var(--chrome);display:flex;flex-direction:column;min-height:0}
+.inspector .tabsrow{display:flex;gap:2px;padding:8px 8px 4px}
+.inspector .tabsrow button{flex:1;height:28px;color:var(--muted);font-size:12px}
+.inspector .tabsrow button[aria-selected="true"]{background:var(--raised);color:var(--ink)}
+.inspector .content{flex:1;overflow:auto;padding:6px 16px 20px;scrollbar-width:thin}
+.inspector section{margin-top:18px}
+.inspector section:first-child{margin-top:8px}
+.inspector .label{display:block;margin-bottom:8px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:12px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;color:var(--ink);overflow-wrap:anywhere}
+.slider{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.slider .track{flex:1;height:4px;border-radius:2px;background:var(--pressed);position:relative}
+.slider .track b{position:absolute;left:0;top:0;bottom:0;width:60%;background:var(--accent);border-radius:2px}
+.slider .track i{position:absolute;left:60%;top:50%;width:14px;height:14px;border-radius:50%;background:var(--ink);transform:translate(-50%,-50%)}
+.thread{display:flex;flex-direction:column;gap:12px}
+.msg .who{display:flex;gap:8px;align-items:center;font-size:12px;font-weight:600}
+.msg .who .num{color:var(--faint);font-weight:400;font-size:11px;margin-left:auto}
+.msg p{margin:4px 0 0;font-size:12px;color:var(--muted);line-height:1.5}
+.avatar{width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:600}
+.reply{display:flex;gap:6px;margin-top:4px}
+.fonts{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.fonts div{display:flex;justify-content:space-between;gap:8px}
+.fonts span:last-child{color:var(--faint)}
+.sig{padding:2px 0 14px}
+.sig + .sig{padding-top:14px;border-top:1px solid var(--hairline)}
+.sig .who{font-size:13px;font-weight:600;margin:8px 0 6px}
+.sig p{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.5}
+
+.stage{flex:1;min-width:0;position:relative;display:flex;flex-direction:column}
+.viewport{flex:1;overflow:auto;padding:28px 32px 120px;scrollbar-width:thin}
+.page{width:min(720px,100%);margin:0 auto 24px;background:var(--paper);color:var(--paper-ink);border-radius:2px;padding:64px 72px 56px;font-size:15px;line-height:1.65;position:relative}
+.page .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--paper-muted)}
+.page h1{font-size:30px;line-height:1.15;letter-spacing:-.02em;margin:10px 0 14px}
+.page h2{font-size:19px;margin:28px 0 8px}
+.page p{margin:0 0 14px}
+.page .meta{display:flex;gap:24px;font-size:12px;color:var(--paper-muted);padding:12px 0;margin:18px 0 26px;border-top:1px solid var(--paper-rule);border-bottom:1px solid var(--paper-rule)}
+.page .foot{display:flex;justify-content:space-between;font-size:11px;color:var(--paper-muted);margin-top:36px}
+.page mark{background:transparent;color:inherit;border-radius:2px}
+.app[data-find] .page mark.m{background:var(--match)}
+.app[data-find] .page mark.m.current{background:var(--match-current)}
+.app[data-selecting] .page .sel{background:var(--select)}
+.ann{display:none}
+.app[data-annotations] .ann{display:block}
+.app[data-annotations] .hl-y{background:var(--hl-yellow)}
+.app[data-annotations] .hl-g{background:var(--hl-green)}
+.app[data-annotations] .ul{text-decoration:underline;text-decoration-color:var(--dot-blue);text-decoration-thickness:2px;text-underline-offset:3px}
+.app[data-annotations] .st{text-decoration:line-through;text-decoration-color:var(--ink-stroke);text-decoration-thickness:2px}
+.app[data-inspecting] .hl-y{outline:2px solid var(--accent);outline-offset:2px}
+.pin{position:absolute;right:28px;width:22px;height:22px;border-radius:var(--radius);background:var(--dot-yellow);color:#3d2e00;display:none;align-items:center;justify-content:center}
+.pin svg{width:13px;height:13px}
+.app[data-annotations] .pin{display:flex}
+.ink{position:absolute;right:14px;top:452px;width:44px;height:84px;pointer-events:none}
+.ink path{stroke:var(--ink-stroke);stroke-width:2.4}
+.stamp{position:absolute;right:96px;top:120px;transform:rotate(-8deg);border:3px solid var(--stamp-ok);color:var(--stamp-ok);font-weight:800;letter-spacing:.14em;font-size:20px;padding:4px 14px;border-radius:4px;display:none;text-align:center;line-height:1.2}
+.stamp small{display:block;font-size:10px;letter-spacing:.06em;font-weight:600}
+.app[data-stamped] .stamp{display:block}
+.signature{position:absolute;right:72px;bottom:96px;width:220px;text-align:center;display:none}
+.app[data-signed] .signature{display:block}
+.app[data-signed] .viewport .page.first{padding-bottom:180px}
+.app[data-signed] .viewport .page.first .foot{position:absolute;left:72px;right:72px;bottom:56px}
+.signature .mark{font-family:var(--script);font-size:34px;color:var(--sig-ink);line-height:1.1}
+.app[data-placing] .signature .mark{outline:1.5px dashed var(--accent);outline-offset:6px;border-radius:2px}
+.signature .line{border-top:1px solid var(--paper-rule);margin-top:6px;padding-top:4px;font-size:11px;color:var(--paper-muted)}
+.signature .handles{position:absolute;inset:-10px;pointer-events:none;display:none}
+.app[data-placing] .signature .handles{display:block}
+.signature .handles i{position:absolute;width:8px;height:8px;background:var(--paper);border:1.5px solid var(--accent);border-radius:2px}
+.signature .handles i:nth-child(1){left:-4px;top:-4px}
+.signature .handles i:nth-child(2){right:-4px;top:-4px}
+.signature .handles i:nth-child(3){left:-4px;bottom:20px}
+.signature .handles i:nth-child(4){right:-4px;bottom:20px}
+.app[data-night="invert"] .page{filter:invert(.9) hue-rotate(180deg)}
+.app[data-night="sepia"] .page{background:#f4ecd8;color:#433422}
+
+.popover{position:absolute;display:flex;align-items:center;gap:2px;padding:4px;z-index:2}
+.popover button{color:var(--muted);font-size:12px}
+.popover button:hover{color:var(--ink)}
+.selpop{left:calc(50% - 170px);top:330px}
+
+.hud{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:4px;z-index:2}
+.hud .group{display:flex;align-items:center;gap:2px}
+.hud button{color:var(--muted)}
+.hud button:hover{color:var(--ink)}
+.hud button[aria-pressed="true"],.hud button[aria-expanded="true"]{color:var(--accent-strong);background:var(--accent-soft)}
+.hud .pageinput{width:64px;color:var(--ink)}
+.hud .pageinput span{color:var(--faint)}
+.hud .zoomval{width:56px;color:var(--ink)}
+.menu{position:absolute;bottom:56px;left:50%;transform:translateX(-50%);width:220px;padding:6px;z-index:3}
+.menu button{width:100%;justify-content:flex-start;height:30px;color:var(--ink)}
+.menu button .num,.menu button kbd{margin-left:auto}
+.menu button[aria-checked="true"]{color:var(--accent-strong)}
+.menu button[aria-checked="true"]::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;margin-left:-2px}
+.menu .divider{height:1px;background:var(--hairline);margin:6px 4px}
+.menu .label{padding:6px 8px 4px}
+.menu-right{left:calc(50% + 120px)}
+
+.tools{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:4px;z-index:2;max-width:calc(100% - 24px)}
+.tools button{color:var(--muted)}
+.tools button:hover{color:var(--ink)}
+.tools button[aria-pressed="true"]{color:var(--accent-strong);background:var(--accent-soft)}
+.tools .swatches{display:flex}
+.tools .swatch[aria-pressed="true"] .dot{box-shadow:0 0 0 2px var(--raised),0 0 0 3.5px currentColor}
+.tools .label-text{font-size:12px}
+.stampmenu{position:absolute;top:60px;left:50%;transform:translateX(20px);width:240px;padding:6px;z-index:3}
+.stampmenu .label{padding:6px 8px 4px}
+.stampmenu .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px}
+.stampmenu .st-btn{height:44px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:.06em;font-size:10px;background:var(--paper);padding:0 4px}
+.stampmenu .st-btn span{border:2px solid currentColor;padding:2px 6px;border-radius:3px}
+.stampmenu .st-btn:hover{background:var(--paper);outline:2px solid var(--accent)}
+
+.find{position:absolute;right:20px;top:14px;display:flex;align-items:center;gap:4px;padding:4px;width:min(420px,calc(100% - 40px));z-index:2}
+.find>svg{margin-left:6px;color:var(--muted)}
+.find input{flex:1;min-width:0;height:28px;background:transparent;border:0;color:var(--ink);font:inherit;padding:0 4px}
+.find input:focus-visible{outline:0}
+.find .count{color:var(--muted);padding:0 6px;white-space:nowrap}
+.find button{color:var(--muted)}
+.find .opt{font-family:var(--mono);font-size:11px;min-width:26px}
+.find .opt[aria-pressed="true"]{color:var(--accent-strong);background:var(--accent-soft)}
+
+.formbar{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:4px 4px 4px 10px;z-index:2;white-space:nowrap}
+.formbar .text{color:var(--muted);font-size:12px}
+.form-page label{display:block;font-size:12px;color:var(--paper-muted);margin:16px 0 4px}
+.form-page .field{height:34px;border-radius:4px;background:var(--field);border:1px solid #c9d8f2;padding:0 10px;display:flex;align-items:center;font-size:14px;color:var(--paper-ink)}
+.form-page .field.focus{outline:2px solid #1f6feb;outline-offset:1px;background:#fff}
+.form-page .field.empty{color:#9aa3b0}
+.form-page .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-page .check{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:14px}
+.form-page .box{width:18px;height:18px;border-radius:4px;background:var(--field);border:1px solid #c9d8f2;display:flex;align-items:center;justify-content:center;color:#1f6feb}
+.form-page .box svg{width:13px;height:13px;stroke-width:2.4}
+.form-page .sigfield{height:64px;border-radius:4px;border:1px dashed #9db5de;background:var(--field);display:flex;align-items:center;justify-content:center;color:#5577aa;font-size:13px;gap:8px;margin-top:4px}
+
+.spread{flex:1;overflow:auto;padding:28px 32px 120px;display:flex;justify-content:center;align-items:flex-start;gap:4px}
+.spread .page{width:min(460px,48%);aspect-ratio:210/297;overflow:hidden;margin:0;padding:44px 46px 40px;font-size:11px;line-height:1.6;display:flex;flex-direction:column}
+.spread .page .foot,.pane .page .foot{margin-top:auto}
+.spread .page h1{font-size:21px}
+.spread .page h2{font-size:14px;margin:18px 0 6px}
+.spread .page .meta{margin:12px 0 16px;font-size:10px}
+
+.split{flex:1;display:flex;min-height:0;gap:2px;background:var(--hairline)}
+.pane{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--canvas)}
+.pane-head{height:38px;flex:none;display:flex;align-items:center;gap:6px;padding:0 8px 0 14px;background:var(--chrome)}
+.pane-head .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.pane-head .num{color:var(--muted)}
+.pane-head button{color:var(--muted)}
+.pane.focused .pane-head .name{color:var(--ink);font-weight:600}
+.pane:not(.focused) .pane-head .name{color:var(--muted)}
+.pane .viewport{padding:20px 20px 40px}
+.pane .page{padding:40px 44px 36px;font-size:12px;line-height:1.6;aspect-ratio:210/297;overflow:hidden;display:flex;flex-direction:column}
+.pane .page h1{font-size:22px}
+.pane .page h2{font-size:15px}
+.pane .page .meta{font-size:10px;margin:12px 0 16px}
+
+.present{position:fixed;inset:38px 0 0 0;background:var(--present-bg);display:flex;align-items:center;justify-content:center;z-index:4}
+.present .page{width:auto;height:calc(100% - 48px);aspect-ratio:8.5/11;margin:0;padding:6% 7%;font-size:clamp(9px,1.25vh,15px);overflow:hidden}
+.present .page h1{font-size:2.1em}
+.present .page h2{font-size:1.3em}
+.present .hint{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:16px;align-items:center;color:#8a929c;font-size:12px;background:rgba(23,27,32,.9);padding:6px 12px;border-radius:var(--radius)}
+.present .hint kbd{background:#252b33;color:#c9cdd2}
+
+.loupe{position:absolute;left:calc(50% - 150px);top:420px;width:300px;height:150px;border-radius:var(--radius);overflow:hidden;background:var(--paper);box-shadow:var(--shadow),0 0 0 2px var(--accent);z-index:2;pointer-events:none}
+.loupe .inner{position:absolute;left:0;top:14px;width:900px;font-size:30px;line-height:1.65;color:var(--paper-ink);padding:0 20px}
+.loupe .tag{position:absolute;right:8px;bottom:8px;font-family:var(--mono);font-size:11px;color:var(--paper-muted);background:#f1f2f4;border-radius:var(--radius);padding:1px 6px}
+
+.toast{position:absolute;right:20px;bottom:20px;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px;z-index:2;max-width:calc(100% - 40px)}
+.toast .text{color:var(--muted);font-size:12px}
+.toast button{color:var(--accent-strong);font-size:12px}
+
+.organize{flex:1;display:flex;flex-direction:column;min-height:0}
+.orgbar{height:52px;flex:none;display:flex;align-items:center;gap:4px;padding:0 16px;background:var(--chrome);overflow-x:auto;scrollbar-width:none}
+.orgbar .title{font-weight:600;margin-right:10px;white-space:nowrap}
+.orgbar .selcount{color:var(--muted);margin-right:auto;white-space:nowrap}
+.orgbar button{color:var(--muted)}
+.orgbar button:hover{color:var(--ink)}
+.orgbar .danger:hover{color:var(--fail)}
+.orgbar .primary{color:var(--on-accent)}
+.grid{flex:1;overflow:auto;padding:28px 32px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:28px 22px;align-content:start}
+.gpage{display:flex;flex-direction:column;align-items:center;gap:8px;height:auto;padding:0;background:transparent;position:relative}
+.gpage:hover{background:transparent}
+.gpage .sheet{width:132px;height:172px;padding:16px 14px;gap:5px}
+.gpage:hover .sheet{outline-color:var(--hairline)}
+.gpage[aria-selected="true"] .sheet{outline-color:var(--accent)}
+.gpage .check{position:absolute;top:8px;left:calc(50% + 40px);width:20px;height:20px;border-radius:50%;background:var(--raised);color:var(--faint);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow)}
+.gpage .check svg{width:12px;height:12px;stroke-width:2.4}
+.gpage[aria-selected="true"] .check{background:var(--accent);color:var(--on-accent)}
+.gpage .num{color:var(--faint);font-size:11px}
+.gpage[aria-selected="true"] .num{color:var(--accent)}
+.gpage.rot .sheet{width:172px;height:132px;margin:20px 0}
+.gpage.rot .check{left:calc(50% + 60px);top:28px}
+.gpage.ghost .sheet{background:transparent;outline:2px dashed var(--accent);outline-offset:-2px}
+.insert{width:132px;height:172px;border-radius:3px;border:1.5px dashed var(--hairline);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);justify-self:center;font-size:12px}
+
+.lock{flex:1;display:flex;align-items:center;justify-content:center;padding:32px}
+.lock-inner{width:min(360px,100%)}
+.lock-inner .icon{width:40px;height:40px;border-radius:var(--radius);background:var(--raised);display:flex;align-items:center;justify-content:center;color:var(--muted);margin-bottom:16px}
+.lock-inner .icon svg{width:20px;height:20px}
+.lock-inner h2{font-size:17px;margin:0 0 4px;font-weight:600}
+.lock-inner p{margin:0 0 18px;color:var(--muted)}
+.lock-inner .row{display:flex;gap:8px}
+.lock-inner .status{margin-top:12px}
+
+.empty{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;overflow:auto}
+.empty-inner{width:min(560px,100%)}
+.drop{height:170px;border:1.5px dashed var(--hairline);border-radius:var(--radius);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted)}
+.drop svg{width:28px;height:28px;color:var(--faint)}
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:20px}
+.quick button{height:auto;flex-direction:column;align-items:flex-start;gap:6px;padding:12px;color:var(--ink);text-align:left;white-space:normal;flex:1}
+.quick button svg{color:var(--muted)}
+.quick button span{color:var(--muted);font-size:12px}
+.section-label{margin:28px 0 8px}
+.recent button{width:100%;height:36px;justify-content:flex-start;gap:10px;color:var(--ink);padding:0 10px}
+.recent button svg{color:var(--muted)}
+.recent .when{margin-left:auto;color:var(--faint)}
+.recent .name{overflow:hidden;text-overflow:ellipsis}
+
+.scrim{position:fixed;inset:38px 0 0 0;background:var(--scrim);display:flex;justify-content:center;align-items:flex-start;padding:8vh 16px 16px;z-index:5;overflow:auto}
+.dialog{width:min(560px,100%);overflow:hidden}
+.dialog header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px}
+.dialog header h2{font-size:15px;margin:0;font-weight:600}
+.dialog header button{color:var(--muted)}
+.dialog .content{padding:8px 16px 16px}
+.dialog footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--hairline)}
+.dialog .foot-note{margin-right:auto;color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px;min-width:0}
+
+.palette .q{display:flex;align-items:center;gap:10px;padding:0 14px;height:48px}
+.palette .q svg{color:var(--muted)}
+.palette .q input{flex:1;height:100%;background:transparent;border:0;color:var(--ink);font:inherit;font-size:15px}
+.palette .q input:focus-visible{outline:0}
+.palette .items{padding:6px;border-top:1px solid var(--hairline);max-height:58vh;overflow:auto}
+.palette .label{padding:10px 10px 6px}
+.palette .item{width:100%;height:34px;justify-content:flex-start;gap:10px;padding:0 10px;color:var(--ink)}
+.palette .item svg{color:var(--muted)}
+.palette .item .hint{margin-left:auto;display:flex;gap:4px;color:var(--faint)}
+.palette .item.active{background:var(--hover)}
+
+.segtabs{display:flex;gap:2px;margin-bottom:14px}
+.segtabs button{height:28px;color:var(--muted);padding:0 12px}
+.segtabs button[aria-selected="true"]{background:var(--hover);color:var(--ink)}
+.pad{height:170px;border-radius:var(--radius);background:var(--paper);position:relative;display:flex;align-items:center;justify-content:center}
+.pad svg{width:300px;height:110px}
+.pad svg path{stroke:var(--sig-ink);stroke-width:2.6}
+.pad .baseline{position:absolute;left:32px;right:32px;bottom:38px;border-top:1px solid var(--paper-rule)}
+.pad .clear{position:absolute;right:8px;top:8px;color:#5b6168;height:26px;font-size:12px}
+.pad .clear:hover{background:#eef0f3}
+.pad .typed{font-family:var(--script);font-size:46px;color:var(--sig-ink)}
+.saved{display:flex;gap:8px;margin-top:14px;align-items:center}
+.saved button{height:40px;background:var(--paper);color:var(--sig-ink);font-family:var(--script);font-size:20px;padding:0 14px;outline:2px solid transparent}
+.saved button[aria-pressed="true"]{outline-color:var(--accent)}
+.saved button:hover{background:var(--paper);outline-color:var(--hairline)}
+.inks{display:flex;gap:4px;margin-top:12px;align-items:center;color:var(--muted);font-size:12px}
+.inks .swatch .dot{width:14px;height:14px;box-shadow:0 0 0 1px var(--hairline)}
+
+.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.choice{height:auto;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px;text-align:left;white-space:normal;color:var(--ink);outline:1.5px solid transparent;flex:1}
+.choice span{font-size:12px;color:var(--muted)}
+.choice[aria-checked="true"]{background:var(--accent-soft);outline-color:var(--accent)}
+.choice[aria-checked="true"] span{color:var(--accent-strong)}
+.formrow{display:grid;grid-template-columns:130px 1fr;align-items:center;gap:10px;margin-top:14px}
+.formrow>.lbl{font-size:12px;color:var(--muted)}
+.formrow .hint{grid-column:2;font-size:12px;color:var(--faint);margin-top:-6px}
+.pills{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
+.pills button{height:28px;color:var(--muted);padding:0 10px}
+.pills button[aria-checked="true"]{background:var(--hover);color:var(--ink)}
+.pills input.text{width:90px;height:28px;font-family:var(--mono);font-size:12px}
+.toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-size:13px;cursor:pointer}
+.toggle i{width:30px;height:18px;border-radius:9px;background:var(--accent);position:relative;flex:none}
+.toggle i::after{content:"";position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--on-accent)}
+.toggle.off i{background:var(--pressed)}
+.toggle.off i::after{right:auto;left:2px;background:var(--muted)}
+.settings{display:flex;min-height:420px}
+.settings nav{width:160px;flex:none;padding:8px;display:flex;flex-direction:column;gap:2px;background:var(--chrome)}
+.settings nav button{justify-content:flex-start;color:var(--muted);width:100%}
+.settings nav button[aria-current="true"]{background:var(--raised);color:var(--ink)}
+.settings .pane-body{flex:1;padding:4px 20px 20px;overflow:auto}
+.settings h3{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:500;margin:20px 0 4px}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 28px}
+.keys h3{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:500;margin:14px 0 6px}
+.keys .k{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);height:26px;gap:8px}
+.print{display:grid;grid-template-columns:170px 1fr;gap:20px}
+.print .preview-sheet{width:170px;height:220px;background:var(--paper);border-radius:3px;padding:18px 16px;display:flex;flex-direction:column;gap:5px}
+.print .preview-sheet i{display:block;height:4px;background:#d4d7dc;border-radius:1px}
+.print .preview-sheet i.h{height:8px;width:70%;background:#9aa0a8;margin:4px 0}
+.print .preview-sheet i.y{background:var(--dot-yellow)}
+.print .pnav{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:8px;color:var(--muted)}
+.print .formrow{grid-template-columns:96px 1fr}
+.attach-icon{width:28px;height:28px;border-radius:var(--radius);background:var(--raised);display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none}
+
+[hidden]{display:none!important}
+
+@media (max-width:1100px){
+  .inspector{position:absolute;right:0;top:0;bottom:0;z-index:3;box-shadow:var(--shadow)}
+}
+@media (max-width:860px){
+  .title-actions .palette-trigger{min-width:0}
+  .title-actions .palette-trigger .label-text,.title-actions .palette-trigger kbd{display:none}
+  .tools .label-text{display:none}
+  .choices{grid-template-columns:repeat(2,1fr)}
+  .keys{grid-template-columns:repeat(2,1fr)}
+  .title-actions .hide-md{display:none}
+}
+@media (max-width:760px){
+  .lights{display:none}
+  .titlebar{padding-left:6px}
+  .tab{min-width:90px}
+  .sidebar{position:absolute;z-index:3;top:0;bottom:0;box-shadow:var(--shadow)}
+  .inspector{width:min(300px,100%)}
+  .viewport{padding:16px 16px 110px}
+  .page{padding:36px 24px 32px}
+  .page h1{font-size:24px}
+  .hud .zoomgroup,.hud .hide-sm{display:none}
+  .tools{left:8px;right:8px;transform:none;overflow-x:auto;scrollbar-width:none;max-width:none}
+  .tools .swatches,.tools .hide-sm{display:none}
+  .selpop{left:16px;top:300px}
+  .ink,.stamp{display:none!important}
+  .signature{right:24px;width:180px}
+  .app[data-signed] .viewport .page.first .foot{left:24px;right:24px}
+  .quick{grid-template-columns:1fr}
+  .grid{padding:16px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:20px 12px}
+  .gpage .sheet{width:104px;height:136px}
+  .gpage .check{left:calc(50% + 30px)}
+  .gpage.rot .sheet{width:136px;height:104px;margin:16px 0}
+  .gpage.rot .check{left:calc(50% + 46px);top:24px}
+  .orgbar .title{display:none}
+  .formrow,.print .formrow{grid-template-columns:1fr;gap:6px}
+  .formrow .hint{grid-column:1}
+  .choices,.keys{grid-template-columns:1fr}
+  .form-page .two{grid-template-columns:1fr}
+  .formbar .text{display:none}
+  .toast{left:16px;right:16px;bottom:76px}
+  .spread{flex-direction:column;align-items:center;padding:16px 16px 110px;gap:16px}
+  .spread .page{width:100%}
+  .split{flex-direction:column}
+  .loupe{left:16px;right:16px;width:auto}
+  .settings{flex-direction:column}
+  .settings nav{width:auto;flex-direction:row;overflow-x:auto}
+  .settings nav button{width:auto}
+  .print{grid-template-columns:1fr}
+  .print .preview-sheet{margin:0 auto}
+  .banner{flex-wrap:wrap}
+  .preview .desc{display:none}
+  .stampmenu{left:16px;transform:none}
+  .menu-right{left:auto;right:16px;transform:none}
+}
+</style>
+</head>
+<body>
+<div class="preview" role="toolbar" aria-label="Mock states">
+  <b>Mock</b>
+  <button id="prev-state" aria-label="Previous state"><svg viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></svg></button>
+  <select id="state-select" aria-label="State"></select>
+  <button id="next-state" aria-label="Next state"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></button>
+  <span class="desc" id="state-desc"></span>
+  <span class="spacer"></span>
+  <button data-theme-set="dark" aria-pressed="true">Dark</button>
+  <button data-theme-set="light" aria-pressed="false">Light</button>
+</div>
+
+<div class="app" id="app">
+  <header class="titlebar">
+    <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+    <nav class="tabs" aria-label="Open documents">
+      <div class="tab doc-tab"><span class="name">reading.pdf</span><button class="close" aria-label="Close tab"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+      <div class="tab doc-tab active" id="active-tab"><span class="name">quarterly-infrastructure-review.pdf</span><button class="close" aria-label="Close tab"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg><span class="edited" title="Unsaved changes"></span></button></div>
+      <div class="tab doc-tab"><span class="name">field-guide-to-coastal-birds.pdf</span><button class="close" aria-label="Close tab"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+      <button class="new-tab" aria-label="Open PDF" title="Open PDF  (Cmd O)"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></button>
+    </nav>
+    <div class="title-actions">
+      <button data-go="toggle-sidebar" aria-label="Toggle sidebar" title="Sidebar  (Cmd B)"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/></svg></button>
+      <button data-go="find" aria-label="Find" title="Find  (Cmd F)"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg></button>
+      <button data-go="annotate" data-active="annotate stamps sign signed inspector" aria-label="Annotate" title="Annotate  (Cmd Shift A)"><svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3L6 13H3v-3z"/><path d="M9 4l3 3"/></svg></button>
+      <button class="hide-md" data-go="organize" data-active="organize" aria-label="Organize pages" title="Organize pages  (Cmd Shift O)"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></button>
+      <button class="hide-md" data-go="export" data-active="export" aria-label="Export" title="Export  (Cmd E)"><svg viewBox="0 0 16 16"><path d="M8 10V2M5 5l3-3 3 3M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3"/></svg></button>
+      <button data-go="info" data-active="info signatures inspector" aria-label="Inspector" title="Inspector  (Cmd I)"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg></button>
+      <button class="palette-trigger" data-go="palette" aria-label="Command palette"><span class="label-text">Go to anything</span><kbd>Cmd K</kbd></button>
+    </div>
+  </header>
+
+  <div class="banner" data-show="changed" role="status">
+    <span class="status warn"><span class="dot"></span>Changed on disk</span>
+    <span class="text"><b>quarterly-infrastructure-review.pdf</b> was modified by another app. Your unsaved notes are kept until you choose.</span>
+    <button class="quiet">Keep my version</button>
+    <button class="primary" style="height:28px">Reload</button>
+  </div>
+
+  <div class="body">
+    <aside class="sidebar" id="sidebar" aria-label="Document navigation">
+      <div class="rail" role="tablist">
+        <button role="tab" data-panel="pages" title="Pages"><svg viewBox="0 0 16 16"><rect x="3" y="2" width="10" height="12" rx="1.5"/><path d="M6 6h4M6 9h4"/></svg></button>
+        <button role="tab" data-panel="outline" title="Outline"><svg viewBox="0 0 16 16"><path d="M3 4h10M5 8h8M5 12h8"/></svg></button>
+        <button role="tab" data-panel="bookmarks" title="Bookmarks"><svg viewBox="0 0 16 16"><path d="M4 2h8v12l-4-3-4 3z"/></svg></button>
+        <button role="tab" data-panel="notes" title="Notes"><svg viewBox="0 0 16 16"><path d="M3 3h10v7H8l-3 3v-3H3z"/></svg></button>
+        <button role="tab" data-panel="results" title="Search results"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg></button>
+        <button role="tab" data-panel="attachments" title="Attachments"><svg viewBox="0 0 16 16"><path d="M11 6l-4.5 4.5a1.5 1.5 0 01-2-2L10 3a3 3 0 014 4l-5.5 5.5"/></svg></button>
+      </div>
+
+      <div class="panel" data-panel-body="pages">
+        <div class="panel-head"><span class="label">Pages</span><span class="num" style="color:var(--faint)">4</span></div>
+        <div class="panel-body thumbs">
+          <button class="thumb"><span class="sheet"><i class="h"></i><i></i><i></i><i class="s"></i><i></i><i></i><i></i><i class="s"></i></span><span class="num">1</span></button>
+          <button class="thumb" aria-current="page"><span class="sheet"><i></i><i class="y"></i><i class="s"></i><i class="h"></i><i></i><i class="g"></i><i></i><i class="s"></i><i></i></span><span class="num"><svg class="bm" viewBox="0 0 16 16"><path d="M4 2h8v12l-4-3-4 3z" fill="currentColor"/></svg>2</span></button>
+          <button class="thumb"><span class="sheet"><i class="h"></i><i></i><i></i><i></i><i class="s"></i><i></i><i class="s"></i></span><span class="num">3</span></button>
+          <button class="thumb"><span class="sheet"><i></i><i></i><i></i><i class="s"></i><i class="h"></i><i></i><i></i></span><span class="num"><svg class="bm" viewBox="0 0 16 16"><path d="M4 2h8v12l-4-3-4 3z" fill="currentColor"/></svg>4</span></button>
+        </div>
+      </div>
+
+      <div class="panel" data-panel-body="outline">
+        <div class="panel-head"><span class="label">Outline</span><button>Collapse all</button></div>
+        <div class="panel-body list">
+          <button class="row-btn">Summary <span class="num">1</span></button>
+          <button class="row-btn" aria-current="true">1. Network capacity <span class="num">2</span></button>
+          <button class="row-btn sub">Peak traffic <span class="num">2</span></button>
+          <button class="row-btn sub">Regional load <span class="num">2</span></button>
+          <button class="row-btn">2. Storage <span class="num">3</span></button>
+          <button class="row-btn">3. Next quarter <span class="num">4</span></button>
+        </div>
+      </div>
+
+      <div class="panel" data-panel-body="bookmarks">
+        <div class="panel-head"><span class="label">Bookmarks</span><button title="Bookmark this page  (Cmd D)"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>Add</button></div>
+        <div class="panel-body list">
+          <button class="row-btn" aria-current="true"><svg viewBox="0 0 16 16" style="color:var(--accent)"><path d="M4 2h8v12l-4-3-4 3z" fill="currentColor"/></svg>Launch week numbers<span class="num">2</span></button>
+          <button class="row-btn"><svg viewBox="0 0 16 16" style="color:var(--accent)"><path d="M4 2h8v12l-4-3-4 3z" fill="currentColor"/></svg>Q4 plan inputs<span class="num">4</span></button>
+          <p style="color:var(--faint);font-size:12px;padding:10px 8px;margin:0">Bookmarks are yours. They are saved with your notes, not in the outline.</p>
+        </div>
+      </div>
+
+      <div class="panel" data-panel-body="notes">
+        <div class="panel-head"><span class="label">Notes <span class="num">5</span></span>
+          <span class="filter" aria-label="Filter by colour">
+            <span class="dot" style="color:var(--dot-yellow)"></span><span class="dot" style="color:var(--dot-green)"></span><span class="dot" style="color:var(--dot-blue)"></span><span class="dot" style="color:var(--dot-pink)"></span>
+          </span></div>
+        <div class="panel-body list">
+          <button class="note" aria-current="true"><div class="row"><span class="dot" style="color:var(--dot-yellow)"></span>Highlight<span class="num">p. 2</span></div><q>pushed request volume to capacity limits in two regions for several hours</q><p>Which two regions? Check the launch dashboard.</p></button>
+          <button class="note"><div class="row"><span class="dot" style="color:var(--dot-green)"></span>Highlight<span class="num">p. 2</span></div><q>Cache hit rates stayed above target, so origin servers saw only a modest increase in load.</q></button>
+          <button class="note"><div class="row"><span class="dot" style="color:var(--dot-blue)"></span>Underline<span class="num">p. 2</span></div><q>the margin was smaller than the plan assumes</q></button>
+          <button class="note"><div class="row"><span class="dot" style="color:var(--dot-pink)"></span>Ink<span class="num">p. 2</span></div><q>Freehand drawing</q></button>
+          <button class="note"><div class="row"><span class="dot" style="color:var(--dot-green)"></span>Stamp<span class="num">p. 2</span></div><q>Approved</q></button>
+        </div>
+      </div>
+
+      <div class="panel" data-panel-body="results">
+        <div class="panel-head"><span class="label">Results <span class="num">7</span></span><span class="num" style="color:var(--faint)">"capacity"</span></div>
+        <div class="panel-body list">
+          <div class="label" style="padding:8px 10px 4px">Page 2</div>
+          <button class="note ctx"><q>...pushed request volume to <mark>capacity</mark> limits in two regions...</q></button>
+          <button class="note ctx" aria-current="true"><q>...ran close to their planned <mark>capacity</mark> during the launch window...</q></button>
+          <button class="note ctx"><q>...more headroom without adding <mark>capacity</mark> everywhere...</q></button>
+          <div class="label" style="padding:8px 10px 4px">Page 3</div>
+          <button class="note ctx"><q>...storage <mark>capacity</mark> grew by a fifth...</q></button>
+          <div class="label" style="padding:8px 10px 4px">Page 4</div>
+          <button class="note ctx"><q>...plan for 30 percent more <mark>capacity</mark> in the eastern...</q></button>
+          <button class="note ctx"><q>...<mark>capacity</mark> reviews move to monthly...</q></button>
+          <button class="note ctx"><q>...reserved <mark>capacity</mark> contracts renew in...</q></button>
+        </div>
+      </div>
+
+      <div class="panel" data-panel-body="attachments">
+        <div class="panel-head"><span class="label">Attachments <span class="num">2</span></span></div>
+        <div class="panel-body list">
+          <button class="row-btn" style="height:44px"><span class="attach-icon"><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg></span><span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0"><span style="color:var(--ink);overflow:hidden;text-overflow:ellipsis;max-width:120px">traffic-by-region.csv</span><span class="num" style="font-size:11px;color:var(--faint)">48 KB</span></span></button>
+          <button class="row-btn" style="height:44px"><span class="attach-icon"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 11l3-3 3 3 2-2 4 4"/></svg></span><span style="display:flex;flex-direction:column;align-items:flex-start;min-width:0"><span style="color:var(--ink)">network-map.png</span><span class="num" style="font-size:11px;color:var(--faint)">1.2 MB</span></span></button>
+          <p style="color:var(--faint);font-size:12px;padding:10px 8px;margin:0">Files embedded in this PDF. Click to save a copy.</p>
+        </div>
+      </div>
+    </aside>
+
+    <main class="stage" id="stage">
+      <div class="viewport" data-view="main">
+        <article class="page first">
+          <div class="eyebrow">Section 1</div>
+          <h1>Network capacity</h1>
+          <div class="meta"><span class="num">Q3 review</span><span class="num">4 pages</span><span class="num">Internal draft</span></div>
+          <div class="stamp">APPROVED<small>A. Morgan, 4 Nov 2026</small></div>
+          <p>Traffic grew steadily through the quarter. The busiest week arrived in late September, when a product launch <span class="hl-y">pushed request volume to <mark class="m">capacity</mark> limits in two regions for several hours</span>.</p>
+          <span class="pin" style="top:258px"><svg viewBox="0 0 16 16"><path d="M3 3h10v7H8l-3 3v-3H3z"/></svg></span>
+          <h2>Peak traffic</h2>
+          <p><span class="sel">The edge network absorbed the spike without dropped requests. </span><span class="hl-g">Cache hit rates stayed above target, so origin servers saw only a modest increase in load.</span> Most of the extra traffic was static assets, which the cache serves cheaply.</p>
+          <p>Two regions ran close to their planned <mark class="m current">capacity</mark> during the launch window. Neither crossed it, but <span class="ul">the margin was smaller than the plan assumes</span> for the coming quarter.</p>
+          <svg class="ink ann" viewBox="0 0 44 84"><path d="M8 6c10 0 14 4 14 12v14c0 6 4 9 10 10-6 1-10 4-10 10v14c0 8-4 12-14 12"/></svg>
+          <h2>Regional load</h2>
+          <p>Load was uneven across regions. The eastern regions carried most of the launch traffic, while the western regions stayed well below their usual peaks. Rebalancing would leave more headroom without adding <mark class="m">capacity</mark> everywhere. <span class="st">A second launch is not planned this year.</span></p>
+          <div class="signature"><div class="handles"><i></i><i></i><i></i><i></i></div><div class="mark">Alex Morgan</div><div class="line">Approved, 4 Nov 2026</div></div>
+          <div class="foot"><span>Quarterly infrastructure review</span><span class="num">2</span></div>
+        </article>
+        <article class="page">
+          <div class="eyebrow">Section 2</div>
+          <h1>Storage</h1>
+          <p>Stored data grew more slowly than traffic. Most growth came from logs kept for the standard retention window.</p>
+          <div class="foot"><span>Quarterly infrastructure review</span><span class="num">3</span></div>
+        </article>
+      </div>
+
+      <div class="viewport" data-view="form">
+        <article class="page form-page">
+          <div class="eyebrow">Form 7</div>
+          <h1>Equipment request</h1>
+          <p style="color:var(--paper-muted);font-size:13px">Complete every field and sign at the bottom.</p>
+          <div class="two">
+            <div><label>Full name</label><div class="field">Alex Morgan</div></div>
+            <div><label>Team</label><div class="field">Infrastructure</div></div>
+          </div>
+          <label>Item requested</label><div class="field focus">Standing desk, 140 cm<span style="border-left:1.5px solid #1f6feb;height:18px;margin-left:1px"></span></div>
+          <div class="two">
+            <div><label>Cost centre</label><div class="field empty">e.g. 4100</div></div>
+            <div><label>Needed by</label><div class="field empty">DD/MM/YYYY</div></div>
+          </div>
+          <div class="check"><span class="box"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></span>I have checked this with my manager</div>
+          <div class="check"><span class="box"></span>Deliver to home address</div>
+          <label>Signature</label>
+          <div class="sigfield"><svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3L6 13H3v-3z"/></svg>Click to sign</div>
+          <div class="foot"><span>Equipment request</span><span class="num">1</span></div>
+        </article>
+      </div>
+
+      <div class="spread" data-view="spread">
+        <article class="page">
+          <div class="eyebrow">Section 1</div>
+          <h1>Network capacity</h1>
+          <div class="meta"><span class="num">Q3 review</span><span class="num">4 pages</span></div>
+          <p>Traffic grew steadily through the quarter. The busiest week arrived in late September, when a product launch pushed request volume to capacity limits in two regions for several hours.</p>
+          <h2>Peak traffic</h2>
+          <p>The edge network absorbed the spike without dropped requests. Cache hit rates stayed above target, so origin servers saw only a modest increase in load.</p>
+          <p>Two regions ran close to their planned capacity during the launch window.</p>
+          <div class="foot"><span>Quarterly infrastructure review</span><span class="num">2</span></div>
+        </article>
+        <article class="page">
+          <div class="eyebrow">Section 2</div>
+          <h1>Storage</h1>
+          <p>Stored data grew more slowly than traffic. Most growth came from logs kept for the standard retention window.</p>
+          <h2>Retention</h2>
+          <p>Shortening log retention for debug-level entries would cut storage growth by about a third without affecting audits.</p>
+          <div class="foot"><span>Quarterly infrastructure review</span><span class="num">3</span></div>
+        </article>
+      </div>
+
+      <div class="split" data-view="split">
+        <section class="pane focused">
+          <div class="pane-head"><span class="name">quarterly-infrastructure-review.pdf</span><span class="num">2 / 4</span><button aria-label="Swap panes"><svg viewBox="0 0 16 16"><path d="M3 5h10l-3-3M13 11H3l3 3"/></svg></button><button aria-label="Close pane"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+          <div class="viewport"><article class="page"><div class="eyebrow">Section 1</div><h1>Network capacity</h1><div class="meta"><span class="num">Q3 review</span><span class="num">Draft 2</span></div><p>Traffic grew steadily through the quarter. The busiest week arrived in late September, when a product launch pushed request volume to capacity limits in two regions for several hours.</p><h2>Peak traffic</h2><p>The edge network absorbed the spike without dropped requests.</p><div class="foot"><span>Quarterly infrastructure review</span><span class="num">2</span></div></article></div>
+        </section>
+        <section class="pane">
+          <div class="pane-head"><span class="name">quarterly-infrastructure-review-draft-1.pdf</span><span class="num">2 / 4</span><button aria-label="Sync scrolling" title="Scroll together" style="color:var(--accent-strong);background:var(--accent-soft)"><svg viewBox="0 0 16 16"><path d="M6 10l4-4M5 7L3.5 8.5a2.5 2.5 0 003.5 3.5L8.5 10.5M11 9l1.5-1.5A2.5 2.5 0 009 4L7.5 5.5"/></svg></button><button aria-label="Close pane"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+          <div class="viewport"><article class="page"><div class="eyebrow">Section 1</div><h1>Network capacity</h1><div class="meta"><span class="num">Q3 review</span><span class="num">Draft 1</span></div><p>Traffic grew through the quarter. The busiest week arrived in late September, when a product launch pushed request volume close to limits in two regions.</p><h2>Peak traffic</h2><p>The edge network absorbed the spike.</p><div class="foot"><span>Quarterly infrastructure review</span><span class="num">2</span></div></article></div>
+        </section>
+      </div>
+
+      <div class="organize" data-view="organize">
+        <div class="orgbar" role="toolbar" aria-label="Organize pages">
+          <span class="title">Organize pages</span>
+          <span class="selcount num">2 of 4 selected</span>
+          <button title="Rotate left"><svg viewBox="0 0 16 16"><path d="M3 8a5 5 0 105-5H5M5 3L3 5M5 3l2 2"/></svg></button>
+          <button title="Rotate right"><svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 11-5-5h3M11 3l2 2M11 3L9 5"/></svg></button>
+          <button><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M8 7v5M6 10l2 2 2-2"/></svg>Extract</button>
+          <button><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>Insert file</button>
+          <button class="danger"><svg viewBox="0 0 16 16"><path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5L11 4"/></svg>Delete</button>
+          <span class="sep-v"></span>
+          <button class="quiet" style="height:28px" data-go="reading">Cancel</button>
+          <button class="primary" style="height:28px" data-go="reading">Apply</button>
+        </div>
+        <div class="grid">
+          <button class="gpage" aria-selected="false"><span class="sheet"><i class="h"></i><i></i><i></i><i class="s"></i><i></i><i></i><i></i><i class="s"></i></span><span class="check"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></span><span class="num">1</span></button>
+          <button class="gpage" aria-selected="true"><span class="sheet"><i></i><i class="y"></i><i class="s"></i><i class="h"></i><i></i><i class="g"></i><i></i><i class="s"></i><i></i></span><span class="check"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></span><span class="num">2</span></button>
+          <button class="gpage ghost" aria-label="Drop position"><span class="sheet"></span><span class="num">Drop here</span></button>
+          <button class="gpage rot" aria-selected="true"><span class="sheet"><i class="h"></i><i></i><i></i><i></i><i class="s"></i><i></i><i class="s"></i></span><span class="check"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></span><span class="num">3, rotated</span></button>
+          <button class="gpage" aria-selected="false"><span class="sheet"><i></i><i></i><i></i><i class="s"></i><i class="h"></i><i></i><i></i></span><span class="check"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></span><span class="num">4</span></button>
+          <button class="insert"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>Add pages from a file</button>
+        </div>
+      </div>
+
+      <div class="lock" data-view="locked">
+        <div class="lock-inner">
+          <div class="icon"><svg viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/></svg></div>
+          <h2>This PDF is password protected</h2>
+          <p>Enter the password to open contract-2026.pdf. The password stays in memory for this session only.</p>
+          <div class="row"><input class="text" type="password" value="hunter22" aria-label="Password"><button class="primary">Unlock</button></div>
+          <span class="status fail"><span class="dot"></span>Wrong password. Try again.</span>
+        </div>
+      </div>
+
+      <div class="empty" data-view="empty">
+        <div class="empty-inner">
+          <div class="drop">
+            <svg viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+            <div>Drop PDFs or images anywhere</div>
+            <button class="primary">Open PDF</button>
+          </div>
+          <div class="quick">
+            <button data-go="convert"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="5" height="10" rx="1"/><rect x="9" y="3" width="5" height="10" rx="1"/></svg>Combine files<span>Merge PDFs and images into one PDF</span></button>
+            <button data-go="form"><svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3L6 13H3v-3z"/></svg>Fill and sign<span>Complete a form or add a signature</span></button>
+            <button data-go="export"><svg viewBox="0 0 16 16"><path d="M8 10V2M5 5l3-3 3 3M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3"/></svg>Convert<span>PDF to images or text</span></button>
+          </div>
+          <div class="label section-label">Restore last session</div>
+          <div class="recent"><button><svg viewBox="0 0 16 16"><path d="M2 8a6 6 0 106-6M2 3v3h3"/></svg><span class="name">3 tabs from yesterday</span><span class="when num">Cmd Shift T</span></button></div>
+          <div class="label section-label">Recent</div>
+          <div class="recent">
+            <button><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg><span class="name">quarterly-infrastructure-review.pdf</span><span class="when num">page 2</span></button>
+            <button><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg><span class="name">field-guide-to-coastal-birds.pdf</span><span class="when num">page 118</span></button>
+            <button><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg><span class="name">equipment-request.pdf</span><span class="when num">page 1</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="loupe" data-show="magnifier" aria-hidden="true">
+        <div class="inner">The edge network absorbed<br>the spike without dropped</div>
+        <span class="tag">3x</span>
+      </div>
+
+      <div class="popover floating selpop" data-show="reading" role="toolbar" aria-label="Selection">
+        <button class="swatch" aria-label="Highlight yellow"><span class="dot" style="color:var(--dot-yellow)"></span></button>
+        <button class="swatch" aria-label="Highlight green"><span class="dot" style="color:var(--dot-green)"></span></button>
+        <button class="swatch" aria-label="Highlight blue"><span class="dot" style="color:var(--dot-blue)"></span></button>
+        <button class="swatch" aria-label="Highlight pink"><span class="dot" style="color:var(--dot-pink)"></span></button>
+        <span class="sep-v"></span>
+        <button aria-label="Underline"><svg viewBox="0 0 16 16"><path d="M5 3v4a3 3 0 006 0V3M4 13h8"/></svg></button>
+        <button aria-label="Add note"><svg viewBox="0 0 16 16"><path d="M3 3h10v7H8l-3 3v-3H3z"/></svg></button>
+        <button aria-label="Look up" title="Look up"><svg viewBox="0 0 16 16"><path d="M3 3h4a2 2 0 012 2v8a1.5 1.5 0 00-1.5-1.5H3zM13 3H9"/><path d="M13 3v8.5H9"/></svg></button>
+        <span class="sep-v"></span>
+        <button><svg viewBox="0 0 16 16"><rect x="5" y="5" width="8" height="8" rx="2"/><path d="M3 11V4a1 1 0 011-1h7"/></svg>Copy</button>
+      </div>
+
+      <div class="tools floating" data-show="annotate stamps sign signed inspector" role="toolbar" aria-label="Annotation tools">
+        <button aria-label="Select" title="Select  (V)" data-tool="select"><svg viewBox="0 0 16 16"><path d="M4 2l8 6-4 1 2 4-2 1-2-4-2 3z"/></svg></button>
+        <button aria-label="Highlight" title="Highlight  (H)" data-tool="highlight"><svg viewBox="0 0 16 16"><path d="M9 3l4 4-6 6H3v-4z"/><path d="M3 14h10"/></svg></button>
+        <div class="swatches">
+          <button class="swatch" aria-pressed="true" aria-label="Yellow" style="color:var(--dot-yellow)"><span class="dot"></span></button>
+          <button class="swatch" aria-label="Green" style="color:var(--dot-green)"><span class="dot"></span></button>
+          <button class="swatch" aria-label="Blue" style="color:var(--dot-blue)"><span class="dot"></span></button>
+          <button class="swatch" aria-label="Pink" style="color:var(--dot-pink)"><span class="dot"></span></button>
+        </div>
+        <span class="sep-v"></span>
+        <button aria-label="Underline" title="Underline  (U)"><svg viewBox="0 0 16 16"><path d="M5 3v4a3 3 0 006 0V3M4 13h8"/></svg></button>
+        <button aria-label="Strikethrough" title="Strikethrough  (S)"><svg viewBox="0 0 16 16"><path d="M3 8h10M11 4.5C10.3 3.6 9.3 3 8 3 6.3 3 5 4 5 5.3M5 11.5c.7.9 1.7 1.5 3 1.5 1.7 0 3-1 3-2.3"/></svg></button>
+        <button aria-label="Note" title="Note  (N)"><svg viewBox="0 0 16 16"><path d="M3 3h10v7H8l-3 3v-3H3z"/></svg></button>
+        <button aria-label="Draw" title="Draw  (D)"><svg viewBox="0 0 16 16"><path d="M2 12c2-4 4-6 6-4s2 4 6-2"/></svg></button>
+        <button class="hide-sm" aria-label="Shape" title="Shape  (R)"><svg viewBox="0 0 16 16"><rect x="2.5" y="4" width="11" height="8" rx="1"/></svg></button>
+        <button class="hide-sm" aria-label="Text box" title="Text  (T)"><svg viewBox="0 0 16 16"><path d="M3 4V3h10v1M8 3v10M6 13h4"/></svg></button>
+        <button aria-label="Stamp" title="Stamp" data-tool="stamp" data-go="stamps"><svg viewBox="0 0 16 16"><path d="M6 2h4v4l2 2v2H4V8l2-2zM3 13h10"/></svg></button>
+        <button aria-label="Signature" title="Signature" data-go="sign"><svg viewBox="0 0 16 16"><path d="M2 12c2 0 3-6 5-6s0 5 2 5 2-3 3-3 1 2 2 2M2 14h12"/></svg><span class="label-text">Sign</span></button>
+        <span class="sep-v"></span>
+        <button class="hide-sm" aria-label="Undo" title="Undo  (Cmd Z)"><svg viewBox="0 0 16 16"><path d="M5 7H11a3 3 0 010 6H8M5 7l3-3M5 7l3 3"/></svg></button>
+        <button class="hide-sm" aria-label="Redo" title="Redo  (Cmd Shift Z)"><svg viewBox="0 0 16 16"><path d="M11 7H5a3 3 0 000 6h3M11 7L8 4M11 7l-3 3"/></svg></button>
+        <button aria-label="Done" data-go="notes"><span class="label-text">Done</span><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg></button>
+      </div>
+
+      <div class="stampmenu floating" data-show="stamps" role="menu" aria-label="Stamps">
+        <div class="label">Stamps</div>
+        <div class="grid2">
+          <button class="st-btn" style="color:var(--stamp-ok)" data-go="signed"><span>APPROVED</span></button>
+          <button class="st-btn" style="color:var(--stamp-fail)"><span>REJECTED</span></button>
+          <button class="st-btn" style="color:#5b6168"><span>DRAFT</span></button>
+          <button class="st-btn" style="color:var(--stamp-fail)"><span>CONFIDENTIAL</span></button>
+          <button class="st-btn" style="color:#1c3d8f"><span>REVIEWED</span></button>
+          <button class="st-btn" style="color:#5b6168;font-weight:600;letter-spacing:0"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>Custom</button>
+        </div>
+      </div>
+
+      <div class="find floating" data-show="find results" role="search">
+        <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>
+        <input value="capacity" aria-label="Find in document">
+        <span class="count num">2 of 7</span>
+        <button class="opt" aria-pressed="false" title="Match case">Aa</button>
+        <button class="opt" aria-pressed="false" title="Whole word">W</button>
+        <button data-go="results" title="Show all results in the sidebar" aria-label="List all results"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h10"/></svg></button>
+        <button aria-label="Previous match"><svg viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button>
+        <button aria-label="Next match"><svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
+        <button aria-label="Close find" data-go="reading"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+
+      <div class="formbar floating" data-show="form">
+        <span class="status info"><span class="dot"></span>Form</span>
+        <span class="text">3 of 6 fields filled</span>
+        <button class="quiet" style="height:28px">Clear form</button>
+        <button class="quiet" style="height:28px">Next field<kbd>Tab</kbd></button>
+      </div>
+
+      <div class="hud floating" id="hud" role="toolbar" aria-label="Page and zoom">
+        <div class="group">
+          <button aria-label="Previous page" title="Previous page  (Left)"><svg viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></svg></button>
+          <button class="pageinput num" aria-label="Go to page" title="Go to page  (Cmd G)">2 <span>/ 4</span></button>
+          <button aria-label="Next page" title="Next page  (Right)"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></button>
+        </div>
+        <span class="sep-v"></span>
+        <div class="group zoomgroup">
+          <button aria-label="Zoom out" title="Zoom out  (Cmd -)"><svg viewBox="0 0 16 16"><path d="M4 8h8"/></svg></button>
+          <button class="zoomval num" data-go="zoom" data-expanded="zoom" aria-label="Zoom presets">141%</button>
+          <button aria-label="Zoom in" title="Zoom in  (Cmd =)"><svg viewBox="0 0 16 16"><path d="M8 4v8M4 8h8"/></svg></button>
+        </div>
+        <span class="sep-v"></span>
+        <button class="hide-sm" aria-label="Bookmark page" title="Bookmark page  (Cmd D)" aria-pressed="true"><svg viewBox="0 0 16 16"><path d="M4 2h8v12l-4-3-4 3z" fill="currentColor"/></svg></button>
+        <button aria-label="View options" title="View" data-go="layout" data-expanded="layout spread split night magnifier"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="5" height="10" rx="1"/><rect x="9" y="3" width="5" height="10" rx="1"/></svg></button>
+      </div>
+
+      <div class="menu floating" data-show="zoom" role="menu" aria-label="Zoom">
+        <button role="menuitemradio" aria-checked="false">Fit page<kbd>Cmd 9</kbd></button>
+        <button role="menuitemradio" aria-checked="true">Fit width<kbd>Cmd 0</kbd></button>
+        <button role="menuitemradio" aria-checked="false">Actual size<kbd>Cmd 1</kbd></button>
+        <div class="divider"></div>
+        <button role="menuitemradio" aria-checked="false"><span class="num">50%</span></button>
+        <button role="menuitemradio" aria-checked="false"><span class="num">100%</span></button>
+        <button role="menuitemradio" aria-checked="false"><span class="num">200%</span></button>
+        <button role="menuitemradio" aria-checked="false"><span class="num">400%</span></button>
+      </div>
+
+      <div class="menu floating menu-right" data-show="layout" role="menu" aria-label="View">
+        <div class="label">Layout</div>
+        <button role="menuitemradio" aria-checked="true">Continuous</button>
+        <button role="menuitemradio" aria-checked="false" data-go="spread">Two pages</button>
+        <button role="menuitemradio" aria-checked="false">Two pages, cover first</button>
+        <button role="menuitemradio" aria-checked="false" data-go="split">Split view<kbd>Cmd \</kbd></button>
+        <div class="divider"></div>
+        <div class="label">Page colour</div>
+        <button role="menuitemradio" aria-checked="true">Original</button>
+        <button role="menuitemradio" aria-checked="false" data-go="night">Night</button>
+        <button role="menuitemradio" aria-checked="false">Sepia</button>
+        <div class="divider"></div>
+        <button data-go="magnifier">Magnifier<kbd>Cmd Shift M</kbd></button>
+        <button data-go="present">Presentation<kbd>Cmd Shift P</kbd></button>
+      </div>
+
+      <div class="toast floating" data-show="signed" role="status">
+        <span class="status ok"><span class="dot"></span>Saved</span>
+        <span class="text">Signature and stamp added to page 2</span>
+        <button>Undo</button>
+      </div>
+      <div class="toast floating" data-show="update" role="status">
+        <span class="status info"><span class="dot"></span>Update</span>
+        <span class="text">Version 0.3.0 is available</span>
+        <button>Release notes</button>
+        <button>Download</button>
+      </div>
+    </main>
+
+    <aside class="inspector" data-show="inspector info signatures" aria-label="Inspector">
+      <div class="tabsrow" role="tablist">
+        <button role="tab" data-itab="selection">Selection</button>
+        <button role="tab" data-itab="document">Document</button>
+        <button role="tab" data-itab="signatures">Signatures</button>
+      </div>
+      <div class="content" data-ipane="selection">
+        <section>
+          <span class="label">Highlight</span>
+          <div class="kv"><dt>Page</dt><dd class="num">2</dd><dt>Author</dt><dd>Alex Morgan</dd><dt>Created</dt><dd class="num">4 Nov 2026 09:41</dd></div>
+        </section>
+        <section>
+          <span class="label">Colour</span>
+          <div style="display:flex;gap:2px">
+            <button class="swatch" aria-pressed="true" style="color:var(--dot-yellow);background:var(--hover)"><span class="dot"></span></button>
+            <button class="swatch" style="color:var(--dot-green)"><span class="dot"></span></button>
+            <button class="swatch" style="color:var(--dot-blue)"><span class="dot"></span></button>
+            <button class="swatch" style="color:var(--dot-pink)"><span class="dot"></span></button>
+          </div>
+        </section>
+        <section>
+          <span class="label">Opacity</span>
+          <div class="slider"><span class="track"><b></b><i></i></span><span class="num">60%</span></div>
+        </section>
+        <section>
+          <span class="label">Comments</span>
+          <div class="thread">
+            <div class="msg"><div class="who"><span class="avatar">AM</span>Alex Morgan<span class="num">09:41</span></div><p>Which two regions? Check the launch dashboard.</p></div>
+            <div class="msg"><div class="who"><span class="avatar">JL</span>Jordan Lee<span class="num">10:02</span></div><p>East 1 and East 2. Added to the appendix.</p></div>
+          </div>
+          <div class="reply"><input class="text" placeholder="Reply" aria-label="Reply"><button class="quiet" style="height:32px">Send</button></div>
+        </section>
+        <section style="display:flex;gap:6px">
+          <button class="quiet" style="height:28px;padding:0 8px">Copy text</button>
+          <button class="quiet" style="height:28px;padding:0 8px;color:var(--fail)">Delete</button>
+        </section>
+      </div>
+      <div class="content" data-ipane="document">
+        <section>
+          <span class="label">File</span>
+          <dl class="kv"><dt>Name</dt><dd>quarterly-infrastructure-review.pdf</dd><dt>Size</dt><dd class="num">2.4 MB</dd><dt>Pages</dt><dd class="num">4</dd><dt>Page size</dt><dd class="num">210 x 297 mm</dd><dt>PDF version</dt><dd class="num">1.7</dd><dt>Location</dt><dd class="num">~/Documents/Reviews</dd></dl>
+        </section>
+        <section>
+          <span class="label">Properties</span>
+          <dl class="kv"><dt>Title</dt><dd>Quarterly infrastructure review</dd><dt>Author</dt><dd>Infrastructure team</dd><dt>Created</dt><dd class="num">2 Nov 2026</dd><dt>Modified</dt><dd class="num">4 Nov 2026</dd><dt>Producer</dt><dd>Example Writer 4</dd></dl>
+        </section>
+        <section>
+          <span class="label">Security</span>
+          <dl class="kv"><dt>Encryption</dt><dd><span class="status ok"><span class="dot"></span>None</span></dd><dt>Printing</dt><dd>Allowed</dd><dt>Copying</dt><dd>Allowed</dd></dl>
+        </section>
+        <section>
+          <span class="label">Fonts</span>
+          <div class="fonts"><div><span>Inter Regular</span><span>Embedded</span></div><div><span>Inter Semibold</span><span>Embedded</span></div><div><span>Source Code Pro</span><span>Subset</span></div></div>
+        </section>
+      </div>
+      <div class="content" data-ipane="signatures">
+        <section>
+          <span class="label">Digital signatures <span class="num">2</span></span>
+          <div class="sig">
+            <span class="status ok"><span class="dot"></span>Valid</span>
+            <div class="who">Jordan Lee</div>
+            <dl class="kv"><dt>Signed</dt><dd class="num">3 Nov 2026 16:20</dd><dt>Certificate</dt><dd>Example Corp Issuing CA</dd><dt>Covers</dt><dd>Revision 2 of 3</dd></dl>
+          </div>
+          <div class="sig">
+            <span class="status warn"><span class="dot"></span>Changed after signing</span>
+            <div class="who">Sam Rivera</div>
+            <dl class="kv"><dt>Signed</dt><dd class="num">2 Nov 2026 11:05</dd><dt>Certificate</dt><dd>Example Corp Issuing CA</dd><dt>Covers</dt><dd>Revision 1 of 3</dd></dl>
+            <p>The document was edited after this signature. The signed revision is unchanged.</p>
+            <button class="quiet" style="height:28px;padding:0 8px;margin-top:6px">View signed revision</button>
+          </div>
+        </section>
+        <section>
+          <span class="label">Visual signatures <span class="num">1</span></span>
+          <div class="kv"><dt>Page 2</dt><dd>Alex Morgan, image only</dd></div>
+        </section>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="present" data-show="present">
+  <article class="page">
+    <div class="eyebrow">Section 1</div>
+    <h1>Network capacity</h1>
+    <p>Traffic grew steadily through the quarter. The busiest week arrived in late September, when a product launch pushed request volume to capacity limits in two regions for several hours.</p>
+    <h2>Peak traffic</h2>
+    <p>The edge network absorbed the spike without dropped requests. Cache hit rates stayed above target, so origin servers saw only a modest increase in load.</p>
+    <p>Two regions ran close to their planned capacity during the launch window.</p>
+  </article>
+  <div class="hint"><span class="num">2 / 4</span><span><kbd>Left</kbd> <kbd>Right</kbd> pages</span><span><kbd>Esc</kbd> exit</span></div>
+</div>
+
+<div class="scrim" data-show="palette">
+  <div class="dialog floating palette" role="dialog" aria-label="Command palette">
+    <div class="q"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg><input placeholder="Type a command, page number, or file name" aria-label="Command"></div>
+    <div class="items">
+      <div class="label">Suggested</div>
+      <button class="item active"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg>Go to page<span class="hint"><kbd>Cmd G</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>Find in document<span class="hint"><kbd>Cmd F</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><path d="M4 2h8v12l-4-3-4 3z"/></svg>Bookmark this page<span class="hint"><kbd>Cmd D</kbd></span></button>
+      <div class="label">Edit</div>
+      <button class="item"><svg viewBox="0 0 16 16"><path d="M9 3l4 4-6 6H3v-4z"/></svg>Highlight selection<span class="hint"><kbd>H</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><path d="M2 12c2 0 3-6 5-6s0 5 2 5 2-3 3-3 1 2 2 2M2 14h12"/></svg>Add signature</button>
+      <button class="item"><svg viewBox="0 0 16 16"><path d="M6 2h4v4l2 2v2H4V8l2-2zM3 13h10"/></svg>Add stamp</button>
+      <button class="item"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>Organize pages<span class="hint"><kbd>Cmd Shift O</kbd></span></button>
+      <div class="label">View</div>
+      <button class="item"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="5" height="10" rx="1"/><rect x="9" y="3" width="5" height="10" rx="1"/></svg>Two-page view</button>
+      <button class="item"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M8 3v10"/></svg>Split view<span class="hint"><kbd>Cmd \</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><path d="M13 9.5A5.5 5.5 0 016.5 3 5.5 5.5 0 1013 9.5z"/></svg>Night pages</button>
+      <button class="item"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="9" rx="1.5"/><path d="M6 15h4M8 12v3"/></svg>Presentation<span class="hint"><kbd>Cmd Shift P</kbd></span></button>
+      <div class="label">File</div>
+      <button class="item"><svg viewBox="0 0 16 16"><path d="M8 10V2M5 5l3-3 3 3M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3"/></svg>Export as images or text<span class="hint"><kbd>Cmd E</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="5" height="10" rx="1"/><rect x="9" y="3" width="5" height="10" rx="1"/></svg>Combine files into one PDF</button>
+      <button class="item"><svg viewBox="0 0 16 16"><path d="M4 6V2h8v4M4 12H2V7h12v5h-2M4 10h8v4H4z"/></svg>Print<span class="hint"><kbd>Cmd P</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>Document info<span class="hint"><kbd>Cmd I</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings<span class="hint"><kbd>Cmd ,</kbd></span></button>
+      <button class="item"><svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 7h1M7 7h1M10 7h2M4 9.5h8"/></svg>Keyboard shortcuts<span class="hint"><kbd>?</kbd></span></button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" data-show="sign">
+  <div class="dialog floating" role="dialog" aria-labelledby="sign-title">
+    <header><h2 id="sign-title">Add signature</h2><button aria-label="Close" data-go="annotate"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+    <div class="content">
+      <div class="segtabs" role="tablist">
+        <button role="tab" aria-selected="true" data-sigtab="draw">Draw</button>
+        <button role="tab" aria-selected="false" data-sigtab="type">Type</button>
+        <button role="tab" aria-selected="false" data-sigtab="image">Image</button>
+      </div>
+      <div class="pad" data-sigpane="draw">
+        <svg viewBox="0 0 300 110"><path d="M20 78c10-30 22-52 30-50s-8 50-2 52 16-40 26-38-4 30 4 30 12-18 20-18 2 16 10 16 14-22 22-20-6 22 4 22 18-16 28-16M150 60c10-6 30-10 40-4s-10 22 0 22 30-26 46-24 10 18 24 16 20-10 30-12"/></svg>
+        <div class="baseline"></div>
+        <button class="clear">Clear</button>
+      </div>
+      <div class="pad" data-sigpane="type" hidden><span class="typed">Alex Morgan</span><div class="baseline"></div></div>
+      <div class="pad" data-sigpane="image" hidden style="flex-direction:column;gap:8px;color:#5b6168"><svg viewBox="0 0 16 16" style="width:24px;height:24px;stroke:#5b6168"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 11l3-3 3 3 2-2 4 4"/></svg><span>Drop a PNG or JPEG of your signature</span></div>
+      <div class="inks"><span>Ink</span>
+        <button class="swatch" aria-pressed="true" style="color:var(--sig-ink)"><span class="dot"></span></button>
+        <button class="swatch" style="color:#1d2024"><span class="dot"></span></button>
+        <button class="swatch" style="color:#b42318"><span class="dot"></span></button>
+      </div>
+      <div class="saved"><span class="label">Saved</span><button aria-pressed="true">Alex Morgan</button><button>A.M.</button></div>
+    </div>
+    <footer>
+      <span class="foot-note"><span class="status warn"><span class="dot"></span>Visual only</span>Adds an image, not a certificate</span>
+      <button class="quiet" data-go="annotate">Cancel</button>
+      <button class="primary" data-go="signed">Place on page</button>
+    </footer>
+  </div>
+</div>
+
+<div class="scrim" data-show="export">
+  <div class="dialog floating" role="dialog" aria-labelledby="export-title" style="width:min(620px,100%)">
+    <header><h2 id="export-title">Export</h2><button aria-label="Close" data-go="reading"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+    <div class="content">
+      <div class="choices" role="radiogroup" aria-label="Format">
+        <button class="choice" role="radio" aria-checked="false">PDF<span>Copy with your notes</span></button>
+        <button class="choice" role="radio" aria-checked="false">Flattened PDF<span>Notes and signatures baked in</span></button>
+        <button class="choice" role="radio" aria-checked="true">PNG<span>One image per page</span></button>
+        <button class="choice" role="radio" aria-checked="false">JPEG<span>Smaller images</span></button>
+        <button class="choice" role="radio" aria-checked="false">Plain text<span>Extracted text</span></button>
+        <button class="choice" role="radio" aria-checked="false">Notes summary<span>Highlights and notes as Markdown</span></button>
+      </div>
+      <div class="formrow"><span class="lbl">Pages</span>
+        <div class="pills" role="radiogroup"><button role="radio" aria-checked="false">All 4</button><button role="radio" aria-checked="false">Current</button><button role="radio" aria-checked="true">Range</button><input class="text" value="1-2, 4" aria-label="Page range"></div>
+      </div>
+      <div class="formrow"><span class="lbl">Resolution</span>
+        <div class="pills" role="radiogroup"><button role="radio" aria-checked="false"><span class="num">72 dpi</span></button><button role="radio" aria-checked="true"><span class="num">150 dpi</span></button><button role="radio" aria-checked="false"><span class="num">300 dpi</span></button></div>
+      </div>
+      <div class="formrow"><span class="lbl">Include</span><span class="toggle"><i></i>Highlights, notes, and signatures</span></div>
+      <div class="formrow"><span class="lbl">Save to</span>
+        <div style="display:flex;gap:8px;align-items:center;min-width:0"><span class="num" style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">~/Downloads/quarterly-infrastructure-review/</span><button class="quiet" style="height:28px">Change</button></div>
+      </div>
+    </div>
+    <footer>
+      <span class="foot-note num">3 files, about 2.1 MB</span>
+      <button class="quiet" data-go="reading">Cancel</button>
+      <button class="primary">Export</button>
+    </footer>
+  </div>
+</div>
+
+<div class="scrim" data-show="convert">
+  <div class="dialog floating" role="dialog" aria-labelledby="combine-title">
+    <header><h2 id="combine-title">Combine into one PDF</h2><button aria-label="Close" data-go="reading"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+    <div class="content">
+      <div class="recent">
+        <button><span class="num" style="color:var(--faint);width:16px">1</span><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg><span class="name">quarterly-infrastructure-review.pdf</span><span class="when num">4 pages</span></button>
+        <button><span class="num" style="color:var(--faint);width:16px">2</span><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 11l3-3 3 3 2-2 4 4"/></svg><span class="name">whiteboard-photo.jpg</span><span class="when num">1 page</span></button>
+        <button><span class="num" style="color:var(--faint);width:16px">3</span><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg><span class="name">appendix-a.pdf</span><span class="when num">6 pages</span></button>
+      </div>
+      <button class="quiet" style="margin-top:6px"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>Add files</button>
+      <div class="formrow"><span class="lbl">Image pages</span>
+        <div class="pills" role="radiogroup"><button role="radio" aria-checked="true">Fit to A4</button><button role="radio" aria-checked="false">Fit to Letter</button><button role="radio" aria-checked="false">Original size</button></div>
+      </div>
+    </div>
+    <footer>
+      <span class="foot-note">Drag to reorder. <span class="num">11 pages</span></span>
+      <button class="quiet" data-go="reading">Cancel</button>
+      <button class="primary">Combine</button>
+    </footer>
+  </div>
+</div>
+
+<div class="scrim" data-show="print">
+  <div class="dialog floating" role="dialog" aria-labelledby="print-title" style="width:min(600px,100%)">
+    <header><h2 id="print-title">Print</h2><button aria-label="Close" data-go="reading"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+    <div class="content print">
+      <div>
+        <div class="preview-sheet"><i class="h"></i><i></i><i class="y"></i><i></i><i></i><i></i><i></i><i class="h"></i><i></i><i></i><i></i></div>
+        <div class="pnav"><button aria-label="Previous preview page"><svg viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></svg></button><span class="num">1 of 3</span><button aria-label="Next preview page"><svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg></button></div>
+      </div>
+      <div>
+        <div class="formrow" style="margin-top:0"><span class="lbl">Printer</span><select class="text"><option>Office printer, 2nd floor</option><option>Save as PDF</option></select></div>
+        <div class="formrow"><span class="lbl">Pages</span><div class="pills" role="radiogroup"><button role="radio" aria-checked="false">All</button><button role="radio" aria-checked="true">Range</button><input class="text" value="1-3" aria-label="Page range"></div></div>
+        <div class="formrow"><span class="lbl">Copies</span><input class="text num" value="1" style="width:70px" aria-label="Copies"></div>
+        <div class="formrow"><span class="lbl">Scale</span><div class="pills" role="radiogroup"><button role="radio" aria-checked="true">Fit</button><button role="radio" aria-checked="false">Actual size</button></div></div>
+        <div class="formrow"><span class="lbl">Include</span><span class="toggle"><i></i>Notes and stamps</span></div>
+        <div class="formrow"><span class="lbl">Sides</span><div class="pills" role="radiogroup"><button role="radio" aria-checked="true">One</button><button role="radio" aria-checked="false">Both</button></div></div>
+      </div>
+    </div>
+    <footer>
+      <button class="quiet" style="margin-right:auto">System dialog</button>
+      <button class="quiet" data-go="reading">Cancel</button>
+      <button class="primary">Print</button>
+    </footer>
+  </div>
+</div>
+
+<div class="scrim" data-show="settings">
+  <div class="dialog floating" role="dialog" aria-labelledby="settings-title" style="width:min(720px,100%)">
+    <header><h2 id="settings-title">Settings</h2><button aria-label="Close" data-go="reading"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+    <div class="settings">
+      <nav>
+        <button aria-current="true">General</button>
+        <button>Reading</button>
+        <button>Notes and signing</button>
+        <button>Shortcuts</button>
+        <button>Updates</button>
+      </nav>
+      <div class="pane-body">
+        <h3>Appearance</h3>
+        <div class="formrow"><span class="lbl">Theme</span><div class="pills" role="radiogroup"><button role="radio" aria-checked="true">System</button><button role="radio" aria-checked="false">Light</button><button role="radio" aria-checked="false">Dark</button></div></div>
+        <h3>Startup</h3>
+        <div class="formrow"><span class="lbl">On launch</span><span class="toggle"><i></i>Reopen last session's tabs</span></div>
+        <div class="formrow"><span class="lbl">Each file</span><span class="toggle"><i></i>Open at the last page read</span></div>
+        <div class="formrow"><span class="lbl">Default app</span><div style="display:flex;gap:8px;align-items:center"><span class="status warn"><span class="dot"></span>Not default</span><button class="quiet" style="height:28px">Make default for PDFs</button></div></div>
+        <h3>Reading</h3>
+        <div class="formrow"><span class="lbl">Default zoom</span><div class="pills" role="radiogroup"><button role="radio" aria-checked="true">Fit width</button><button role="radio" aria-checked="false">Fit page</button><button role="radio" aria-checked="false"><span class="num">100%</span></button></div></div>
+        <div class="formrow"><span class="lbl">Layout</span><div class="pills" role="radiogroup"><button role="radio" aria-checked="true">Continuous</button><button role="radio" aria-checked="false">Two pages</button></div></div>
+        <div class="formrow"><span class="lbl">Night pages</span><div class="pills" role="radiogroup"><button role="radio" aria-checked="true">Follow theme</button><button role="radio" aria-checked="false">Always</button><button role="radio" aria-checked="false">Never</button></div></div>
+        <h3>Notes</h3>
+        <div class="formrow"><span class="lbl">Author name</span><input class="text" value="Alex Morgan" aria-label="Author name"></div>
+        <div class="formrow"><span class="lbl">Saving</span><span class="toggle off"><i></i>Save notes automatically</span><span class="hint">Off: the tab shows a dot until you press Cmd S.</span></div>
+        <h3>Updates</h3>
+        <div class="formrow"><span class="lbl">Check</span><span class="toggle"><i></i>Tell me when a new version is out</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" data-show="shortcuts">
+  <div class="dialog floating" role="dialog" aria-labelledby="keys-title" style="width:min(820px,100%)">
+    <header><h2 id="keys-title">Keyboard shortcuts</h2><button aria-label="Close" data-go="reading"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+    <div class="content keys">
+      <div>
+        <h3>Navigate</h3>
+        <div class="k">Command palette<kbd>Cmd K</kbd></div>
+        <div class="k">Go to page<kbd>Cmd G</kbd></div>
+        <div class="k">Next or previous page<kbd>Right Left</kbd></div>
+        <div class="k">First or last page<kbd>Home End</kbd></div>
+        <div class="k">Back or forward<kbd>Cmd [ ]</kbd></div>
+        <div class="k">Bookmark page<kbd>Cmd D</kbd></div>
+      </div>
+      <div>
+        <h3>View</h3>
+        <div class="k">Zoom in or out<kbd>Cmd = -</kbd></div>
+        <div class="k">Fit width<kbd>Cmd 0</kbd></div>
+        <div class="k">Sidebar<kbd>Cmd B</kbd></div>
+        <div class="k">Inspector<kbd>Cmd I</kbd></div>
+        <div class="k">Split view<kbd>Cmd \</kbd></div>
+        <div class="k">Presentation<kbd>Cmd Shift P</kbd></div>
+      </div>
+      <div>
+        <h3>Edit</h3>
+        <div class="k">Find<kbd>Cmd F</kbd></div>
+        <div class="k">Annotate<kbd>Cmd Shift A</kbd></div>
+        <div class="k">Highlight<kbd>H</kbd></div>
+        <div class="k">Note<kbd>N</kbd></div>
+        <div class="k">Save<kbd>Cmd S</kbd></div>
+        <div class="k">Export<kbd>Cmd E</kbd></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var STATES=[
+    ['Reading',[
+      ['reading','Reading','Tabs in the title bar, floating page bar, text selection with quick highlight'],
+      ['find','Find','Search with match count, case and whole-word options'],
+      ['results','Search results','Every match listed in the sidebar with context'],
+      ['outline','Outline','The table of contents built into the PDF'],
+      ['bookmarks','Bookmarks','Your own saved pages'],
+      ['attachments','Attachments','Files embedded inside the PDF'],
+      ['zoom','Zoom presets','Fit page, fit width, actual size, fixed levels'],
+      ['palette','Command palette','Cmd K: every action, outline heading and open file'],
+      ['changed','File changed','The file was edited by another app']
+    ]],
+    ['Annotate',[
+      ['annotate','Annotate','Tool bar: highlight colours, underline, strike, note, draw, shape, text, stamp, sign'],
+      ['stamps','Stamps','Approved, rejected, draft, confidential, reviewed, custom'],
+      ['notes','Notes list','Every annotation in the sidebar'],
+      ['inspector','Selected highlight','Right panel: colour, opacity, author, comment thread'],
+      ['sign','Signature','Draw, type or import a visual signature'],
+      ['signed','Signed','Signature and stamp placed, saved, with undo'],
+      ['form','Form filling','Fill fields, tick boxes, sign']
+    ]],
+    ['Document',[
+      ['info','Document info','Right panel: file, properties, security, fonts'],
+      ['signatures','Signature check','Right panel: digital signatures and their status'],
+      ['organize','Organize pages','Select, rotate, extract, insert, delete, reorder'],
+      ['export','Export','PDF, flattened PDF, PNG, JPEG, text, notes summary'],
+      ['convert','Combine files','Merge PDFs and images into one PDF'],
+      ['print','Print','Printer, pages, copies, scale, include notes'],
+      ['locked','Password','Locked PDF with a wrong password']
+    ]],
+    ['View',[
+      ['layout','View menu','Layout, page colour, magnifier, presentation'],
+      ['spread','Two pages','Pages side by side like a book'],
+      ['split','Split view','Two documents side by side with linked scrolling'],
+      ['night','Night pages','Inverted page colours for reading in the dark'],
+      ['magnifier','Magnifier','Loupe for small print'],
+      ['present','Presentation','Full screen, no chrome']
+    ]],
+    ['App',[
+      ['empty','Empty','Open, quick actions, restore session, recent files'],
+      ['settings','Settings','Theme, startup, reading defaults, notes, updates'],
+      ['shortcuts','Shortcuts','Press ? for every keyboard shortcut'],
+      ['update','Update available','Notice when a new version is out']
+    ]]
+  ];
+  var flat=[];STATES.forEach(function(g){g[1].forEach(function(s){flat.push(s)})});
+  var info={};flat.forEach(function(s){info[s[0]]=s});
+
+  var VIEW={form:'form',spread:'spread',split:'split',organize:'organize',locked:'locked',empty:'empty'};
+  var PANEL={results:'results',outline:'outline',bookmarks:'bookmarks',attachments:'attachments',notes:'notes',annotate:'notes',stamps:'notes',inspector:'notes',sign:'notes',signed:'notes'};
+  var NO_SIDEBAR={organize:1,locked:1,empty:1,present:1,split:1};
+  var NO_HUD={organize:1,locked:1,empty:1,present:1,split:1};
+  var ITAB={inspector:'selection',info:'document',signatures:'signatures'};
+  var ANNOTATED=['annotate','stamps','notes','inspector','sign','signed','export','print','signatures','info','changed','night','magnifier','spread'];
+  var root=document.documentElement,app=document.getElementById('app'),sidebar=document.getElementById('sidebar'),hud=document.getElementById('hud');
+  var select=document.getElementById('state-select'),desc=document.getElementById('state-desc');
+  var current='reading',sidebarOpen=!window.matchMedia('(max-width:760px)').matches;
+
+  STATES.forEach(function(g){var og=document.createElement('optgroup');og.label=g[0];g[1].forEach(function(s){var o=document.createElement('option');o.value=s[0];o.textContent=s[1];og.appendChild(o)});select.appendChild(og)});
+
+  function attr(el,name,on,val){if(on)el.setAttribute(name,val||'');else el.removeAttribute(name)}
+  function setPanel(name){
+    document.querySelectorAll('[data-panel]').forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.panel===name))});
+    document.querySelectorAll('[data-panel-body]').forEach(function(p){p.hidden=p.dataset.panelBody!==name});
+  }
+  function setItab(name){
+    document.querySelectorAll('[data-itab]').forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.itab===name))});
+    document.querySelectorAll('[data-ipane]').forEach(function(p){p.hidden=p.dataset.ipane!==name});
+  }
+  function setState(s){
+    if(!info[s])return;
+    current=s;select.value=s;desc.textContent=info[s][2];
+    var view=VIEW[s]||'main';
+    document.querySelectorAll('[data-view]').forEach(function(v){v.hidden=v.dataset.view!==view});
+    document.querySelectorAll('[data-show]').forEach(function(el){el.hidden=el.dataset.show.split(' ').indexOf(s)<0});
+    sidebar.hidden=!sidebarOpen||!!NO_SIDEBAR[s];
+    hud.hidden=!!NO_HUD[s];
+    document.querySelectorAll('.doc-tab').forEach(function(t){t.hidden=s==='empty'||s==='locked'});
+    var annotated=ANNOTATED.indexOf(s)>=0;
+    attr(app,'data-annotations',annotated);
+    attr(app,'data-find',s==='find'||s==='results');
+    attr(app,'data-selecting',s==='reading');
+    attr(app,'data-signed',s==='signed'||s==='signatures'||s==='info');
+    attr(app,'data-placing',s==='signed');
+    attr(app,'data-stamped',s==='signed'||s==='signatures');
+    attr(app,'data-inspecting',s==='inspector');
+    attr(app,'data-present',s==='present');
+    attr(app,'data-night',s==='night','invert');
+    document.getElementById('active-tab').classList.toggle('modified',['annotate','stamps','notes','inspector','sign','signed','organize','changed'].indexOf(s)>=0);
+    document.querySelectorAll('[data-active]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.active.split(' ').indexOf(s)>=0))});
+    document.querySelectorAll('[data-expanded]').forEach(function(b){b.setAttribute('aria-expanded',String(b.dataset.expanded.split(' ').indexOf(s)>=0))});
+    document.querySelectorAll('[data-tool]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.tool===(s==='stamps'?'stamp':s==='inspector'?'select':'highlight')))});
+    setPanel(PANEL[s]||'pages');
+    if(ITAB[s])setItab(ITAB[s]);
+    var focus=s==='palette'?'.palette input':(s==='find'?'.find input':null);
+    if(focus)document.querySelector(focus).focus();
+  }
+  select.addEventListener('change',function(){setState(select.value)});
+  function step(d){var i=flat.findIndex(function(x){return x[0]===current});setState(flat[(i+d+flat.length)%flat.length][0])}
+  document.getElementById('prev-state').addEventListener('click',function(){step(-1)});
+  document.getElementById('next-state').addEventListener('click',function(){step(1)});
+  document.querySelectorAll('[data-theme-set]').forEach(function(b){b.addEventListener('click',function(){
+    root.dataset.theme=b.dataset.themeSet;
+    document.querySelectorAll('[data-theme-set]').forEach(function(x){x.setAttribute('aria-pressed',String(x===b))});
+  })});
+  document.addEventListener('click',function(e){
+    var go=e.target.closest('[data-go]');
+    if(go){
+      var t=go.dataset.go;
+      if(t==='toggle-sidebar'){sidebarOpen=!sidebarOpen;setState(current);return}
+      if(t===current&&['find','annotate','organize','info','zoom','layout'].indexOf(t)>=0){setState('reading');return}
+      setState(t);return;
+    }
+    var p=e.target.closest('[data-panel]');if(p){setPanel(p.dataset.panel);return}
+    var it=e.target.closest('[data-itab]');if(it){setItab(it.dataset.itab);return}
+    var st=e.target.closest('[data-sigtab]');
+    if(st){document.querySelectorAll('[data-sigtab]').forEach(function(x){x.setAttribute('aria-selected',String(x===st))});document.querySelectorAll('[data-sigpane]').forEach(function(x){x.hidden=x.dataset.sigpane!==st.dataset.sigtab});return}
+    var r=e.target.closest('[role="radio"]');
+    if(r){var g=r.closest('[role="radiogroup"]');g.querySelectorAll('[role="radio"]').forEach(function(x){x.setAttribute('aria-checked',String(x===r))});return}
+    var tg=e.target.closest('.toggle');if(tg){tg.classList.toggle('off');return}
+    var gp=e.target.closest('.gpage:not(.ghost)');if(gp){gp.setAttribute('aria-selected',String(gp.getAttribute('aria-selected')!=='true'));return}
+    var th=e.target.closest('.thumb');if(th){document.querySelectorAll('.thumb').forEach(function(x){x.removeAttribute('aria-current')});th.setAttribute('aria-current','page');return}
+    var sw=e.target.closest('.tools .swatch');if(sw){document.querySelectorAll('.tools .swatch').forEach(function(x){x.setAttribute('aria-pressed',String(x===sw))});return}
+    var sc=e.target.closest('.scrim');if(sc&&e.target===sc){setState('reading')}
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.target.tagName==='INPUT'&&e.key!=='Escape')return;
+    var mod=e.metaKey||e.ctrlKey,k=e.key.toLowerCase();
+    var map={k:'palette',f:'find',e:'export',i:'info',p:'print',',':'settings'};
+    if(mod&&e.shiftKey&&k==='a'){e.preventDefault();setState('annotate')}
+    else if(mod&&e.shiftKey&&k==='o'){e.preventDefault();setState('organize')}
+    else if(mod&&e.shiftKey&&k==='p'){e.preventDefault();setState('present')}
+    else if(mod&&k==='b'){e.preventDefault();sidebarOpen=!sidebarOpen;setState(current)}
+    else if(mod&&k==='\\'){e.preventDefault();setState('split')}
+    else if(mod&&map[k]){e.preventDefault();setState(map[k])}
+    else if(!mod&&e.key==='?'){setState('shortcuts')}
+    else if(e.key==='Escape'){setState('reading')}
+  });
+  setState('reading');
+})();
+</script>
+</body>
+</html>

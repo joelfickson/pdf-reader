@@ -1,6 +1,6 @@
 use super::super::Reader;
 use gpui::{
-    Bounds, Context, IntoElement, MouseButton, canvas, div, img, point, prelude::*, px, rgba, size,
+    Bounds, Context, IntoElement, MouseButton, canvas, div, img, point, prelude::*, px, size,
 };
 
 impl Reader {
@@ -18,6 +18,7 @@ impl Reader {
                 _ => Vec::new(),
             };
             let page_bounds = self.page_bounds.clone();
+            let select = self.chrome.theme.select;
             page = page
                 .w(px(image.width))
                 .h(px(image.height))
@@ -32,7 +33,7 @@ impl Reader {
                         cx.stop_propagation();
                     }),
                 )
-                .child(img(image.image.clone()).size_full())
+                .child(img(image.image.clone()).size_full().rounded(px(2.0)))
                 .child(
                     canvas(
                         move |bounds, _, _| {
@@ -50,7 +51,7 @@ impl Reader {
                                         bounds.size.height * (rect.bottom - rect.top),
                                     ),
                                 );
-                                window.paint_quad(gpui::fill(highlight, rgba(0x729ee65c)));
+                                window.paint_quad(gpui::fill(highlight, select));
                             }
                         },
                     )
