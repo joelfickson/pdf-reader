@@ -25,6 +25,10 @@ impl<T, K: Ord + Clone> PageCache<T, K> {
         self.entries.contains_key(page)
     }
 
+    pub(super) fn peek(&self, page: &K) -> Option<&T> {
+        self.entries.get(page)
+    }
+
     pub(super) fn get(&mut self, page: &K) -> Option<&T> {
         if self.entries.contains_key(page) {
             self.order.retain(|entry| entry != page);

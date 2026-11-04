@@ -1,4 +1,4 @@
-use super::Reader;
+use super::{Reader, view};
 use crate::pdf::{Job, ViewKey};
 use gpui::Window;
 
@@ -11,8 +11,17 @@ impl Reader {
             return;
         }
         let width = (f32::from(window.viewport_size().width)
-            - if self.sidebar { 184.0 } else { 0.0 }
-            - 96.0)
+            - if self.sidebar && self.chrome.mode != super::chrome::Mode::Organize {
+                view::SIDEBAR_WIDTH
+            } else {
+                0.0
+            }
+            - if self.inspector_visible() {
+                view::INSPECTOR_WIDTH
+            } else {
+                0.0
+            }
+            - view::CANVAS_PADDING * 2.0)
             .max(160.0);
         let view = ViewKey {
             session: tab.session,
@@ -25,7 +34,8 @@ impl Reader {
             zoom: tab.zoom,
             scale: (window.scale_factor() * 100.0).round() as u32,
         };
-        let visible = if self.sidebar {
+        let visible = if self.sidebar_visible() || self.chrome.mode == super::chrome::Mode::Organize
+        {
             tab.visible.clone()
         } else {
             0..0
