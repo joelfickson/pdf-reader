@@ -16,6 +16,9 @@ parking_lot = "0.12"
 pdfium-render = { version = "=0.9.4", default-features = false, features = ["pdfium_7881", "thread_safe"] }
 smallvec = "1"
 
+[build-dependencies]
+winresource = "=0.1.34"
+
 [dev-dependencies]
 gpui = { version = "=0.2.2", default-features = false, features = ["test-support"] }
 
