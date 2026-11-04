@@ -115,6 +115,9 @@ pub(super) struct Chrome {
     pub include_notes: bool,
     pub print_pages: usize,
     pub print_scale: usize,
+    pub print_sides: usize,
+    pub combine_fit: usize,
+    pub sign_ink: usize,
     pub settings_section: usize,
 }
 
@@ -145,6 +148,9 @@ impl Chrome {
             include_notes: true,
             print_pages: 0,
             print_scale: 0,
+            print_sides: 0,
+            combine_fit: 0,
+            sign_ink: 0,
             settings_section: 0,
         }
     }
@@ -267,7 +273,7 @@ impl Reader {
         });
         cx.spawn(async move |this, cx| {
             cx.background_executor()
-                .timer(Duration::from_millis(3200))
+                .timer(Duration::from_millis(4500))
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if this

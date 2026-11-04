@@ -5,7 +5,9 @@ use super::super::{
     commands::modifier,
 };
 use crate::ui::{
+    field::TextField,
     icon::Icon,
+    kit::clickable,
     kit::{RADIUS, Status, Tone, dot, floating, icon, icon_button, kbd, label, separator, status},
     theme::{Marker, Theme},
 };
@@ -14,25 +16,31 @@ use gpui::{
     anchored, deferred, div, point, prelude::*, px,
 };
 
-pub(super) fn field(theme: &Theme, text: &str, placeholder: &str, focused: bool) -> Div {
-    let empty = text.is_empty();
+pub(super) fn field(theme: &Theme, value: &TextField, placeholder: &str, focused: bool) -> Div {
+    let empty = value.text.is_empty();
+    let text = |content: &str| {
+        div()
+            .flex_none()
+            .text_color(theme.ink)
+            .child(content.to_string())
+    };
     div()
         .flex()
         .items_center()
         .min_w_0()
         .overflow_hidden()
         .whitespace_nowrap()
-        .when(empty && focused, |field| field.child(caret(theme)))
-        .child(
-            div()
-                .text_color(if empty { theme.faint } else { theme.ink })
-                .child(if empty {
-                    placeholder.to_string()
-                } else {
-                    text.to_string()
-                }),
-        )
-        .when(!empty && focused, |field| field.child(caret(theme)))
+        .when(empty, |field| {
+            field
+                .when(focused, |field| field.child(caret(theme)))
+                .child(div().text_color(theme.faint).child(placeholder.to_string()))
+        })
+        .when(!empty, |field| {
+            field
+                .child(text(value.before_cursor()))
+                .when(focused, |field| field.child(caret(theme)))
+                .child(text(value.after_cursor()))
+        })
 }
 
 fn caret(theme: &Theme) -> Div {
@@ -69,8 +77,7 @@ fn menu_item(
     theme: &Theme,
 ) -> gpui::Stateful<Div> {
     let hover = theme.hover;
-    div()
-        .id(id)
+    clickable(id)
         .h(px(30.0))
         .px(px(8.0))
         .flex()
@@ -120,23 +127,21 @@ impl Reader {
     ) -> Vec<AnyElement> {
         let mut layers = Vec::new();
         let has_document = self.has_document();
+        let reading = has_document && self.chrome.mode != Mode::Organize;
         if has_document && self.chrome.mode == Mode::Annotate {
-            layers.push(layer_top_center(self.tools(cx)).into_any_element());
-            if self.chrome.overlay == Overlay::Stamps {
-                layers.push(
-                    div()
-                        .absolute()
-                        .top(px(60.0))
-                        .left_0()
-                        .right_0()
-                        .flex()
-                        .justify_center()
-                        .child(div().ml(px(260.0)).child(self.stamps(cx)))
-                        .into_any_element(),
-                );
-            }
+            let stamps = (self.chrome.overlay == Overlay::Stamps).then(|| {
+                div()
+                    .absolute()
+                    .top(px(44.0))
+                    .right(px(110.0))
+                    .child(self.stamps(cx))
+            });
+            layers.push(
+                layer_top_center(div().relative().child(self.tools(cx)).children(stamps))
+                    .into_any_element(),
+            );
         }
-        if has_document && self.chrome.find_open && self.chrome.mode != Mode::Organize {
+        if reading && self.chrome.find_open {
             layers.push(
                 div()
                     .absolute()
@@ -150,19 +155,30 @@ impl Reader {
                     .into_any_element(),
             );
         }
-        if has_document && self.chrome.mode != Mode::Organize {
-            layers.push(layer_bottom_center(20.0, self.hud(cx)).into_any_element());
-            match self.chrome.overlay {
-                Overlay::ZoomMenu => layers.push(
-                    layer_bottom_center(66.0, div().ml(px(40.0)).child(self.zoom_menu(cx)))
+        if reading {
+            let menu = match self.chrome.overlay {
+                Overlay::ZoomMenu => Some(
+                    div()
+                        .absolute()
+                        .bottom(px(44.0))
+                        .left(px(101.0))
+                        .child(self.zoom_menu(cx))
                         .into_any_element(),
                 ),
-                Overlay::ViewMenu => layers.push(
-                    layer_bottom_center(66.0, div().ml(px(300.0)).child(self.view_menu(cx)))
+                Overlay::ViewMenu => Some(
+                    div()
+                        .absolute()
+                        .bottom(px(44.0))
+                        .right_0()
+                        .child(self.view_menu(cx))
                         .into_any_element(),
                 ),
-                _ => {}
-            }
+                _ => None,
+            };
+            layers.push(
+                layer_bottom_center(20.0, div().relative().child(self.hud(cx)).children(menu))
+                    .into_any_element(),
+            );
         }
         if let Some(popover) = self.selection_popover(window, cx) {
             layers.push(popover);
@@ -172,7 +188,7 @@ impl Reader {
                 div()
                     .absolute()
                     .right(px(20.0))
-                    .bottom(px(20.0))
+                    .bottom(px(if reading { 72.0 } else { 20.0 }))
                     .child(toast)
                     .into_any_element(),
             );
@@ -208,8 +224,7 @@ impl Reader {
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(Previous), cx)),
             )
             .child(
-                div()
-                    .id("page-input")
+                clickable("page-input")
                     .h(px(28.0))
                     .w(px(76.0))
                     .px(px(6.0))
@@ -229,7 +244,7 @@ impl Reader {
                     .child(if editing {
                         field(
                             &theme,
-                            &self.chrome.page_input.text,
+                            &self.chrome.page_input,
                             &(page + 1).to_string(),
                             true,
                         )
@@ -264,8 +279,7 @@ impl Reader {
                 .on_click(|_, window, cx| window.dispatch_action(Box::new(ZoomOut), cx)),
             )
             .child(
-                div()
-                    .id("zoom-presets")
+                clickable("zoom-presets")
                     .h(px(28.0))
                     .w(px(56.0))
                     .flex()
@@ -299,20 +313,6 @@ impl Reader {
             )
             .child(separator(&theme))
             .child(
-                icon_button(
-                    "fit",
-                    Icon::Fit,
-                    &theme,
-                    if zoom.is_none() {
-                        Tone::Active
-                    } else {
-                        Tone::Plain
-                    },
-                    true,
-                )
-                .on_click(|_, window, cx| window.dispatch_action(Box::new(Fit), cx)),
-            )
-            .child(
                 icon_button("bookmark", Icon::Bookmark, &theme, Tone::Plain, true)
                     .on_click(|_, window, cx| window.dispatch_action(Box::new(Bookmark), cx)),
             )
@@ -344,12 +344,17 @@ impl Reader {
             .flex()
             .flex_col()
             .child(
-                menu_item("fit-page", "Fit page", false, None, &theme).on_click(cx.listener(
-                    |this, _, _, cx| {
-                        this.chrome.overlay = Overlay::None;
-                        this.unavailable("Fit page", cx)
-                    },
-                )),
+                menu_item(
+                    "fit-page",
+                    "Fit page",
+                    false,
+                    Some(format!("{m} 9")),
+                    &theme,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.chrome.overlay = Overlay::None;
+                    this.unavailable("Fit page", cx)
+                })),
             )
             .child(
                 menu_item(
@@ -364,8 +369,21 @@ impl Reader {
                     this.set_zoom(None, window, cx)
                 })),
             )
+            .child(
+                menu_item(
+                    "actual-size",
+                    "Actual size",
+                    zoom == Some(100),
+                    Some(format!("{m} 1")),
+                    &theme,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.chrome.overlay = Overlay::None;
+                    this.set_zoom(Some(100), window, cx)
+                })),
+            )
             .child(div().h(px(1.0)).my(px(6.0)).mx(px(4.0)).bg(theme.hairline))
-            .children([50u32, 100, 150, 200, 400].into_iter().map(|level| {
+            .children([50u32, 100, 200, 400].into_iter().map(|level| {
                 menu_item(
                     ("zoom", level as usize),
                     format!("{level}%"),
@@ -463,8 +481,7 @@ impl Reader {
         let focused = self.chrome.input == Input::Find;
         let option = |id: &'static str, text: &'static str, feature: &'static str| {
             let hover = theme.hover;
-            div()
-                .id(id)
+            clickable(id)
                 .h(px(28.0))
                 .min_w(px(26.0))
                 .px(px(6.0))
@@ -490,8 +507,7 @@ impl Reader {
             .gap(px(4.0))
             .child(div().pl(px(6.0)).child(icon(Icon::Search, theme.muted)))
             .child(
-                div()
-                    .id("find-field")
+                clickable("find-field")
                     .flex_1()
                     .min_w_0()
                     .h(px(28.0))
@@ -502,7 +518,7 @@ impl Reader {
                     .on_click(cx.listener(|this, _, _, cx| this.open_find(cx)))
                     .child(field(
                         &theme,
-                        &self.chrome.find.text,
+                        &self.chrome.find,
                         "Find in document",
                         focused,
                     )),
@@ -572,8 +588,7 @@ impl Reader {
         let swatches = (0..Marker::ALL.len()).map(|index| {
             let selected = self.chrome.marker == index;
             let hover = theme.hover;
-            div()
-                .id(("marker", index))
+            clickable(("marker", index))
                 .size(px(28.0))
                 .flex()
                 .items_center()
@@ -669,8 +684,7 @@ impl Reader {
                     .children(stamps.into_iter().map(|(text, color)| {
                         let color: Hsla = gpui::rgb(color).into();
                         let accent = theme.accent;
-                        div()
-                            .id(text)
+                        clickable(text)
                             .w(px(118.0))
                             .h(px(44.0))
                             .flex()
@@ -735,8 +749,7 @@ impl Reader {
         let copied = self.copied;
         let swatches = (0..Marker::ALL.len()).map(|index| {
             let hover = theme.hover;
-            div()
-                .id(("quick-highlight", index))
+            clickable(("quick-highlight", index))
                 .size(px(28.0))
                 .flex()
                 .items_center()

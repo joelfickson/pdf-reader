@@ -166,6 +166,26 @@ impl Reader {
         cx: &mut Context<Self>,
     ) {
         let keystroke = &event.keystroke;
+        if self.chrome.input != Input::None
+            && (keystroke.modifiers.platform || keystroke.modifiers.control)
+            && keystroke.key == "v"
+        {
+            if let Some(pasted) = cx.read_from_clipboard().and_then(|item| item.text()) {
+                let line = pasted.lines().next().unwrap_or_default().to_string();
+                let edited = match self.chrome.input {
+                    Input::Palette => self.chrome.palette.insert(&line),
+                    Input::Find => self.chrome.find.insert(&line),
+                    Input::Page => self.chrome.page_input.insert(&line),
+                    Input::None => false,
+                };
+                if edited && self.chrome.input == Input::Palette {
+                    self.chrome.palette_index = 0;
+                }
+            }
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
         match self.chrome.input {
             Input::None => {
                 if keystroke.key_char.as_deref() == Some("?")
@@ -198,6 +218,7 @@ impl Reader {
                         }
                     }
                     FieldKey::Cancel => self.set_overlay(Overlay::None, cx),
+                    FieldKey::Moved => {}
                     FieldKey::Ignored => return,
                 }
                 cx.stop_propagation();
@@ -210,7 +231,7 @@ impl Reader {
                     self.unavailable("Search", cx);
                     cx.stop_propagation();
                 }
-                FieldKey::Edited => {
+                FieldKey::Edited | FieldKey::Moved => {
                     cx.stop_propagation();
                     cx.notify();
                 }

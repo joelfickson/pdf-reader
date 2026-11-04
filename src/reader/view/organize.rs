@@ -1,6 +1,7 @@
 use super::super::{Reader, chrome::Mode};
 use crate::ui::{
     icon::Icon,
+    kit::clickable,
     kit::{Kind, Tone, icon, icon_button, mono, separator, text_button},
 };
 use gpui::{Context, FontWeight, IntoElement, div, prelude::*, px};
@@ -100,8 +101,7 @@ impl Reader {
         let pages = (0..count).map(|index| {
             let checked = self.chrome.organize_selection.contains(&index);
             let hairline = theme.hairline;
-            div()
-                .id(("organize-page", index))
+            clickable(("organize-page", index))
                 .group("organize-page")
                 .relative()
                 .w(px(156.0))
@@ -170,12 +170,45 @@ impl Reader {
             .flex_col()
             .child(toolbar)
             .child(
-                div()
-                    .id("organize-grid")
+                clickable("organize-grid")
                     .flex_1()
                     .overflow_y_scroll()
                     .p(px(28.0))
-                    .child(div().flex().flex_wrap().gap(px(22.0)).children(pages)),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap(px(22.0))
+                            .children(pages)
+                            .child(
+                                clickable("organize-add-pages")
+                                    .w(px(156.0))
+                                    .flex()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.unavailable("Inserting pages", cx)
+                                    }))
+                                    .child(
+                                        div()
+                                            .w(px(138.0))
+                                            .h(px(178.0))
+                                            .rounded(px(5.0))
+                                            .border_1()
+                                            .border_dashed()
+                                            .border_color(theme.hairline)
+                                            .flex()
+                                            .flex_col()
+                                            .items_center()
+                                            .justify_center()
+                                            .gap(px(8.0))
+                                            .text_size(px(12.0))
+                                            .text_color(theme.muted)
+                                            .child(icon(Icon::Plus, theme.muted))
+                                            .child("Add pages from a file"),
+                                    ),
+                            ),
+                    ),
             )
             .into_any_element()
     }

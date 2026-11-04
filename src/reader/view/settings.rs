@@ -1,12 +1,19 @@
-use super::super::Reader;
+use super::super::{Reader, chrome::Overlay};
 use super::dialogs::form_row;
 use crate::ui::{
+    kit::clickable,
     kit::{RADIUS, Status, label, pill, status, toggle},
     theme::ThemeChoice,
 };
 use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
 
-const SECTIONS: [&str; 4] = ["General", "Reading", "Notes and signing", "Updates"];
+const SECTIONS: [&str; 5] = [
+    "General",
+    "Reading",
+    "Notes and signing",
+    "Shortcuts",
+    "Updates",
+];
 
 impl Reader {
     fn placeholder_toggle(
@@ -64,8 +71,7 @@ impl Reader {
             .children(SECTIONS.iter().enumerate().map(|(index, name)| {
                 let selected = index == section;
                 let hover = theme.hover;
-                div()
-                    .id(("settings-section", index))
+                clickable(("settings-section", index))
                     .h(px(30.0))
                     .px(px(8.0))
                     .flex()
@@ -76,8 +82,12 @@ impl Reader {
                     .cursor_pointer()
                     .hover(move |style| style.bg(hover))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.chrome.settings_section = index;
-                        cx.notify();
+                        if SECTIONS[index] == "Shortcuts" {
+                            this.set_overlay(Overlay::Shortcuts, cx);
+                        } else {
+                            this.chrome.settings_section = index;
+                            cx.notify();
+                        }
                     }))
                     .child(*name)
             }));

@@ -122,7 +122,10 @@ pub(crate) fn run(paths: Vec<PathBuf>) -> anyhow::Result<()> {
                 }
             })
             .detach();
-            let bounds = Bounds::centered(None, size(px(1180.0), px(860.0)), cx);
+            let mut bounds = Bounds::centered(None, size(px(1180.0), px(860.0)), cx);
+            if cfg!(debug_assertions) && std::env::var_os("PDF_READER_PREVIEW").is_some() {
+                bounds.origin = point(px(24.0), px(48.0));
+            }
             let opened = cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),

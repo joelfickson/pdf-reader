@@ -13,7 +13,7 @@ use super::{
     Reader,
     chrome::{Input, Mode},
 };
-use crate::ui::theme::Theme;
+use crate::ui::{kit::clickable, theme::Theme};
 use gpui::{Context, IntoElement, Render, Window, div, prelude::*, px};
 
 pub(super) const SIDEBAR_WIDTH: f32 = 220.0;
@@ -42,8 +42,7 @@ impl Reader {
         } else {
             self.canvas(cx).into_any_element()
         };
-        div()
-            .id("stage")
+        clickable("stage")
             .relative()
             .flex_1()
             .min_w_0()
@@ -98,8 +97,7 @@ impl Render for Reader {
         } else {
             "Reader TextInput"
         };
-        div()
-            .id("reader-root")
+        clickable("reader-root")
             .group("reader")
             .relative()
             .size_full()
