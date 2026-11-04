@@ -24,6 +24,9 @@ def main():
     library = root / "vendor/pdfium/lib/libpdfium.dylib"
     if not library.is_file():
         raise SystemExit("Install the PDF engine first: uv run scripts/setup_pdfium.py")
+    icon = root / "assets/brand/pdf-reader.icns"
+    if not icon.is_file():
+        raise SystemExit(f"Missing application icon: {icon}")
     command = ["cargo", "build", "--locked"]
     if not args.debug:
         command.append("--release")
@@ -40,6 +43,7 @@ def main():
         directory.mkdir(parents=True, exist_ok=True)
     copy_file(root / "target" / profile / "pdf-reader", executable_dir / executable_name)
     copy_file(library, frameworks / library.name)
+    copy_file(icon, resources / icon.name)
     shutil.copytree(root / "vendor/pdfium/licenses", resources / "licenses/pdfium", dirs_exist_ok=True)
     shutil.copy2(root / "vendor/pdfium/LICENSE", resources / "licenses/PDFium-LICENSE")
     shutil.copy2(root / "LICENSE", resources / "licenses/Application-LICENSE")
@@ -48,6 +52,7 @@ def main():
         "CFBundleDisplayName": name,
         "CFBundleExecutable": executable_name,
         "CFBundleIdentifier": "org.pdfreader.desktop.debug" if args.debug else "org.pdfreader.desktop",
+        "CFBundleIconFile": icon.name,
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": "0.1.0",
         "CFBundleVersion": "1",

@@ -21,3 +21,17 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
       - run: cargo test --locked -- --ignored
+      - if: runner.os == 'macOS'
+        name: Package and validate macOS application bundles
+        run: |
+          uv run scripts/package_macos.py
+          uv run scripts/package_macos.py --debug
+          for bundle in "target/release/PDF Reader.app" "target/debug/PDF Reader Debug.app"; do
+            plutil -lint "$bundle/Contents/Info.plist"
+            test "$(plutil -extract CFBundleIconFile raw -o - "$bundle/Contents/Info.plist")" = "pdf-reader.icns"
+            test -f "$bundle/Contents/Resources/pdf-reader.icns"
+            iconutil -c iconset "$bundle/Contents/Resources/pdf-reader.icns" -o "$RUNNER_TEMP/$(basename "$bundle" .app).iconset"
+          done
+      - if: runner.os == 'Windows'
+        name: Build release executable with embedded icon
+        run: cargo build --locked --release
