@@ -5,6 +5,8 @@ mod commands;
 mod handlers;
 mod images;
 mod navigation;
+#[cfg(debug_assertions)]
+mod preview;
 mod scheduling;
 mod selection;
 mod tabs;
@@ -105,6 +107,8 @@ impl Reader {
             page_bounds: Rc::new(Cell::new(gpui::Bounds::default())),
             chrome: Chrome::new(theme),
         };
+        #[cfg(debug_assertions)]
+        reader.preview_theme(window, cx);
         reader.open_paths(paths, window, cx);
         reader
     }
@@ -129,6 +133,8 @@ impl Reader {
                         self.cache_current_page(window);
                         self.image = Some(image);
                         self.image_key = Some(view);
+                        #[cfg(debug_assertions)]
+                        self.preview_after_page(window, cx);
                     }
                     Err(error) => tab.error = Some(error.to_string()),
                 }
@@ -137,6 +143,8 @@ impl Reader {
                 if key == (tab.session, tab.page) {
                     self.text = Some(text.clone());
                     self.texts.insert(key, text);
+                    #[cfg(debug_assertions)]
+                    self.preview_after_text(cx);
                 }
             }
             Event::Thumbnail { page, raster, .. } => match PageImage::new(raster) {

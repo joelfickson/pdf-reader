@@ -6,6 +6,7 @@ use super::super::{
 use super::floating::field;
 use crate::ui::{
     icon::Icon,
+    kit::clickable,
     kit::{
         Kind, RADIUS, Status, Tone, floating, icon, icon_button, kbd, label, mono, pill, status,
         text_button, toggle,
@@ -61,8 +62,7 @@ impl Reader {
             _ => return None,
         };
         Some(
-            div()
-                .id("scrim")
+            clickable("scrim")
                 .absolute()
                 .inset_0()
                 .bg(theme.scrim)
@@ -178,8 +178,7 @@ impl Reader {
             .chrome
             .palette_index
             .min(entries.len().saturating_sub(1));
-        let mut list = div()
-            .id("palette-list")
+        let mut list = clickable("palette-list")
             .max_h(px(420.0))
             .overflow_y_scroll()
             .p(px(6.0))
@@ -215,8 +214,7 @@ impl Reader {
             let entry = *entry;
             let hover = theme.hover;
             list = list.child(
-                div()
-                    .id(("palette-entry", index))
+                clickable(("palette-entry", index))
                     .h(px(34.0))
                     .px(px(10.0))
                     .flex()
@@ -256,7 +254,7 @@ impl Reader {
                     .child(icon(Icon::Search, theme.muted))
                     .child(field(
                         &theme,
-                        &self.chrome.palette.text,
+                        &self.chrome.palette,
                         "Type a command, page number, or file name",
                         self.chrome.input == Input::Palette,
                     )),
@@ -318,8 +316,7 @@ impl Reader {
                             })),
                     )
                     .child(
-                        div()
-                            .id("signature-pad")
+                        clickable("signature-pad")
                             .h(px(170.0))
                             .rounded(px(RADIUS))
                             .bg(Paper::base())
@@ -330,6 +327,58 @@ impl Reader {
                             .gap(px(12.0))
                             .child(pad)
                             .child(div().w(px(420.0)).max_w_full().h(px(1.0)).bg(Paper::rule())),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .text_size(px(12.0))
+                            .text_color(theme.muted)
+                            .child(div().mr(px(4.0)).child("Ink"))
+                            .children(
+                                [0x1c3d8f_u32, 0x1d2024, 0xb42318]
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(index, color)| {
+                                        let selected = self.chrome.sign_ink == index;
+                                        let hover = theme.hover;
+                                        clickable(("sign-ink", index))
+                                            .size(px(28.0))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .rounded(px(RADIUS))
+                                            .when(selected, |swatch| swatch.bg(theme.hover))
+                                            .cursor_pointer()
+                                            .hover(move |style| style.bg(hover))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.chrome.sign_ink = index;
+                                                cx.notify();
+                                            }))
+                                            .child(
+                                                div()
+                                                    .size(px(14.0))
+                                                    .rounded_full()
+                                                    .bg(gpui::rgb(color))
+                                                    .border_1()
+                                                    .border_color(theme.hairline),
+                                            )
+                                    }),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(label(&theme, "Saved"))
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(theme.faint)
+                                    .child("Saved signatures are not available yet"),
+                            ),
                     ),
             )
             .child(
@@ -372,8 +421,7 @@ impl Reader {
                 .children(formats.iter().enumerate().map(|(index, (name, detail))| {
                     let selected = self.chrome.export_format == index;
                     let hover = theme.hover;
-                    div()
-                        .id(("export-format", index))
+                    clickable(("export-format", index))
                         .w(px(192.0))
                         .p(px(10.0))
                         .rounded(px(RADIUS))
@@ -522,7 +570,22 @@ impl Reader {
                                     this.unavailable("Adding files", cx)
                                 })),
                         ),
-                    ),
+                    )
+                    .child(form_row(
+                        &theme,
+                        "Image pages",
+                        self.choice_pills(
+                            "combine-fit",
+                            vec![
+                                "Fit to A4".into(),
+                                "Fit to Letter".into(),
+                                "Original size".into(),
+                            ],
+                            self.chrome.combine_fit,
+                            |this, index| this.chrome.combine_fit = index,
+                            cx,
+                        ),
+                    )),
             )
             .child(
                 self.dialog_footer(
@@ -530,7 +593,14 @@ impl Reader {
                         div()
                             .text_size(px(12.0))
                             .text_color(theme.muted)
-                            .child("Drag to reorder")
+                            .child(if self.tabs.entries.iter().all(|tab| tab.count > 0) {
+                                format!(
+                                    "Drag to reorder. {} pages",
+                                    self.tabs.entries.iter().map(|tab| tab.count).sum::<usize>()
+                                )
+                            } else {
+                                "Drag to reorder".to_string()
+                            })
                             .into_any_element(),
                     ),
                     "Combine",
@@ -565,8 +635,50 @@ impl Reader {
                             .gap(px(8.0))
                             .child(self.thumbnail_element(session, page, 170.0, 220.0))
                             .child(
-                                mono(format!("Page {} of {count}", page + 1))
-                                    .text_color(theme.muted),
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.0))
+                                    .child(
+                                        icon_button(
+                                            "print-previous",
+                                            Icon::ChevronLeft,
+                                            &theme,
+                                            Tone::Plain,
+                                            page > 0,
+                                        )
+                                        .on_click(
+                                            cx.listener(|this, _, window, cx| {
+                                                if let Some(page) =
+                                                    this.tabs.current().map(|tab| tab.page)
+                                                {
+                                                    this.go(page.saturating_sub(1), window, cx)
+                                                }
+                                            }),
+                                        ),
+                                    )
+                                    .child(
+                                        mono(format!("{} of {count}", page + 1))
+                                            .text_color(theme.muted),
+                                    )
+                                    .child(
+                                        icon_button(
+                                            "print-next",
+                                            Icon::ChevronRight,
+                                            &theme,
+                                            Tone::Plain,
+                                            page + 1 < count,
+                                        )
+                                        .on_click(
+                                            cx.listener(|this, _, window, cx| {
+                                                if let Some(page) =
+                                                    this.tabs.current().map(|tab| tab.page)
+                                                {
+                                                    this.go(page + 1, window, cx)
+                                                }
+                                            }),
+                                        ),
+                                    ),
                             ),
                     )
                     .child(
@@ -618,10 +730,35 @@ impl Reader {
                                             })),
                                     )
                                     .child("Notes and stamps"),
+                            ))
+                            .child(form_row(
+                                &theme,
+                                "Sides",
+                                self.choice_pills(
+                                    "print-sides",
+                                    vec!["One".into(), "Both".into()],
+                                    self.chrome.print_sides,
+                                    |this, index| this.chrome.print_sides = index,
+                                    cx,
+                                ),
                             )),
                     ),
             )
-            .child(self.dialog_footer(None, "Print", "Printing", cx))
+            .child(
+                self.dialog_footer(
+                    Some(
+                        text_button("print-system", "System dialog", &theme, Kind::Quiet)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.chrome.overlay = Overlay::None;
+                                this.unavailable("The system print dialog", cx)
+                            }))
+                            .into_any_element(),
+                    ),
+                    "Print",
+                    "Printing",
+                    cx,
+                ),
+            )
             .into_any_element()
     }
 

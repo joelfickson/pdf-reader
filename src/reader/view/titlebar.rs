@@ -6,6 +6,7 @@ use super::super::{
 };
 use crate::ui::{
     icon::Icon,
+    kit::clickable,
     kit::{RADIUS, Tone, icon, icon_button, kbd},
 };
 use gpui::{Context, IntoElement, MouseButton, Window, div, prelude::*, px};
@@ -24,8 +25,7 @@ impl Reader {
         let hover = theme.hover;
         let tabs = self.tabs.entries.iter().enumerate().map(|(index, tab)| {
             let active = index == self.tabs.active;
-            div()
-                .id(("tab", tab.session))
+            clickable(("tab", tab.session))
                 .group("tab")
                 .h(px(30.0))
                 .flex_basis(px(220.0))
@@ -70,8 +70,7 @@ impl Reader {
                     })),
                 )
         });
-        div()
-            .id("titlebar")
+        clickable("titlebar")
             .h(px(40.0))
             .flex_shrink_0()
             .flex()
@@ -86,8 +85,7 @@ impl Reader {
                 }
             })
             .child(
-                div()
-                    .id("tabs")
+                clickable("tabs")
                     .flex_1()
                     .min_w_0()
                     .flex()
@@ -182,8 +180,7 @@ impl Reader {
                         })),
                     )
                     .child(
-                        div()
-                            .id("palette-trigger")
+                        clickable("palette-trigger")
                             .ml(px(4.0))
                             .h(px(28.0))
                             .w(px(180.0))

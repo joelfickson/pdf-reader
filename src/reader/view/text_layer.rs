@@ -1,11 +1,10 @@
 use super::super::Reader;
-use gpui::{
-    Bounds, Context, IntoElement, MouseButton, canvas, div, img, point, prelude::*, px, size,
-};
+use crate::ui::kit::clickable;
+use gpui::{Bounds, Context, IntoElement, MouseButton, canvas, img, point, prelude::*, px, size};
 
 impl Reader {
     pub(in crate::reader) fn page_element(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut page = div().id("rendered-page").relative().flex_shrink_0();
+        let mut page = clickable("rendered-page").relative().flex_shrink_0();
         if let Some(image) = &self.image {
             let rects: Vec<_> = match (&self.text, &self.selection) {
                 (Some(Ok(text)), Some(selection)) => text

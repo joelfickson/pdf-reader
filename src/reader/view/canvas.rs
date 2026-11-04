@@ -2,6 +2,7 @@ use super::{super::Reader, CANVAS_PADDING};
 use crate::reader::actions::Open;
 use crate::ui::{
     icon::Icon,
+    kit::clickable,
     kit::{Kind, icon, text_button},
 };
 use gpui::{Context, IntoElement, div, prelude::*, px};
@@ -40,8 +41,7 @@ impl Reader {
                 .child("Opening page")
                 .into_any_element()
         };
-        div()
-            .id("document-canvas")
+        clickable("document-canvas")
             .flex_1()
             .min_w_0()
             .h_full()

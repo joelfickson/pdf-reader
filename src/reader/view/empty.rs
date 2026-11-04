@@ -1,18 +1,17 @@
-use super::super::{Reader, actions::Open, chrome::Overlay, commands::modifier};
+use super::super::{Reader, actions::Open, chrome::Overlay};
 use crate::ui::{
     icon::Icon,
-    kit::{Kind, RADIUS, icon, kbd, label, text_button},
+    kit::clickable,
+    kit::{Kind, RADIUS, icon, label, text_button},
 };
 use gpui::{Context, IntoElement, div, prelude::*, px};
 
 impl Reader {
     pub(in crate::reader) fn empty(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.chrome.theme;
-        let m = modifier();
         let quick = |id: &'static str, glyph: Icon, title: &'static str, body: &'static str| {
             let hover = theme.hover;
-            div()
-                .id(id)
+            clickable(id)
                 .flex_1()
                 .p(px(12.0))
                 .flex()
@@ -30,18 +29,7 @@ impl Reader {
                         .child(body),
                 )
         };
-        let key = |text: &'static str, keys: String| {
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .text_size(px(12.0))
-                .text_color(theme.muted)
-                .child(text)
-                .child(kbd(&theme, keys))
-        };
-        div()
-            .id("empty")
+        clickable("empty")
             .flex_1()
             .overflow_y_scroll()
             .flex()
@@ -114,36 +102,23 @@ impl Reader {
                                 )),
                             ),
                     )
+                    .child(
+                        label(&theme, "Restore last session")
+                            .mt(px(28.0))
+                            .mb(px(8.0)),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(theme.faint)
+                            .child("Restoring sessions is not available yet."),
+                    )
                     .child(label(&theme, "Recent").mt(px(28.0)).mb(px(8.0)))
                     .child(
                         div()
                             .text_size(px(12.0))
                             .text_color(theme.faint)
                             .child("Recent files are not available yet."),
-                    )
-                    .child(label(&theme, "Keys").mt(px(28.0)).mb(px(8.0)))
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(24.0))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(8.0))
-                                    .child(key("Command palette", format!("{m} K")))
-                                    .child(key("Open", format!("{m} O"))),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(8.0))
-                                    .child(key("Settings", format!("{m} ,")))
-                                    .child(key("All shortcuts", "?".into())),
-                            ),
                     ),
             )
     }

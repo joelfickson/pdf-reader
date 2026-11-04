@@ -17,7 +17,7 @@ pub(super) enum Group {
 impl Group {
     pub fn title(self) -> &'static str {
         match self {
-            Self::Navigate => "Navigate",
+            Self::Navigate => "Suggested",
             Self::Edit => "Edit",
             Self::View => "View",
             Self::File => "File",

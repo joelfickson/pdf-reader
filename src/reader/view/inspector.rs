@@ -2,6 +2,7 @@ use super::{super::Reader, INSPECTOR_WIDTH};
 use crate::reader::{actions::CopyText, chrome::InspectorTab};
 use crate::ui::{
     icon::Icon,
+    kit::clickable,
     kit::{Kind, RADIUS, Status, empty_state, label, mono, status, text_button},
     theme::Theme,
 };
@@ -63,7 +64,7 @@ impl InspectorTab {
         match self {
             Self::Selection => "Selection",
             Self::Document => "Document",
-            Self::Signatures => "Placing signatures",
+            Self::Signatures => "Signatures",
         }
     }
 }
@@ -82,8 +83,7 @@ impl Reader {
                 let tab = *tab;
                 let selected = tab == current;
                 let hover = theme.hover;
-                div()
-                    .id(tab.title())
+                clickable(tab.title())
                     .flex_1()
                     .h(px(28.0))
                     .flex()
@@ -112,8 +112,7 @@ impl Reader {
             )
             .into_any_element(),
         };
-        div()
-            .id("inspector")
+        clickable("inspector")
             .w(px(INSPECTOR_WIDTH))
             .flex_shrink_0()
             .h_full()
@@ -122,8 +121,7 @@ impl Reader {
             .bg(theme.chrome)
             .child(tabs)
             .child(
-                div()
-                    .id("inspector-body")
+                clickable("inspector-body")
                     .flex_1()
                     .overflow_y_scroll()
                     .px(px(16.0))

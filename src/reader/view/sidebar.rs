@@ -2,6 +2,7 @@ use super::{super::Reader, SIDEBAR_WIDTH};
 use crate::reader::chrome::Panel;
 use crate::ui::{
     icon::Icon,
+    kit::clickable,
     kit::{RADIUS, empty_state, icon, label, mono},
     theme::Paper,
 };
@@ -117,8 +118,7 @@ impl Reader {
                 let item = *item;
                 let selected = item == panel;
                 let hover = theme.hover;
-                div()
-                    .id(item.title())
+                clickable(item.title())
                     .flex_1()
                     .h(px(30.0))
                     .flex()
@@ -201,15 +201,13 @@ impl Reader {
                         let preview =
                             this.thumbnail_element(session, index, THUMB_WIDTH, THUMB_HEIGHT);
                         let hairline = theme.hairline;
-                        div()
-                            .id(index)
+                        clickable(index)
                             .w_full()
                             .h(px(178.0))
                             .flex()
                             .justify_center()
                             .child(
-                                div()
-                                    .id("thumbnail")
+                                clickable("thumbnail")
                                     .group("thumb")
                                     .flex()
                                     .flex_col()

@@ -25,6 +25,12 @@ pub(crate) enum Status {
     Info,
 }
 
+pub(crate) fn clickable(id: impl Into<ElementId>) -> Stateful<Div> {
+    let id = id.into();
+    let name = id.to_string();
+    div().debug_selector(move || name).id(id)
+}
+
 pub(crate) fn icon(glyph: Icon, color: Hsla) -> Svg {
     svg()
         .path(glyph.path())
@@ -50,8 +56,7 @@ pub(crate) fn icon_button(
     } else {
         theme.hover
     };
-    div()
-        .id(id)
+    clickable(id)
         .h(px(28.0))
         .min_w(px(28.0))
         .px(px(6.0))
@@ -85,8 +90,7 @@ pub(crate) fn text_button(
             FontWeight::SEMIBOLD,
         ),
     };
-    div()
-        .id(id)
+    clickable(id)
         .h(px(32.0))
         .px(px(12.0))
         .flex()
@@ -111,8 +115,7 @@ pub(crate) fn pill(
     theme: &Theme,
 ) -> Stateful<Div> {
     let hover = theme.hover;
-    div()
-        .id(id)
+    clickable(id)
         .h(px(28.0))
         .px(px(10.0))
         .flex()
@@ -194,8 +197,7 @@ pub(crate) fn separator(theme: &Theme) -> Div {
 }
 
 pub(crate) fn toggle(id: impl Into<ElementId>, on: bool, theme: &Theme) -> Stateful<Div> {
-    div()
-        .id(id)
+    clickable(id)
         .flex_none()
         .w(px(30.0))
         .h(px(18.0))
