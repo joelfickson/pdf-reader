@@ -1,9 +1,11 @@
 import argparse
+import os
 import plistlib
 import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 
@@ -12,6 +14,19 @@ def copy_file(source, destination):
         staged = Path(temporary) / destination.name
         shutil.copy2(source, staged)
         staged.replace(destination)
+
+
+def crate_version(root):
+    with (root / "Cargo.toml").open("rb") as manifest:
+        return tomllib.load(manifest)["package"]["version"]
+
+
+def sign(paths, identity):
+    command = ["codesign", "--force", "--sign", identity]
+    if identity != "-":
+        command += ["--options", "runtime", "--timestamp"]
+    for path in paths:
+        subprocess.run([*command, str(path)], check=True)
 
 
 def main():
@@ -31,6 +46,7 @@ def main():
     if not args.debug:
         command.append("--release")
     subprocess.run(command, cwd=root, check=True)
+    version = crate_version(root)
     profile = "debug" if args.debug else "release"
     name = "PDF Reader Debug" if args.debug else "PDF Reader"
     executable_name = "pdf-reader-debug" if args.debug else "pdf-reader"
@@ -54,13 +70,16 @@ def main():
         "CFBundleIdentifier": "org.pdfreader.desktop.debug" if args.debug else "org.pdfreader.desktop",
         "CFBundleIconFile": icon.name,
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1.0",
-        "CFBundleVersion": "1",
+        "CFBundleShortVersionString": version,
+        "CFBundleVersion": version,
         "NSHighResolutionCapable": True,
         "NSPrincipalClass": "NSApplication",
     }
     with (contents / "Info.plist").open("wb") as output:
         plistlib.dump(info, output)
+    identity = os.environ.get("MACOS_SIGNING_IDENTITY") or "-"
+    sign([frameworks / library.name, bundle], identity)
+    subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
     print(f"Local development bundle: {bundle}")
 
 
