@@ -15,8 +15,31 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    name: Verify tag matches crate version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          crate="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          if [ "$RELEASE_TAG" != "v$crate" ]; then
+            echo "::error::Tag $RELEASE_TAG does not match Cargo.toml version $crate"
+            exit 1
+          fi
+
+  check:
+    needs: version
+    uses: ./.github/workflows/check.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
+
   package:
     name: Package ${{ matrix.platform }}
+    needs: check
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +51,12 @@ jobs:
           - os: windows-2022
             platform: windows-x64
     runs-on: ${{ matrix.os }}
+    env:
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,10 +65,44 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - uses: Swatinem/rust-cache@v2
       - run: uv run scripts/setup_pdfium.py
+      - if: runner.os == 'macOS' && env.MACOS_CERTIFICATE_P12 != ''
+        name: Import Developer ID certificate
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          certificate="$RUNNER_TEMP/certificate.p12"
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain"
+          security list-keychains -d user | tr -d '"' | xargs security list-keychains -d user -s "$keychain"
+          rm "$certificate"
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ { print $2; exit }')"
+          if [ -z "$identity" ]; then
+            echo "::error::No Developer ID Application identity found in the imported certificate"
+            exit 1
+          fi
+          echo "MACOS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
       - if: runner.os == 'macOS'
         run: uv run scripts/package_macos.py
+      - if: runner.os == 'macOS' && env.MACOS_SIGNING_IDENTITY != ''
+        name: Notarize and staple
+        run: |
+          ditto -c -k --keepParent "target/release/PDF Reader.app" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "target/release/PDF Reader.app"
+          spctl --assess --type execute --verbose=2 "target/release/PDF Reader.app"
       - if: runner.os == 'macOS'
         run: ditto -c -k --keepParent "target/release/PDF Reader.app" "pdf-reader-${{ matrix.platform }}.zip"
+      - if: runner.os == 'macOS'
+        name: Verify packaged bundle
+        run: |
+          mkdir "$RUNNER_TEMP/verify"
+          ditto -x -k "pdf-reader-${{ matrix.platform }}.zip" "$RUNNER_TEMP/verify"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/verify/PDF Reader.app"
+          "$RUNNER_TEMP/verify/PDF Reader.app/Contents/MacOS/pdf-reader" --check tests/fixtures/reading.pdf
       - if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -51,6 +114,8 @@ jobs:
           Copy-Item "LICENSE" "$stage\licenses\Application-LICENSE"
           Copy-Item "vendor\pdfium\LICENSE" "$stage\licenses\PDFium-LICENSE"
           Copy-Item "vendor\pdfium\licenses\*" "$stage\licenses\pdfium" -Recurse
+          $check = Start-Process -FilePath "$stage\pdf-reader.exe" -ArgumentList "--check", "tests\fixtures\reading.pdf" -Wait -PassThru -NoNewWindow
+          if ($check.ExitCode -ne 0) { exit $check.ExitCode }
           Compress-Archive -Path "$stage\*" -DestinationPath "pdf-reader-${{ matrix.platform }}.zip"
       - uses: actions/upload-artifact@v4
         with:
@@ -68,7 +133,23 @@ jobs:
           pattern: pdf-reader-*
           path: release-assets
           merge-multiple: true
+      - run: cd release-assets && sha256sum -- *.zip > SHA256SUMS.txt
+      - env:
+          MACOS_NOTARIZED: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+        run: |
+          {
+            echo "## Install"
+            echo
+            echo "macOS: download the zip for your Mac (arm64 for Apple silicon, x64 for Intel), unzip it, and move PDF Reader to Applications."
+            if [ "$MACOS_NOTARIZED" != "true" ]; then
+              echo "This build is not notarized. The first time you open it, macOS blocks it. Open System Settings, go to Privacy & Security, and click Open Anyway next to the PDF Reader message."
+            fi
+            echo
+            echo "Windows: unzip the archive and run pdf-reader.exe. Keep pdfium.dll in the same folder. This build is not code signed, so Windows SmartScreen may warn on first launch. Click More info, then Run anyway."
+            echo
+            echo "Verify downloads against SHA256SUMS.txt."
+          } > notes.md
       - env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: gh release create "$RELEASE_TAG" release-assets/*.zip --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "$RELEASE_TAG"
+        run: gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --verify-tag --notes-file notes.md --generate-notes --title "$RELEASE_TAG"
