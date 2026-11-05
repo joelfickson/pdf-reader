@@ -1,7 +1,12 @@
 mod actions;
 mod cache;
+mod chrome;
+mod commands;
+mod handlers;
 mod images;
 mod navigation;
+#[cfg(debug_assertions)]
+mod preview;
 mod scheduling;
 mod selection;
 mod tabs;
@@ -10,8 +15,10 @@ mod tests;
 mod view;
 
 use crate::pdf::{Event, ViewKey, Worker, text::PageText};
+use crate::ui::theme::Theme;
 pub(crate) use actions::*;
 use cache::PageCache;
+use chrome::Chrome;
 use gpui::{Context, FocusHandle, Window};
 use images::PageImage;
 use selection::Selection;
@@ -39,6 +46,7 @@ pub(crate) struct Reader {
     notice: Option<String>,
     copied: bool,
     page_bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>>,
+    chrome: Chrome,
 }
 
 impl Reader {
@@ -67,6 +75,12 @@ impl Reader {
             });
         })
         .detach();
+        cx.observe_window_appearance(window, |this, window, cx| {
+            this.chrome.theme = Theme::resolve(this.chrome.theme_choice, window.appearance());
+            cx.notify();
+        })
+        .detach();
+        let theme = Theme::resolve(Default::default(), window.appearance());
         let focus = cx.focus_handle();
         focus.focus(window);
         let mut reader = Self {
@@ -91,7 +105,10 @@ impl Reader {
             notice: None,
             copied: false,
             page_bounds: Rc::new(Cell::new(gpui::Bounds::default())),
+            chrome: Chrome::new(theme),
         };
+        #[cfg(debug_assertions)]
+        reader.preview_theme(window, cx);
         reader.open_paths(paths, window, cx);
         reader
     }
@@ -116,6 +133,8 @@ impl Reader {
                         self.cache_current_page(window);
                         self.image = Some(image);
                         self.image_key = Some(view);
+                        #[cfg(debug_assertions)]
+                        self.preview_after_page(window, cx);
                     }
                     Err(error) => tab.error = Some(error.to_string()),
                 }
@@ -124,6 +143,8 @@ impl Reader {
                 if key == (tab.session, tab.page) {
                     self.text = Some(text.clone());
                     self.texts.insert(key, text);
+                    #[cfg(debug_assertions)]
+                    self.preview_after_text(cx);
                 }
             }
             Event::Thumbnail { page, raster, .. } => match PageImage::new(raster) {
