@@ -6,50 +6,115 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: Existing tag to package and release
+      platform:
+        description: Platforms to package
         required: true
-        type: string
+        type: choice
+        default: all
+        options:
+          - all
+          - macos
+          - windows
+      channel:
+        description: Release channel
+        required: true
+        type: choice
+        default: stable
+        options:
+          - stable
+          - beta
+          - rc
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  version:
-    name: Verify tag matches crate version
+  prepare:
+    name: Generate release tag and targets
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      channel: ${{ steps.release.outputs.channel }}
+      platform: ${{ steps.release.outputs.platform }}
+      matrix: ${{ steps.release.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
-      - env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Create or select release tag
+        id: release
+        env:
+          RELEASE_PLATFORM: ${{ inputs.platform }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
         run: |
-          crate="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
-          if [ "$RELEASE_TAG" != "v$crate" ]; then
-            echo "::error::Tag $RELEASE_TAG does not match Cargo.toml version $crate"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "::error::Start releases from the main branch"
+              exit 1
+            fi
+            release_tag="$(uv run --no-project python scripts/next_release_tag.py "$RELEASE_CHANNEL")"
+            git tag "$release_tag" "$GITHUB_SHA"
+            git push origin "$release_tag"
+            release_platform="$RELEASE_PLATFORM"
+          else
+            release_tag="$GITHUB_REF_NAME"
+            release_platform=all
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::Release tag $release_tag is not a supported semantic version tag"
             exit 1
           fi
+          package_version="$(uv run --no-project python -c 'import tomllib; print(tomllib.loads(open("Cargo.toml", "rb").read().decode())["package"]["version"])')"
+          if [[ "$release_tag" != "v$package_version" && "$release_tag" != "v$package_version-beta."* && "$release_tag" != "v$package_version-rc."* ]]; then
+            echo "::error::Release tag $release_tag does not match Cargo.toml version $package_version"
+            exit 1
+          fi
+          case "$release_tag" in
+            *-beta.*) release_channel=beta ;;
+            *-rc.*) release_channel=rc ;;
+            *) release_channel=stable ;;
+          esac
+          case "$release_platform" in
+            macos)
+              matrix='{"include":[{"os":"macos-14","platform":"macos-arm64"},{"os":"macos-15-intel","platform":"macos-x64"}]}'
+              ;;
+            windows)
+              matrix='{"include":[{"os":"windows-2022","platform":"windows-x64"}]}'
+              ;;
+            all)
+              matrix='{"include":[{"os":"macos-14","platform":"macos-arm64"},{"os":"macos-15-intel","platform":"macos-x64"},{"os":"windows-2022","platform":"windows-x64"}]}'
+              ;;
+            *)
+              echo "::error::Unsupported release platform $release_platform"
+              exit 1
+              ;;
+          esac
+          {
+            echo "tag=$release_tag"
+            echo "channel=$release_channel"
+            echo "platform=$release_platform"
+            echo "matrix=$matrix"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::Preparing $release_channel release $release_tag for $release_platform"
 
   check:
-    needs: version
+    needs: prepare
     uses: ./.github/workflows/check.yml
     with:
-      ref: ${{ inputs.tag || github.ref }}
+      ref: ${{ needs.prepare.outputs.tag }}
+      platform: ${{ needs.prepare.outputs.platform }}
 
   package:
     name: Package ${{ matrix.platform }}
-    needs: check
+    needs: [prepare, check]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            platform: macos-arm64
-          - os: macos-15-intel
-            platform: macos-x64
-          - os: windows-2022
-            platform: windows-x64
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
       MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
@@ -60,7 +125,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.prepare.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v6
       - uses: Swatinem/rust-cache@v2
@@ -125,7 +190,7 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: package
+    needs: [prepare, package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -136,20 +201,30 @@ jobs:
       - run: cd release-assets && sha256sum -- *.zip > SHA256SUMS.txt
       - env:
           MACOS_NOTARIZED: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+          RELEASE_PLATFORM: ${{ needs.prepare.outputs.platform }}
         run: |
           {
             echo "## Install"
             echo
-            echo "macOS: download the zip for your Mac (arm64 for Apple silicon, x64 for Intel), unzip it, and move PDF Reader to Applications."
-            if [ "$MACOS_NOTARIZED" != "true" ]; then
-              echo "This build is not notarized. The first time you open it, macOS blocks it. Open System Settings, go to Privacy & Security, and click Open Anyway next to the PDF Reader message."
+            if [ "$RELEASE_PLATFORM" != "windows" ]; then
+              echo "macOS: download the zip for your Mac (arm64 for Apple silicon, x64 for Intel), unzip it, and move PDF Reader to Applications."
+              if [ "$MACOS_NOTARIZED" != "true" ]; then
+                echo "This build is not notarized. The first time you open it, macOS blocks it. Open System Settings, go to Privacy & Security, and click Open Anyway next to the PDF Reader message."
+              fi
             fi
-            echo
-            echo "Windows: unzip the archive and run pdf-reader.exe. Keep pdfium.dll in the same folder. This build is not code signed, so Windows SmartScreen may warn on first launch. Click More info, then Run anyway."
+            if [ "$RELEASE_PLATFORM" != "macos" ]; then
+              echo "Windows: unzip the archive and run pdf-reader.exe. Keep pdfium.dll in the same folder. This build is not code signed, so Windows SmartScreen may warn on first launch. Click More info, then Run anyway."
+            fi
             echo
             echo "Verify downloads against SHA256SUMS.txt."
           } > notes.md
       - env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --verify-tag --notes-file notes.md --generate-notes --title "$RELEASE_TAG"
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_CHANNEL: ${{ needs.prepare.outputs.channel }}
+        run: |
+          args=(release-assets/* --repo "$GITHUB_REPOSITORY" --verify-tag --notes-file notes.md --generate-notes --title "$RELEASE_TAG")
+          if [ "$RELEASE_CHANNEL" != "stable" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" "${args[@]}"
