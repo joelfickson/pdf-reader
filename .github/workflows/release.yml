@@ -134,20 +134,7 @@ jobs:
           enable-cache: false
       - uses: Swatinem/rust-cache@v2
       - run: uv run scripts/setup_pdfium.py
-      - if: runner.os == 'macOS'
-        name: Check macOS signing credentials
-        run: |
-          missing=""
-          for name in MACOS_CERTIFICATE_P12 MACOS_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              missing="$missing $name"
-            fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::Required repository secrets are missing:$missing"
-            exit 1
-          fi
-      - if: runner.os == 'macOS'
+      - if: runner.os == 'macOS' && env.MACOS_CERTIFICATE_P12 != ''
         name: Import Developer ID certificate
         run: |
           keychain="$RUNNER_TEMP/signing.keychain-db"
@@ -169,7 +156,7 @@ jobs:
           echo "MACOS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
       - if: runner.os == 'macOS'
         run: uv run scripts/package_macos.py
-      - if: runner.os == 'macOS'
+      - if: runner.os == 'macOS' && env.MACOS_SIGNING_IDENTITY != ''
         name: Notarize and staple
         run: |
           ditto -c -k --keepParent "target/release/PDF Reader.app" "$RUNNER_TEMP/notarize.zip"
@@ -218,6 +205,7 @@ jobs:
           merge-multiple: true
       - run: cd release-assets && sha256sum -- *.zip > SHA256SUMS.txt
       - env:
+          MACOS_NOTARIZED: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
           RELEASE_PLATFORM: ${{ needs.prepare.outputs.platform }}
         run: |
           {
@@ -225,7 +213,9 @@ jobs:
             echo
             if [ "$RELEASE_PLATFORM" != "windows" ]; then
               echo "macOS: download the zip for your Mac (arm64 for Apple silicon, x64 for Intel), unzip it, and move PDF Reader to Applications."
-              echo "The macOS app is signed with Developer ID and notarized."
+              if [ "$MACOS_NOTARIZED" != "true" ]; then
+                echo "This build is not notarized. The first time you open it, macOS blocks it. Open System Settings, go to Privacy & Security, and click Open Anyway next to the PDF Reader message."
+              fi
             fi
             if [ "$RELEASE_PLATFORM" != "macos" ]; then
               echo "Windows: unzip the archive and run pdf-reader.exe. Keep pdfium.dll in the same folder. This build is not code signed, so Windows SmartScreen may warn on first launch. Click More info, then Run anyway."
