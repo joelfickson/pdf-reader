@@ -88,29 +88,6 @@ impl Reader {
         self.copied = false;
         cx.notify();
     }
-
-    pub(super) fn selection_status(&self) -> String {
-        if let Some(notice) = &self.notice {
-            return notice.clone();
-        }
-        if self.copied {
-            return "Text copied".into();
-        }
-        if self.has_selection() {
-            return if cfg!(target_os = "macos") {
-                "Text selected · Command + C to copy"
-            } else {
-                "Text selected · Ctrl + C to copy"
-            }
-            .into();
-        }
-        match &self.text {
-            Some(Ok(text)) if text.glyphs.is_empty() => "No selectable text on this page".into(),
-            Some(Err(message)) => message.clone(),
-            None if self.image.is_some() => "Preparing text selection…".into(),
-            _ => "Drag across text to select · Drop PDFs to open".into(),
-        }
-    }
 }
 
 #[cfg(test)]

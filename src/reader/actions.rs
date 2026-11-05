@@ -16,6 +16,23 @@ actions!(
         Fit,
         ToggleSidebar,
         Close,
-        Quit
+        Quit,
+        TogglePalette,
+        ToggleFind,
+        ToggleAnnotate,
+        ToggleOrganize,
+        ToggleInspector,
+        ShowExport,
+        ShowPrint,
+        ShowSettings,
+        ShowShortcuts,
+        GoToPage,
+        Dismiss,
+        Save,
+        Bookmark,
+        ToggleSplit,
+        TogglePresent,
+        FirstPage,
+        LastPage
     ]
 );
