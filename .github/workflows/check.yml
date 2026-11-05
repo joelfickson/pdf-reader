@@ -9,12 +9,16 @@ on:
       ref:
         type: string
         required: false
+      platform:
+        type: string
+        required: false
+        default: all
 
 jobs:
   check:
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || inputs.platform == 'windows' && '["windows-latest"]' || '["macos-latest","windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
