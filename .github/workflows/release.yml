@@ -24,6 +24,10 @@ on:
           - stable
           - beta
           - rc
+      tag:
+        description: Existing tag to package and release
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -53,15 +57,24 @@ jobs:
         env:
           RELEASE_PLATFORM: ${{ inputs.platform }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
+          RELEASE_TAG_INPUT: ${{ inputs.tag }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$GITHUB_REF" != "refs/heads/main" ]; then
               echo "::error::Start releases from the main branch"
               exit 1
             fi
-            release_tag="$(uv run --no-project python scripts/next_release_tag.py "$RELEASE_CHANNEL")"
-            git tag "$release_tag" "$GITHUB_SHA"
-            git push origin "$release_tag"
+            if [ -n "$RELEASE_TAG_INPUT" ]; then
+              release_tag="$RELEASE_TAG_INPUT"
+              if ! git show-ref --verify --quiet "refs/tags/$release_tag"; then
+                echo "::error::Release tag $release_tag does not exist"
+                exit 1
+              fi
+            else
+              release_tag="$(uv run --no-project python scripts/next_release_tag.py "$RELEASE_CHANNEL")"
+              git tag "$release_tag" "$GITHUB_SHA"
+              git push origin "$release_tag"
+            fi
             release_platform="$RELEASE_PLATFORM"
           else
             release_tag="$GITHUB_REF_NAME"
@@ -83,13 +96,13 @@ jobs:
           esac
           case "$release_platform" in
             macos)
-              matrix='{"include":[{"os":"macos-14","platform":"macos-arm64"},{"os":"macos-15-intel","platform":"macos-x64"}]}'
+              matrix='{"include":[{"os":"macos-15","platform":"macos-arm64"},{"os":"macos-15-intel","platform":"macos-x64"}]}'
               ;;
             windows)
               matrix='{"include":[{"os":"windows-2022","platform":"windows-x64"}]}'
               ;;
             all)
-              matrix='{"include":[{"os":"macos-14","platform":"macos-arm64"},{"os":"macos-15-intel","platform":"macos-x64"},{"os":"windows-2022","platform":"windows-x64"}]}'
+              matrix='{"include":[{"os":"macos-15","platform":"macos-arm64"},{"os":"macos-15-intel","platform":"macos-x64"},{"os":"windows-2022","platform":"windows-x64"}]}'
               ;;
             *)
               echo "::error::Unsupported release platform $release_platform"
