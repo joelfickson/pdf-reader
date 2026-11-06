@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Line and Dot</title>
+<style>
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:"SF Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  color-scheme:light;
+  --bg:#f6f7f8;--ink:#1b1e22;--muted:#626973;--faint:#9aa1aa;--hairline:#dadde2;--accent:#1f6feb;
+  --light-stage:#ffffff;--dark-stage:#0b0d10;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#111418;--ink:#e7eaee;--muted:#8a929c;--faint:#5d646d;--hairline:#22272e;--accent:#5b9dff;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#111418;--ink:#e7eaee;--muted:#8a929c;--faint:#5d646d;--hairline:#22272e;--accent:#5b9dff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+main{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding-bottom:28px;border-bottom:1px solid var(--hairline)}
+h1{font-size:22px;margin:0;font-weight:650;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);flex:1;min-width:260px}
+header button{font:inherit;color:var(--muted);background:none;border:0;cursor:pointer;padding:4px 0}
+header button:hover{color:var(--ink)}
+.label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+
+.current{display:flex;align-items:center;gap:20px;padding:22px 0;border-bottom:1px solid var(--hairline)}
+.current .txt{color:var(--muted);max-width:640px}
+.current .txt b{color:var(--ink);font-weight:600}
+
+section.dir{padding:44px 0 40px;border-bottom:1px solid var(--hairline)}
+.dir-head{display:grid;grid-template-columns:48px 1fr;gap:4px 16px;margin-bottom:26px}
+.dir-head .n{font-family:var(--mono);color:var(--faint);font-size:13px;padding-top:4px}
+.dir-head h2{margin:0;font-size:19px;font-weight:650}
+.dir-head h2 em{font-style:normal;color:var(--accent);font-size:13px;font-weight:500;margin-left:10px}
+.dir-head .idea{grid-column:2;color:var(--muted);max-width:720px}
+
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.stage{display:flex;align-items:center;justify-content:center;padding:36px 0}
+.stage.light{background:var(--light-stage)}
+.stage.dark{background:var(--dark-stage)}
+.stage svg{width:min(240px,60%);height:auto}
+.stage .cap{position:absolute}
+
+.rows{display:grid;grid-template-columns:120px 1fr;gap:18px 20px;align-items:center;margin-top:28px}
+.rows .label{padding-top:2px}
+.sizes{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap}
+.sizes figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.sizes figcaption{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.on-dark{background:var(--dark-stage);padding:10px 14px}
+.on-light{background:var(--light-stage);padding:10px 14px}
+
+.dock{display:flex;align-items:flex-end;gap:10px;padding:10px 14px;background:rgba(160,166,175,.28);border-radius:20px;width:max-content;max-width:100%;overflow:hidden}
+.dock .other{width:56px;height:56px;border-radius:13px;flex:none}
+.dock svg{width:56px;height:56px;flex:none}
+.taskbar{display:flex;align-items:center;gap:6px;height:44px;padding:0 10px;background:#202020;width:max-content;max-width:100%}
+.taskbar .slot{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:4px}
+.taskbar .slot.on{background:#3a3a3a}
+.taskbar .other{width:22px;height:22px;border-radius:4px}
+.taskbar svg{width:24px;height:24px}
+.titlebar{display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;background:#eceef1;color:#1b1e22;font-size:12.5px;width:300px;max-width:100%}
+.titlebar svg{width:16px;height:16px}
+
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:28px;max-width:900px}
+.notes p{margin:4px 0 0;color:var(--muted)}
+.notes b{color:var(--ink);font-weight:600}
+
+.verdict{padding:36px 0 0;max-width:760px}
+.verdict h2{font-size:17px;margin:0 0 8px}
+.verdict p{color:var(--muted);margin:0 0 10px}
+.verdict b{color:var(--ink)}
+
+@media (max-width:760px){
+  .hero{grid-template-columns:1fr}
+  .rows{grid-template-columns:1fr;gap:8px}
+  .rows .label{margin-top:12px}
+  .notes{grid-template-columns:1fr}
+  .dir-head{grid-template-columns:1fr}
+  .dir-head .idea{grid-column:1}
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Line and dot, variations</h1>
+    <p>Six takes on direction 02. The line is reading, the dot is the agent. Variants 04 and 05 add a page by mirroring the app itself: document on the left, agent beside it.</p>
+    <button id="themeBtn">Switch theme</button>
+  </header>
+  <div id="dirs"></div>
+  <section class="dir" id="colors"></section>
+</main>
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const PR = `x="100" y="100" width="824" height="824" rx="185"`;
+let uidN = 0;
+const fade = (id,color,on)=>`<linearGradient id="${id}" x1="0" x2="1"><stop offset="0" stop-color="${color}" stop-opacity="${on?0.12:1}"/><stop offset=".6" stop-color="${color}"/></linearGradient>`;
+
+const concepts = [
+  {
+    name:"Refined", style:"Flat",
+    idea:"Round 2 with tightened proportions: a shorter, heavier line, a larger dot, and a faint top light on the plate.",
+    agent:"The dot runs just ahead of your reading position.",
+    palettes:{
+      color:{p1:"#1C2027",p2:"#0D0F12",bar:"#FFFFFF",dot:"#F2C230",f:1},
+      dark:{p1:"#2A3039",p2:"#1B1F25",bar:"#E7EAEE",dot:"#F2C230",f:1},
+      mono:{p1:"#000",p2:"#000",bar:"#fff",dot:"#fff",f:0},
+      reverse:{p1:"#fff",p2:"#fff",bar:"#000",dot:"#000",f:0}
+    },
+    draw:(p,u)=>`<defs><linearGradient id="p${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.p1}"/><stop offset="1" stop-color="${p.p2}"/></linearGradient>${fade("g"+u,p.bar,p.f)}</defs>
+      <rect ${PR} fill="url(#p${u})"/>
+      <rect x="214" y="470" width="420" height="84" rx="42" fill="url(#g${u})"/>
+      <circle cx="752" cy="512" r="68" fill="${p.dot}"/>`
+  },
+  {
+    name:"Paper", style:"Flat",
+    idea:"The same mark in ink on a paper plate. Calm, editorial, and the plate itself suggests a page.",
+    agent:"A blue dot keeps the agent cool and quiet against warm paper.",
+    palettes:{
+      color:{plate:"#F4F1E8",bar:"#1B1E22",dot:"#1F6FEB",f:1},
+      dark:{plate:"#1B1E22",bar:"#E7EAEE",dot:"#5B9DFF",f:1},
+      mono:{plate:"#000",bar:"#fff",dot:"#fff",f:0},
+      reverse:{plate:"#fff",bar:"#000",dot:"#000",f:0}
+    },
+    draw:(p,u)=>`<defs>${fade("g"+u,p.bar,p.f)}</defs>
+      <rect ${PR} fill="${p.plate}"/>
+      <rect x="214" y="470" width="420" height="84" rx="42" fill="url(#g${u})"/>
+      <circle cx="752" cy="512" r="68" fill="${p.dot}"/>`
+  },
+  {
+    name:"Paragraph", style:"Flat",
+    idea:"Faint lines above and below make the bright one a line in a paragraph, without drawing a document.",
+    agent:"Only your current line is lit, and the dot sits at its end.",
+    palettes:{
+      color:{plate:"#111418",bar:"#FFFFFF",ghost:"#FFFFFF",go:0.16,dot:"#F2C230",f:1,gh:64},
+      dark:{plate:"#22272E",bar:"#E7EAEE",ghost:"#E7EAEE",go:0.16,dot:"#F2C230",f:1,gh:64},
+      mono:{plate:"#000",bar:"#fff",ghost:"#fff",go:1,dot:"#fff",f:0,gh:30},
+      reverse:{plate:"#fff",bar:"#000",ghost:"#000",go:1,dot:"#000",f:0,gh:30}
+    },
+    draw:(p,u)=>`<defs>${fade("g"+u,p.bar,p.f)}</defs>
+      <rect ${PR} fill="${p.plate}"/>
+      <rect x="214" y="${360-p.gh/2}" width="540" height="${p.gh}" rx="${p.gh/2}" fill="${p.ghost}" fill-opacity="${p.go}"/>
+      <rect x="214" y="470" width="420" height="84" rx="42" fill="url(#g${u})"/>
+      <circle cx="752" cy="512" r="62" fill="${p.dot}"/>
+      <rect x="214" y="${664-p.gh/2}" width="380" height="${p.gh}" rx="${p.gh/2}" fill="${p.ghost}" fill-opacity="${p.go}"/>`
+  },
+  {
+    name:"Beside the page", style:"Flat",
+    idea:"A portrait sheet with the reading line on it, and the dot just outside the sheet. It is the app's layout in one mark.",
+    agent:"The agent sits next to your document, not inside it. Exactly where the panel lives.",
+    palettes:{
+      color:{plate:"#111418",sheet:"#F4F1E8",bar:"#1B1E22",dot:"#F2C230",f:1},
+      dark:{plate:"#22272E",sheet:"#E7EAEE",bar:"#1B1E22",dot:"#F2C230",f:1},
+      mono:{plate:"#000",sheet:"#fff",bar:"#000",dot:"#fff",f:0},
+      reverse:{plate:"#fff",sheet:"#000",bar:"#fff",dot:"#000",f:0}
+    },
+    draw:(p,u)=>`<defs>${fade("g"+u,p.bar,p.f)}</defs>
+      <rect ${PR} fill="${p.plate}"/>
+      <rect x="200" y="232" width="420" height="560" rx="40" fill="${p.sheet}"/>
+      <rect x="258" y="476" width="300" height="72" rx="36" fill="url(#g${u})"/>
+      <circle cx="752" cy="512" r="62" fill="${p.dot}"/>`
+  },
+  {
+    name:"Split plate", style:"Flat",
+    idea:"The plate itself is divided: paper on the left, dark panel on the right. The line reads across the paper and the dot lives in the panel.",
+    agent:"The most abstract version of the document plus agent panel layout. No sheet outline needed.",
+    palettes:{
+      color:{left:"#F4F1E8",right:"#111418",bar:"#1B1E22",dot:"#F2C230",f:1},
+      dark:{left:"#E7EAEE",right:"#22272E",bar:"#1B1E22",dot:"#F2C230",f:1},
+      mono:{left:"#fff",right:"#000",bar:"#000",dot:"#fff",f:0},
+      reverse:{left:"#000",right:"#fff",bar:"#fff",dot:"#000",f:0}
+    },
+    draw:(p,u)=>`<defs><clipPath id="c${u}"><rect ${PR}/></clipPath>${fade("g"+u,p.bar,p.f)}</defs>
+      <g clip-path="url(#c${u})">
+        <rect x="100" y="100" width="560" height="824" fill="${p.left}"/>
+        <rect x="660" y="100" width="264" height="824" fill="${p.right}"/>
+      </g>
+      <rect x="196" y="472" width="384" height="80" rx="40" fill="url(#g${u})"/>
+      <circle cx="792" cy="512" r="58" fill="${p.dot}"/>`
+  },
+  {
+    name:"Glow", style:"Dimensional",
+    idea:"The refined mark with depth: a deep navy plate, and a dot that gives off a soft light, in the direction of current macOS icons.",
+    agent:"The light is the agent: present, warm, and never the loudest thing in the icon.",
+    palettes:{
+      color:{p1:"#1D2638",p2:"#0B0D10",bar:"#FFFFFF",d1:"#FFE48A",d2:"#F2C230",d3:"#D08E00",glow:0.35,f:1},
+      dark:{p1:"#1D2638",p2:"#0B0D10",bar:"#E7EAEE",d1:"#FFE48A",d2:"#F2C230",d3:"#D08E00",glow:0.35,f:1},
+      mono:{p1:"#000",p2:"#000",bar:"#fff",d1:"#fff",d2:"#fff",d3:"#fff",glow:0,f:0},
+      reverse:{p1:"#fff",p2:"#fff",bar:"#000",d1:"#000",d2:"#000",d3:"#000",glow:0,f:0}
+    },
+    draw:(p,u)=>`<defs>
+        <linearGradient id="p${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.p1}"/><stop offset="1" stop-color="${p.p2}"/></linearGradient>
+        ${fade("g"+u,p.bar,p.f)}
+        <radialGradient id="d${u}" cx=".38" cy=".34" r=".75"><stop offset="0" stop-color="${p.d1}"/><stop offset=".55" stop-color="${p.d2}"/><stop offset="1" stop-color="${p.d3}"/></radialGradient>
+        <radialGradient id="h${u}"><stop offset="0" stop-color="#F2C230" stop-opacity="${p.glow}"/><stop offset="1" stop-color="#F2C230" stop-opacity="0"/></radialGradient>
+      </defs>
+      <rect ${PR} fill="url(#p${u})"/>
+      <circle cx="752" cy="512" r="190" fill="url(#h${u})"/>
+      <rect x="214" y="470" width="420" height="84" rx="42" fill="url(#g${u})"/>
+      <circle cx="752" cy="512" r="68" fill="url(#d${u})"/>`
+  }
+];
+
+function svg(c, variant, label){
+  const u = ++uidN;
+  return `<svg xmlns="${NS}" viewBox="0 0 1024 1024" role="img" aria-label="${label||c.name} icon"><title>${c.name}</title>${c.draw(c.palettes[variant],u)}</svg>`;
+}
+function sized(html, px){ return html.replace("<svg ", `<svg width="${px}" height="${px}" `); }
+
+const others = ["#3b82c4","#e05d44","#9aa1aa","#4fc26b"];
+document.getElementById("dirs").innerHTML = concepts.map((c,n)=>{
+  const sizes = [128,64,32,16];
+  const sizeRow = (variant, cls)=>`<div class="sizes ${cls}">${sizes.map(s=>`<figure>${sized(svg(c,variant),s)}<figcaption>${s}</figcaption></figure>`).join("")}</div>`;
+  return `<section class="dir">
+    <div class="dir-head">
+      <span class="n">0${n+1}</span>
+      <h2>${c.name}<em>${c.style}</em></h2>
+      <p class="idea">${c.idea}</p>
+    </div>
+    <div class="hero">
+      <div class="stage light">${svg(c,"color")}</div>
+      <div class="stage dark">${svg(c,"dark","dark appearance")}</div>
+    </div>
+    <div class="rows">
+      <span class="label">Sizes, light</span>${sizeRow("color","on-light")}
+      <span class="label">Sizes, dark</span>${sizeRow("dark","on-dark")}
+      <span class="label">One color</span>
+      <div class="sizes">
+        <div class="on-light">${sized(svg(c,"mono"),64)}</div>
+        <div class="on-dark">${sized(svg(c,"reverse"),64)}</div>
+        <div class="on-light">${sized(svg(c,"mono"),16)}</div>
+        <div class="on-dark">${sized(svg(c,"reverse"),16)}</div>
+      </div>
+      <span class="label">macOS Dock</span>
+      <div class="dock">${others.slice(0,2).map(o=>`<span class="other" style="background:${o}"></span>`).join("")}${svg(c,"color")}${others.slice(2).map(o=>`<span class="other" style="background:${o}"></span>`).join("")}</div>
+      <span class="label">Title bar, 16 px</span>
+      <div class="titlebar">${svg(c,"color")}<span>Office Lease - Harbor Point.pdf</span></div>
+    </div>
+    <div class="notes">
+      <div><span class="label">Agent</span><p>${c.agent}</p></div>
+    </div>
+  </section>`;
+}).join("");
+
+const dots = [["Yellow","#F2C230"],["Blue","#5B9DFF"],["Coral","#FF7A59"],["Green","#4FC26B"],["White","#FFFFFF"]];
+const base = concepts[0];
+document.getElementById("colors").innerHTML = `
+  <div class="dir-head"><span class="n">+</span><h2>Dot color</h2><p class="idea">Variant 01 with different dot colors. Yellow ties to the app's first highlight color; blue ties to its accent.</p></div>
+  <div class="rows">${dots.map(([name,hex])=>{
+    const c = {...base, palettes:{color:{...base.palettes.color,dot:hex}}};
+    return `<span class="label">${name}</span><div class="sizes">${[128,64,32,16].map(s=>`<figure>${sized(svg(c,"color"),s)}<figcaption>${s}</figcaption></figure>`).join("")}</div>`;
+  }).join("")}</div>`;
+
+document.getElementById("themeBtn").onclick = ()=>{
+  const r = document.documentElement;
+  const dark = r.dataset.theme ? r.dataset.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark";
+};
+</script>
+</body>
+</html>
