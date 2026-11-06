@@ -75,6 +75,8 @@ impl Reader {
         }
         self.reset_request(window);
         self.tabs.active = index;
+        self.clear_search();
+        self.restart_search(cx);
         window.set_window_title(&format!(
             "{} - PDF Reader",
             self.tabs.entries[index].title()

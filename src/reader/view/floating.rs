@@ -479,7 +479,7 @@ impl Reader {
     fn find_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.chrome.theme;
         let focused = self.chrome.input == Input::Find;
-        let option = |id: &'static str, text: &'static str, feature: &'static str| {
+        let option = |id: &'static str, text: &'static str, whole_word: bool, pressed: bool| {
             let hover = theme.hover;
             clickable(id)
                 .h(px(28.0))
@@ -491,12 +491,26 @@ impl Reader {
                 .rounded(px(RADIUS))
                 .font_family(Theme::mono_font())
                 .text_size(px(11.0))
-                .text_color(theme.muted)
+                .text_color(if pressed {
+                    theme.accent_strong
+                } else {
+                    theme.muted
+                })
+                .when(pressed, |button| button.bg(theme.accent_soft))
                 .cursor_pointer()
-                .hover(move |style| style.bg(hover))
-                .on_click(cx.listener(move |this, _, _, cx| this.unavailable(feature, cx)))
+                .when(!pressed, |button| {
+                    button.hover(move |style| style.bg(hover))
+                })
+                .on_click(
+                    cx.listener(move |this, _, _, cx| this.toggle_find_option(whole_word, cx)),
+                )
                 .child(text)
         };
+        let summary = self
+            .search
+            .as_ref()
+            .map(|search| search.summary())
+            .unwrap_or_default();
         floating(&theme)
             .id("find-bar")
             .occlude()
@@ -526,17 +540,14 @@ impl Reader {
             .child(
                 div()
                     .px(px(6.0))
+                    .font_family(Theme::mono_font())
                     .text_size(px(12.0))
-                    .text_color(theme.faint)
+                    .text_color(theme.muted)
                     .whitespace_nowrap()
-                    .child(if self.chrome.find.text.is_empty() {
-                        ""
-                    } else {
-                        "Not available yet"
-                    }),
+                    .child(summary),
             )
-            .child(option("match-case", "Aa", "Match case"))
-            .child(option("whole-word", "W", "Whole-word search"))
+            .child(option("match-case", "Aa", false, self.chrome.find_case))
+            .child(option("whole-word", "W", true, self.chrome.find_word))
             .child(
                 icon_button("find-results", Icon::List, &theme, Tone::Plain, true).on_click(
                     cx.listener(|this, _, _, cx| {
@@ -547,12 +558,13 @@ impl Reader {
                 ),
             )
             .child(
-                icon_button("find-previous", Icon::ChevronUp, &theme, Tone::Plain, true)
-                    .on_click(cx.listener(|this, _, _, cx| this.unavailable("Search", cx))),
+                icon_button("find-previous", Icon::ChevronUp, &theme, Tone::Plain, true).on_click(
+                    cx.listener(|this, _, window, cx| this.step_match(false, window, cx)),
+                ),
             )
             .child(
                 icon_button("find-next", Icon::ChevronDown, &theme, Tone::Plain, true)
-                    .on_click(cx.listener(|this, _, _, cx| this.unavailable("Search", cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.step_match(true, window, cx))),
             )
             .child(
                 icon_button("find-close", Icon::Close, &theme, Tone::Plain, true)

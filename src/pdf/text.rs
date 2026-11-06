@@ -59,10 +59,26 @@ impl PageText {
     }
 }
 
+const MAX_PAGE_CHARACTERS: usize = 100_000;
+
+pub(super) fn characters(page: &PdfPage<'_>) -> Option<Vec<char>> {
+    let text = page.text().ok()?;
+    let chars = text.chars();
+    if chars.len() > MAX_PAGE_CHARACTERS {
+        return None;
+    }
+    Some(
+        chars
+            .iter()
+            .map(|character| character.unicode_char().unwrap_or('\u{fffd}'))
+            .collect(),
+    )
+}
+
 pub(super) fn extract(page: &PdfPage<'_>, current: impl Fn() -> bool) -> Result<PageText> {
     let text = page.text()?;
     let chars = text.chars();
-    if chars.len() > 100_000 {
+    if chars.len() > MAX_PAGE_CHARACTERS {
         bail!("This page has too much text to select safely.");
     }
     let width = page.width().value;

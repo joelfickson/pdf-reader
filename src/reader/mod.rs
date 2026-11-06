@@ -8,6 +8,7 @@ mod navigation;
 #[cfg(debug_assertions)]
 mod preview;
 mod scheduling;
+mod search;
 mod selection;
 mod tabs;
 #[cfg(test)]
@@ -47,6 +48,8 @@ pub(crate) struct Reader {
     copied: bool,
     page_bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>>,
     chrome: Chrome,
+    search: Option<search::SearchState>,
+    reveal: bool,
 }
 
 impl Reader {
@@ -106,6 +109,8 @@ impl Reader {
             copied: false,
             page_bounds: Rc::new(Cell::new(gpui::Bounds::default())),
             chrome: Chrome::new(theme),
+            search: None,
+            reveal: false,
         };
         #[cfg(debug_assertions)]
         reader.preview_theme(window, cx);
@@ -114,8 +119,13 @@ impl Reader {
     }
 
     fn receive(&mut self, event: Event, window: &mut Window, cx: &mut Context<Self>) {
-        if event.generation() != self.generation {
-            return;
+        match event.generation() {
+            None => {
+                self.receive_search(event, window, cx);
+                return;
+            }
+            Some(generation) if generation != self.generation => return,
+            Some(_) => {}
         }
         let Some(tab) = self.tabs.current_mut() else {
             return;
@@ -133,6 +143,7 @@ impl Reader {
                         self.cache_current_page(window);
                         self.image = Some(image);
                         self.image_key = Some(view);
+                        self.reveal_match();
                         #[cfg(debug_assertions)]
                         self.preview_after_page(window, cx);
                     }
@@ -143,6 +154,7 @@ impl Reader {
                 if key == (tab.session, tab.page) {
                     self.text = Some(text.clone());
                     self.texts.insert(key, text);
+                    self.reveal_match();
                     #[cfg(debug_assertions)]
                     self.preview_after_text(cx);
                 }
@@ -164,6 +176,7 @@ impl Reader {
                 tab.error = Some(message);
                 self.busy = false;
             }
+            Event::SearchBatch { .. } | Event::SearchDone { .. } | Event::SearchFailed { .. } => {}
         }
         cx.notify();
     }
