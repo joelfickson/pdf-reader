@@ -1,23 +1,41 @@
 use super::super::Reader;
 use crate::ui::kit::clickable;
 use gpui::{Bounds, Context, IntoElement, MouseButton, canvas, img, point, prelude::*, px, size};
+use std::ops::Range;
 
 impl Reader {
     pub(in crate::reader) fn page_element(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut page = clickable("rendered-page").relative().flex_shrink_0();
         if let Some(image) = &self.image {
-            let rects: Vec<_> = match (&self.text, &self.selection) {
-                (Some(Ok(text)), Some(selection)) => text
-                    .glyphs
-                    .iter()
-                    .skip(selection.range().start)
-                    .take(selection.range().len())
-                    .filter_map(|glyph| glyph.bounds)
-                    .collect(),
-                _ => Vec::new(),
-            };
+            let theme = self.chrome.theme;
+            let mut rects = Vec::new();
+            if let Some(Ok(text)) = &self.text {
+                let glyphs = |range: Range<usize>| {
+                    text.glyphs
+                        .get(range.start.min(text.glyphs.len())..range.end.min(text.glyphs.len()))
+                        .unwrap_or_default()
+                        .iter()
+                        .filter_map(|glyph| glyph.bounds)
+                };
+                if let (Some(search), Some(tab)) = (&self.search, self.tabs.current())
+                    && search.session == tab.session
+                {
+                    for index in search.page_hits(tab.page) {
+                        let color = if search.current == Some(index) {
+                            theme.found_current
+                        } else {
+                            theme.found
+                        };
+                        rects.extend(
+                            glyphs(search.hits[index].1.glyphs.clone()).map(|rect| (rect, color)),
+                        );
+                    }
+                }
+                if let Some(selection) = &self.selection {
+                    rects.extend(glyphs(selection.range()).map(|rect| (rect, theme.select)));
+                }
+            }
             let page_bounds = self.page_bounds.clone();
-            let select = self.chrome.theme.select;
             page = page
                 .w(px(image.width))
                 .h(px(image.height))
@@ -39,7 +57,7 @@ impl Reader {
                             page_bounds.set(bounds);
                         },
                         move |bounds, _, window, _| {
-                            for rect in rects {
+                            for (rect, color) in rects {
                                 let highlight = Bounds::new(
                                     point(
                                         bounds.origin.x + bounds.size.width * rect.left,
@@ -50,7 +68,7 @@ impl Reader {
                                         bounds.size.height * (rect.bottom - rect.top),
                                     ),
                                 );
-                                window.paint_quad(gpui::fill(highlight, select));
+                                window.paint_quad(gpui::fill(highlight, color));
                             }
                         },
                     )

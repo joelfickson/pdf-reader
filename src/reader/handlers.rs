@@ -181,6 +181,9 @@ impl Reader {
                 if edited && self.chrome.input == Input::Palette {
                     self.chrome.palette_index = 0;
                 }
+                if edited && self.chrome.input == Input::Find {
+                    self.schedule_search(cx);
+                }
             }
             cx.stop_propagation();
             cx.notify();
@@ -227,11 +230,21 @@ impl Reader {
             Input::Find => match self.chrome.find.handle(keystroke) {
                 FieldKey::Ignored => {}
                 FieldKey::Cancel => self.close_find(cx),
-                FieldKey::Submit | FieldKey::Down | FieldKey::Up => {
-                    self.unavailable("Search", cx);
+                key @ (FieldKey::Submit | FieldKey::Down | FieldKey::Up) => {
+                    let forward = match key {
+                        FieldKey::Submit => !keystroke.modifiers.shift,
+                        other => other == FieldKey::Down,
+                    };
+                    self.restart_search(cx);
+                    self.step_match(forward, window, cx);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+                FieldKey::Edited => {
+                    self.schedule_search(cx);
                     cx.stop_propagation();
                 }
-                FieldKey::Edited | FieldKey::Moved => {
+                FieldKey::Moved => {
                     cx.stop_propagation();
                     cx.notify();
                 }

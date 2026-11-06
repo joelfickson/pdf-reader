@@ -1,4 +1,5 @@
 mod library;
+pub(crate) mod search;
 pub(crate) mod text;
 mod worker;
 
@@ -38,7 +39,28 @@ pub struct Job {
     pub thumbnails: Vec<usize>,
 }
 
+pub struct SearchJob {
+    pub search: u64,
+    pub session: u64,
+    pub path: PathBuf,
+    pub query: search::Query,
+}
+
 pub enum Event {
+    SearchBatch {
+        search: u64,
+        scanned: usize,
+        pages: Vec<(usize, Vec<search::Hit>)>,
+    },
+    SearchDone {
+        search: u64,
+        skipped: usize,
+        truncated: bool,
+    },
+    SearchFailed {
+        search: u64,
+        message: String,
+    },
     Text {
         generation: u64,
         key: (u64, usize),
@@ -69,14 +91,15 @@ pub enum Event {
 }
 
 impl Event {
-    pub fn generation(&self) -> u64 {
+    pub fn generation(&self) -> Option<u64> {
         match self {
+            Self::SearchBatch { .. } | Self::SearchDone { .. } | Self::SearchFailed { .. } => None,
             Self::Text { generation, .. }
             | Self::Metadata { generation, .. }
             | Self::Page { generation, .. }
             | Self::Thumbnail { generation, .. }
             | Self::ThumbnailFailed { generation, .. }
-            | Self::Error { generation, .. } => *generation,
+            | Self::Error { generation, .. } => Some(*generation),
         }
     }
 }

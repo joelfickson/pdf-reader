@@ -37,8 +37,8 @@ impl Reader {
                 self.chrome.palette.insert("zoom");
             }
             "find" => {
-                self.open_find(cx);
                 self.chrome.find.insert("capacity");
+                self.open_find(cx);
             }
             "page-input" => {
                 self.start_page_input(cx);
@@ -55,8 +55,8 @@ impl Reader {
             "outline" => self.chrome.panel = Panel::Outline,
             "results" => {
                 self.chrome.panel = Panel::Results;
-                self.open_find(cx);
                 self.chrome.find.insert("capacity");
+                self.open_find(cx);
             }
             "inspector-document" => self.set_inspector(InspectorTab::Document, window, cx),
             "inspector-selection" => self.set_inspector(InspectorTab::Selection, window, cx),

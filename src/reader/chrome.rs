@@ -97,6 +97,9 @@ pub(super) struct Chrome {
     pub inspector: Option<InspectorTab>,
     pub find_open: bool,
     pub find: TextField,
+    pub find_case: bool,
+    pub find_word: bool,
+    pub find_edits: u64,
     pub palette: TextField,
     pub palette_index: usize,
     pub page_input: TextField,
@@ -129,6 +132,9 @@ impl Chrome {
             panel: Panel::Pages,
             inspector: None,
             find_open: false,
+            find_case: false,
+            find_word: false,
+            find_edits: 0,
             find: TextField::default(),
             palette: TextField::default(),
             palette_index: 0,
@@ -218,6 +224,7 @@ impl Reader {
         self.chrome.find_open = true;
         self.chrome.input = Input::Find;
         self.chrome.overlay = Overlay::None;
+        self.restart_search(cx);
         cx.notify();
     }
 
@@ -226,6 +233,17 @@ impl Reader {
         if self.chrome.input == Input::Find {
             self.chrome.input = Input::None;
         }
+        self.clear_search();
+        cx.notify();
+    }
+
+    pub(super) fn toggle_find_option(&mut self, whole_word: bool, cx: &mut Context<Self>) {
+        if whole_word {
+            self.chrome.find_word = !self.chrome.find_word;
+        } else {
+            self.chrome.find_case = !self.chrome.find_case;
+        }
+        self.restart_search(cx);
         cx.notify();
     }
 

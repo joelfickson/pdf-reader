@@ -59,10 +59,7 @@ impl Panel {
                 "Notes are not available yet",
                 "Highlights, notes, drawings and stamps will be listed here.",
             ),
-            Self::Results => (
-                "Search is not available yet",
-                "Every match will be listed here with its surrounding text.",
-            ),
+            Self::Results => ("", ""),
             Self::Attachments => (
                 "Attachments are not available yet",
                 "Files embedded in the PDF will be listed here.",
@@ -152,9 +149,23 @@ impl Reader {
                         .text_size(px(11.0))
                         .text_color(theme.faint),
                 )
-            });
+            })
+            .when_some(
+                self.search
+                    .as_ref()
+                    .filter(|search| panel == Panel::Results && !search.hits.is_empty()),
+                |header, search| {
+                    header.child(
+                        mono(search.summary_total())
+                            .text_size(px(11.0))
+                            .text_color(theme.faint),
+                    )
+                },
+            );
         let body: AnyElement = if panel == Panel::Pages {
             self.thumbnails(cx).into_any_element()
+        } else if panel == Panel::Results {
+            self.results(cx)
         } else {
             let (title, body) = panel.placeholder();
             div()
