@@ -254,6 +254,132 @@ fn palette_find_and_dismiss_keyboard_flow(cx: &mut TestAppContext) {
     });
 }
 
+#[gpui::test]
+fn find_searches_steps_between_matches_and_clears(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.open_paths(vec![root.join("tests/fixtures/reading.pdf")], window, cx);
+            let generation = reader.generation;
+            reader.receive(
+                Event::Metadata {
+                    generation,
+                    count: 5,
+                },
+                window,
+                cx,
+            );
+            reader.focus.focus(window);
+        })
+    });
+    cx.run_until_parked();
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let state = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| {
+            let reader = reader.read(cx);
+            (
+                reader.tabs.current().unwrap().page,
+                reader.search.as_ref().map(|search| search.current),
+                reader
+                    .search
+                    .as_ref()
+                    .map(|search| search.summary())
+                    .unwrap_or_default(),
+            )
+        })
+    };
+    let hit = |start: usize| crate::pdf::search::Hit {
+        glyphs: start..start + 4,
+        before: "own ".into(),
+        matched: "pace".into(),
+        after: ".".into(),
+    };
+
+    cx.simulate_keystrokes(&format!("{modifier}-f p a c e"));
+    cx.read(|cx| assert!(reader.read(cx).search.is_none()));
+    cx.executor()
+        .advance_clock(search::SEARCH_DELAY + std::time::Duration::from_millis(10));
+    cx.run_until_parked();
+    let id = cx.read(|cx| {
+        let search = reader.read(cx).search.as_ref().unwrap();
+        assert_eq!(search.query.text, "pace");
+        assert!(!search.query.match_case);
+        search.id
+    });
+    assert_eq!(state(cx).2, "Searching");
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.receive(
+                Event::SearchBatch {
+                    search: id + 99,
+                    scanned: 5,
+                    pages: vec![(4, vec![hit(0)])],
+                },
+                window,
+                cx,
+            );
+            reader.receive(
+                Event::SearchBatch {
+                    search: id,
+                    scanned: 4,
+                    pages: vec![(1, vec![hit(10)]), (3, vec![hit(5), hit(30)])],
+                },
+                window,
+                cx,
+            );
+        })
+    });
+    assert_eq!(state(cx), (1, Some(Some(0)), "1 of 3".into()));
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.receive(
+                Event::SearchDone {
+                    search: id,
+                    skipped: 0,
+                    truncated: false,
+                },
+                window,
+                cx,
+            )
+        })
+    });
+    cx.simulate_keystrokes("enter");
+    assert_eq!(state(cx), (3, Some(Some(1)), "2 of 3".into()));
+    cx.simulate_keystrokes("down");
+    assert_eq!(state(cx), (3, Some(Some(2)), "3 of 3".into()));
+    cx.simulate_keystrokes("enter");
+    assert_eq!(state(cx), (1, Some(Some(0)), "1 of 3".into()));
+    cx.simulate_keystrokes("shift-enter");
+    assert_eq!(state(cx), (3, Some(Some(2)), "3 of 3".into()));
+    cx.simulate_keystrokes("up");
+    assert_eq!(state(cx), (3, Some(Some(1)), "2 of 3".into()));
+
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.toggle_find_option(false, cx)));
+    cx.read(|cx| {
+        let search = reader.read(cx).search.as_ref().unwrap();
+        assert!(search.id > id);
+        assert!(search.query.match_case);
+        assert!(search.hits.is_empty());
+    });
+
+    cx.simulate_keystrokes("escape");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(!reader.chrome.find_open);
+        assert!(reader.search.is_none());
+    });
+}
+
 fn load_document(
     reader: &mut Reader,
     window: &mut gpui::Window,
