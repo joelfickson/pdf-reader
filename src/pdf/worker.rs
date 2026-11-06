@@ -1,21 +1,52 @@
-use super::{Event, Job, library::bind, render};
+use super::{
+    Event, Job, SearchJob,
+    library::bind,
+    render,
+    search::{self, MAX_HITS},
+};
 use anyhow::{Context, Result, bail};
 use parking_lot::{Condvar, Mutex};
+use pdfium_render::prelude::*;
 use std::{
     collections::VecDeque,
+    path::Path,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
+    time::{Duration, Instant},
 };
+
+const SEARCH_SLICE: Duration = Duration::from_millis(30);
+const OPEN_DOCUMENTS: usize = 4;
 
 struct Queue {
     pending: Mutex<Option<Job>>,
+    search: Mutex<Option<SearchJob>>,
     closed: Mutex<Vec<u64>>,
     ready: Condvar,
     generation: AtomicU64,
+    search_generation: AtomicU64,
     stopped: AtomicBool,
+}
+
+impl Queue {
+    fn new() -> Self {
+        Self {
+            pending: Mutex::new(None),
+            search: Mutex::new(None),
+            closed: Mutex::new(Vec::new()),
+            ready: Condvar::new(),
+            generation: AtomicU64::new(0),
+            search_generation: AtomicU64::new(0),
+            stopped: AtomicBool::new(false),
+        }
+    }
+
+    fn running(&self) -> bool {
+        !self.stopped.load(Ordering::SeqCst)
+    }
 }
 
 pub struct Worker(Arc<Queue>);
@@ -23,23 +54,11 @@ pub struct Worker(Arc<Queue>);
 impl Worker {
     #[cfg(test)]
     pub(crate) fn idle() -> Self {
-        Self(Arc::new(Queue {
-            pending: Mutex::new(None),
-            closed: Mutex::new(Vec::new()),
-            ready: Condvar::new(),
-            generation: AtomicU64::new(0),
-            stopped: AtomicBool::new(false),
-        }))
+        Self(Arc::new(Queue::new()))
     }
 
     pub fn start() -> Result<(Self, async_channel::Receiver<Event>)> {
-        let queue = Arc::new(Queue {
-            pending: Mutex::new(None),
-            closed: Mutex::new(Vec::new()),
-            ready: Condvar::new(),
-            generation: AtomicU64::new(0),
-            stopped: AtomicBool::new(false),
-        });
+        let queue = Arc::new(Queue::new());
         let (sender, receiver) = async_channel::bounded(2);
         let worker_queue = queue.clone();
         thread::Builder::new()
@@ -69,6 +88,21 @@ impl Worker {
         self.0.ready.notify_one();
         generation
     }
+
+    pub fn search(&self, mut job: SearchJob) -> u64 {
+        let _pending = self.0.pending.lock();
+        let search = self.0.search_generation.fetch_add(1, Ordering::SeqCst) + 1;
+        job.search = search;
+        *self.0.search.lock() = Some(job);
+        self.0.ready.notify_one();
+        search
+    }
+
+    pub fn cancel_search(&self) -> u64 {
+        let _pending = self.0.pending.lock();
+        *self.0.search.lock() = None;
+        self.0.search_generation.fetch_add(1, Ordering::SeqCst) + 1
+    }
 }
 
 impl Drop for Worker {
@@ -79,142 +113,411 @@ impl Drop for Worker {
     }
 }
 
+type Documents<'a> = VecDeque<(u64, PdfDocument<'a>)>;
+
+fn document<'a, 'b>(
+    engine: &'a Pdfium,
+    documents: &'b mut Documents<'a>,
+    session: u64,
+    path: &Path,
+) -> Result<&'b PdfDocument<'a>> {
+    if let Some(index) = documents.iter().position(|(open, _)| *open == session) {
+        if let Some(entry) = documents.remove(index) {
+            documents.push_back(entry);
+        }
+    } else {
+        let document = engine.load_pdf_from_file(path, None).context(
+            "Could not open this PDF. It may be damaged, password-protected, or inaccessible.",
+        )?;
+        documents.push_back((session, document));
+        while documents.len() > OPEN_DOCUMENTS {
+            documents.pop_front();
+        }
+    }
+    documents
+        .back()
+        .map(|(_, document)| document)
+        .context("No PDF document is open")
+}
+
+struct ActiveSearch {
+    job: SearchJob,
+    page: usize,
+    hits: usize,
+    skipped: usize,
+}
+
 fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
     let engine = bind();
     let mut documents = VecDeque::new();
+    let mut active: Option<ActiveSearch> = None;
     loop {
-        let (job, closed) = {
+        let (job, closed, search) = {
             let mut pending = queue.pending.lock();
             while pending.is_none()
+                && active.is_none()
+                && queue.search.lock().is_none()
                 && queue.closed.lock().is_empty()
-                && !queue.stopped.load(Ordering::SeqCst)
+                && queue.running()
             {
                 queue.ready.wait(&mut pending);
             }
-            if queue.stopped.load(Ordering::SeqCst) {
+            if !queue.running() {
                 return;
             }
             let closed = std::mem::take(&mut *queue.closed.lock());
-            (pending.take(), closed)
+            (pending.take(), closed, queue.search.lock().take())
         };
         documents.retain(|(session, _)| !closed.contains(session));
-        let Some(job) = job else { continue };
-        let generation = job.generation;
-        let current = || {
-            !queue.stopped.load(Ordering::SeqCst)
-                && queue.generation.load(Ordering::SeqCst) == generation
-        };
-        let result = (|| -> Result<()> {
-            let engine = engine
-                .as_ref()
-                .map_err(|error| anyhow::anyhow!("{error:#}"))?;
-            if let Some(index) = documents
-                .iter()
-                .position(|(session, _)| *session == job.view.session)
-            {
-                if let Some(document) = documents.remove(index) {
-                    documents.push_back(document);
-                }
-            } else {
-                let document = engine.load_pdf_from_file(&job.path, None).context(
-                    "Could not open this PDF. It may be damaged, password-protected, or inaccessible.",
-                )?;
-                documents.push_back((job.view.session, document));
-                while documents.len() > 4 {
-                    documents.pop_front();
-                }
-            }
-            if !current() {
-                return Ok(());
-            }
-            let (_, document) = documents.back().context("No PDF document is open")?;
-            let count = document.pages().len() as usize;
-            if count == 0 {
-                bail!("This PDF has no pages to display.");
-            }
-            sender.send_blocking(Event::Metadata { generation, count })?;
-            if job.render_page && current() {
-                let page = document.pages().get(job.view.page as i32)?;
-                let base_width = page.width().value * 96.0 / 72.0;
-                let logical_width = job
-                    .view
-                    .zoom
-                    .map_or(job.view.available_width as f32, |zoom| {
-                        base_width * zoom as f32 / 100.0
-                    });
-                let raster = render(&page, logical_width, job.view.scale as f32 / 100.0, 4096)?;
-                if current() {
-                    sender.send_blocking(Event::Page {
-                        generation,
-                        view: job.view.clone(),
-                        raster,
-                    })?;
-                }
-            }
-            if job.extract_text && current() {
-                let text = document
-                    .pages()
-                    .get(job.view.page as i32)
-                    .map_err(anyhow::Error::from)
-                    .and_then(|page| super::text::extract(&page, current))
-                    .map(Arc::new)
-                    .map_err(|_| "Text selection is unavailable on this page.".to_string());
-                if current() {
-                    sender.send_blocking(Event::Text {
-                        generation,
-                        key: (job.view.session, job.view.page),
-                        text,
-                    })?;
-                }
-            }
-            for index in job.thumbnails {
-                if !current() {
-                    break;
-                }
-                if index >= count {
-                    continue;
-                }
-                let result = document
-                    .pages()
-                    .get(index as i32)
-                    .map_err(anyhow::Error::from)
-                    .and_then(|page| render(&page, 132.0, 2.0, 342));
-                if current() {
-                    let event = match result {
-                        Ok(raster) => Event::Thumbnail {
-                            generation,
-                            page: index,
-                            raster,
-                        },
-                        Err(_) => Event::ThumbnailFailed {
-                            generation,
-                            page: index,
-                        },
-                    };
-                    sender.send_blocking(event)?;
-                }
-            }
-            Ok(())
-        })();
-        if let Err(error) = result
-            && current()
-            && sender
-                .send_blocking(Event::Error {
-                    generation,
-                    message: format!("{error:#}"),
-                })
-                .is_err()
+        if let Some(job) = search {
+            active = Some(ActiveSearch {
+                job,
+                page: 0,
+                hits: 0,
+                skipped: 0,
+            });
+        }
+        if active
+            .as_ref()
+            .is_some_and(|state| closed.contains(&state.job.session))
         {
-            return;
+            active = None;
+        }
+        let engine = match engine.as_ref() {
+            Ok(engine) => engine,
+            Err(error) => {
+                let message = format!("{error:#}");
+                if let Some(job) = job
+                    && sender
+                        .send_blocking(Event::Error {
+                            generation: job.generation,
+                            message: message.clone(),
+                        })
+                        .is_err()
+                {
+                    return;
+                }
+                if let Some(state) = active.take()
+                    && sender
+                        .send_blocking(Event::SearchFailed {
+                            search: state.job.search,
+                            message,
+                        })
+                        .is_err()
+                {
+                    return;
+                }
+                continue;
+            }
+        };
+        if let Some(job) = job {
+            let generation = job.generation;
+            let current =
+                || queue.running() && queue.generation.load(Ordering::SeqCst) == generation;
+            if let Err(error) = render_job(engine, &mut documents, job, &current, &sender)
+                && current()
+                && sender
+                    .send_blocking(Event::Error {
+                        generation,
+                        message: format!("{error:#}"),
+                    })
+                    .is_err()
+            {
+                return;
+            }
+            continue;
+        }
+        if let Some(state) = active.as_mut() {
+            let search = state.job.search;
+            let current =
+                || queue.running() && queue.search_generation.load(Ordering::SeqCst) == search;
+            let yielded = || queue.pending.lock().is_some() || queue.search.lock().is_some();
+            match search_slice(engine, &mut documents, state, &current, &yielded, &sender) {
+                Ok(true) => {}
+                Ok(false) => active = None,
+                Err(error) => {
+                    active = None;
+                    if current()
+                        && sender
+                            .send_blocking(Event::SearchFailed {
+                                search,
+                                message: format!("{error:#}"),
+                            })
+                            .is_err()
+                    {
+                        return;
+                    }
+                }
+            }
         }
     }
+}
+
+fn render_job<'a>(
+    engine: &'a Pdfium,
+    documents: &mut Documents<'a>,
+    job: Job,
+    current: &dyn Fn() -> bool,
+    sender: &async_channel::Sender<Event>,
+) -> Result<()> {
+    let generation = job.generation;
+    let document = document(engine, documents, job.view.session, &job.path)?;
+    if !current() {
+        return Ok(());
+    }
+    let count = document.pages().len() as usize;
+    if count == 0 {
+        bail!("This PDF has no pages to display.");
+    }
+    sender.send_blocking(Event::Metadata { generation, count })?;
+    if job.render_page && current() {
+        let page = document.pages().get(job.view.page as i32)?;
+        let base_width = page.width().value * 96.0 / 72.0;
+        let logical_width = job
+            .view
+            .zoom
+            .map_or(job.view.available_width as f32, |zoom| {
+                base_width * zoom as f32 / 100.0
+            });
+        let raster = render(&page, logical_width, job.view.scale as f32 / 100.0, 4096)?;
+        if current() {
+            sender.send_blocking(Event::Page {
+                generation,
+                view: job.view.clone(),
+                raster,
+            })?;
+        }
+    }
+    if job.extract_text && current() {
+        let text = document
+            .pages()
+            .get(job.view.page as i32)
+            .map_err(anyhow::Error::from)
+            .and_then(|page| super::text::extract(&page, current))
+            .map(Arc::new)
+            .map_err(|_| "Text selection is unavailable on this page.".to_string());
+        if current() {
+            sender.send_blocking(Event::Text {
+                generation,
+                key: (job.view.session, job.view.page),
+                text,
+            })?;
+        }
+    }
+    for index in job.thumbnails {
+        if !current() {
+            break;
+        }
+        if index >= count {
+            continue;
+        }
+        let result = document
+            .pages()
+            .get(index as i32)
+            .map_err(anyhow::Error::from)
+            .and_then(|page| render(&page, 132.0, 2.0, 342));
+        if current() {
+            let event = match result {
+                Ok(raster) => Event::Thumbnail {
+                    generation,
+                    page: index,
+                    raster,
+                },
+                Err(_) => Event::ThumbnailFailed {
+                    generation,
+                    page: index,
+                },
+            };
+            sender.send_blocking(event)?;
+        }
+    }
+    Ok(())
+}
+
+fn search_slice<'a>(
+    engine: &'a Pdfium,
+    documents: &mut Documents<'a>,
+    state: &mut ActiveSearch,
+    current: &dyn Fn() -> bool,
+    yielded: &dyn Fn() -> bool,
+    sender: &async_channel::Sender<Event>,
+) -> Result<bool> {
+    let document = document(engine, documents, state.job.session, &state.job.path)?;
+    let count = document.pages().len() as usize;
+    let started = Instant::now();
+    let mut pages = Vec::new();
+    while state.page < count && state.hits < MAX_HITS && current() {
+        match super::text::characters(&document.pages().get(state.page as i32)?) {
+            Some(characters) => {
+                let hits = search::find(&characters, &state.job.query, MAX_HITS - state.hits);
+                state.hits += hits.len();
+                if !hits.is_empty() {
+                    pages.push((state.page, hits));
+                }
+            }
+            None => state.skipped += 1,
+        }
+        state.page += 1;
+        if started.elapsed() >= SEARCH_SLICE || yielded() {
+            break;
+        }
+    }
+    if !current() {
+        return Ok(false);
+    }
+    sender.send_blocking(Event::SearchBatch {
+        search: state.job.search,
+        scanned: state.page,
+        pages,
+    })?;
+    let truncated = state.hits >= MAX_HITS && state.page < count;
+    if state.page < count && !truncated {
+        return Ok(true);
+    }
+    sender.send_blocking(Event::SearchDone {
+        search: state.job.search,
+        skipped: state.skipped,
+        truncated,
+    })?;
+    Ok(false)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pdf::ViewKey;
-    use std::path::PathBuf;
+    use crate::pdf::{ViewKey, search::Query};
+    use std::{collections::BTreeSet, path::PathBuf};
+
+    fn next_event(events: &async_channel::Receiver<Event>) -> Event {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            match events.try_recv() {
+                Ok(event) => return event,
+                Err(async_channel::TryRecvError::Closed) => panic!("Renderer exited unexpectedly"),
+                Err(async_channel::TryRecvError::Empty) => {
+                    assert!(Instant::now() < deadline, "Renderer timed out");
+                    thread::sleep(Duration::from_millis(5));
+                }
+            }
+        }
+    }
+
+    fn search_fixture(
+        worker: &Worker,
+        events: &async_channel::Receiver<Event>,
+        text: &str,
+        match_case: bool,
+    ) -> Vec<(usize, search::Hit)> {
+        let id = worker.search(SearchJob {
+            search: 0,
+            session: 7,
+            path: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reading.pdf"),
+            query: Query {
+                text: text.into(),
+                match_case,
+                whole_word: true,
+            },
+        });
+        let mut hits = Vec::new();
+        loop {
+            match next_event(events) {
+                Event::SearchBatch { search, pages, .. } if search == id => {
+                    for (page, page_hits) in pages {
+                        hits.extend(page_hits.into_iter().map(|hit| (page, hit)));
+                    }
+                }
+                Event::SearchDone {
+                    search,
+                    skipped,
+                    truncated,
+                } if search == id => {
+                    assert_eq!(skipped, 0);
+                    assert!(!truncated);
+                    return hits;
+                }
+                Event::SearchFailed { message, .. } => panic!("search failed: {message}"),
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn searches_fixture_across_lines_and_survives_page_renders() {
+        let (worker, events) = Worker::start().unwrap();
+        let phrase = search_fixture(&worker, &events, "step aside", false);
+        assert_eq!(phrase.len(), 1);
+        assert_eq!(phrase[0].0, 0);
+        assert_eq!(phrase[0].1.matched, "step aside");
+
+        let pages = |hits: &[(usize, search::Hit)]| {
+            hits.iter().map(|(page, _)| *page).collect::<BTreeSet<_>>()
+        };
+        let folded = search_fixture(&worker, &events, "find", false);
+        assert_eq!(pages(&folded), BTreeSet::from([0, 1, 2]));
+        let exact = search_fixture(&worker, &events, "Find", true);
+        assert_eq!(pages(&exact), BTreeSet::from([1, 2]));
+
+        let id = worker.search(SearchJob {
+            search: 0,
+            session: 8,
+            path: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reading.pdf"),
+            query: Query {
+                text: "page".into(),
+                match_case: false,
+                whole_word: false,
+            },
+        });
+        let generation = worker.submit(Job {
+            generation: 0,
+            path: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reading.pdf"),
+            view: ViewKey {
+                session: 8,
+                page: 2,
+                available_width: 400,
+                zoom: None,
+                scale: 100,
+            },
+            render_page: true,
+            extract_text: false,
+            thumbnails: vec![],
+        });
+        let (mut rendered, mut finished) = (false, false);
+        while !(rendered && finished) {
+            match next_event(&events) {
+                Event::Page {
+                    generation: page, ..
+                } if page == generation => rendered = true,
+                Event::SearchDone { search, .. } if search == id => finished = true,
+                Event::SearchFailed { message, .. } | Event::Error { message, .. } => {
+                    panic!("{message}")
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn newer_search_replaces_pending_search() {
+        let queue = Arc::new(Queue::new());
+        let worker = Worker(queue.clone());
+        let job = |text: &str| SearchJob {
+            search: 0,
+            session: 1,
+            path: PathBuf::from("sample.pdf"),
+            query: Query {
+                text: text.into(),
+                match_case: false,
+                whole_word: false,
+            },
+        };
+        assert_eq!(worker.search(job("first")), 1);
+        assert_eq!(worker.search(job("second")), 2);
+        assert_eq!(queue.search.lock().as_ref().unwrap().query.text, "second");
+        assert_eq!(worker.cancel_search(), 3);
+        assert!(queue.search.lock().is_none());
+        assert_eq!(queue.generation.load(Ordering::SeqCst), 0);
+    }
 
     #[test]
     #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
@@ -397,13 +700,7 @@ mod tests {
 
     #[test]
     fn pending_render_is_replaced_by_newest_request() {
-        let queue = Arc::new(Queue {
-            pending: Mutex::new(None),
-            closed: Mutex::new(Vec::new()),
-            ready: Condvar::new(),
-            generation: AtomicU64::new(0),
-            stopped: AtomicBool::new(false),
-        });
+        let queue = Arc::new(Queue::new());
         let worker = Worker(queue.clone());
         for page in 0..100 {
             worker.submit(Job {
