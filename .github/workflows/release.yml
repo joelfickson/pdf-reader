@@ -162,6 +162,7 @@ jobs:
           ditto -c -k --keepParent "target/release/PDF Reader.app" "$RUNNER_TEMP/notarize.zip"
           xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
           xcrun stapler staple "target/release/PDF Reader.app"
+          xcrun stapler validate "target/release/PDF Reader.app"
           spctl --assess --type execute --verbose=2 "target/release/PDF Reader.app"
       - if: runner.os == 'macOS'
         run: ditto -c -k --keepParent "target/release/PDF Reader.app" "pdf-reader-${{ matrix.platform }}.zip"
