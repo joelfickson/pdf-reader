@@ -145,20 +145,17 @@
   padding: 14px 0;
   border-bottom: 1px solid var(--hair);
 }
-.changelog-page .change p {
+.changelog-page .change .text {
   margin: 0;
   color: var(--ink);
   font-weight: 400;
 }
-.changelog-page .change p span {
-  color: var(--muted);
-}
-.changelog-page .change a {
+.changelog-page .change .pr {
   font: 13px var(--mono);
   color: var(--cite);
   white-space: nowrap;
 }
-.changelog-page .change a:hover {
+.changelog-page a.change:hover .pr {
   text-decoration: underline;
 }
 .changelog-page .compare {
@@ -208,11 +205,150 @@
 }
 @media (max-width: 620px) {
   .changelog-page .head {
-    padding-top: 88px;
-    padding-bottom: 24px;
+    padding-top: 40px;
+    padding-bottom: 0;
+  }
+  .changelog-page .head h1 {
+    font-size: 40px;
+    margin-top: 10px;
+  }
+  .changelog-page .head p {
+    font-size: 16px;
+    margin-top: 14px;
+  }
+  .changelog-page .log {
+    gap: 0;
+    padding-top: 22px;
+    padding-bottom: 0;
+  }
+  .changelog-page .index {
+    position: sticky;
+    top: 76px;
+    z-index: 4;
+    margin: 0 -20px;
+    padding: 8px 20px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    background: linear-gradient(var(--bg) 70%, rgba(242, 238, 229, 0));
+  }
+  .changelog-page .index::-webkit-scrollbar {
+    display: none;
+  }
+  .changelog-page .index .eyebrow {
+    display: none;
+  }
+  .changelog-page .index a {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: var(--tap);
+    padding: 0 16px;
+    border-radius: 999px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--glass-edge);
+    font: 14px var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+    scroll-snap-align: start;
+    scroll-margin-left: 20px;
+  }
+  .changelog-page .index a b {
+    font-weight: 400;
+  }
+  .changelog-page .index a span {
+    display: inline;
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .changelog-page .index a.active {
+    background: var(--btn-bg);
+    color: var(--btn-ink);
+  }
+  .changelog-page .index a.active b {
+    color: var(--btn-ink);
+  }
+  .changelog-page .index a.active span {
+    color: rgba(251, 248, 241, 0.7);
+  }
+  .changelog-page .entry {
+    padding: 40px 0 0;
+    border-top: 0;
+    scroll-margin-top: 140px;
+  }
+  .changelog-page .entry:first-child {
+    padding-top: 18px;
+  }
+  .changelog-page .entry-head {
+    gap: 10px;
+  }
+  .changelog-page .entry-head h2 {
+    font-size: 34px;
+    font-weight: 300;
+    letter-spacing: -0.04em;
+  }
+  .changelog-page .entry-head time {
+    color: var(--muted);
+  }
+  .changelog-page .tag {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+  .changelog-page .entry .summary,
+  .changelog-page .empty {
+    font-size: 15px;
+    margin-top: 8px;
+  }
+  .changelog-page .group {
+    margin-top: 18px;
+  }
+  .changelog-page .group .eyebrow {
+    display: block;
+    margin-bottom: 4px;
   }
   .changelog-page .change {
-    grid-template-columns: 1fr;
-    gap: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    padding: 6px 0;
+    border-top: 1px solid var(--hair);
+    border-bottom: 0;
+    font-size: 16px;
+  }
+  .changelog-page .change:last-child {
+    border-bottom: 1px solid var(--hair);
+  }
+  .changelog-page .change .pr {
+    font-size: 14px;
+    min-width: var(--tap);
+    min-height: var(--tap);
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .changelog-page .compare {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    margin-top: 8px;
+    color: var(--cite);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .changelog-page .release-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    margin-top: 8px;
+  }
+  .changelog-page .head p a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
   }
 }
