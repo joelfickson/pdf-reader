@@ -111,6 +111,8 @@ impl Render for Reader {
             .track_focus(&self.focus)
             .key_context(key_context)
             .on_action(cx.listener(Self::open))
+            .on_action(cx.listener(Self::open_recent))
+            .on_action(cx.listener(Self::clear_recent))
             .on_action(cx.listener(Self::previous))
             .on_action(cx.listener(Self::next))
             .on_action(cx.listener(Self::first_page))

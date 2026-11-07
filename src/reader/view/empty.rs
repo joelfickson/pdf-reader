@@ -1,10 +1,16 @@
-use super::super::{Reader, actions::Open, chrome::Overlay};
+use super::super::{
+    Reader,
+    actions::{Open, OpenRecent},
+    chrome::Overlay,
+};
 use crate::ui::{
     icon::Icon,
     kit::clickable,
-    kit::{Kind, RADIUS, icon, label, text_button},
+    kit::{Kind, RADIUS, icon, label, mono, text_button},
 };
-use gpui::{Context, IntoElement, div, prelude::*, px};
+use gpui::{AnyElement, Context, IntoElement, div, prelude::*, px};
+
+const RECENT_ROWS: usize = 8;
 
 impl Reader {
     pub(in crate::reader) fn empty(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -114,12 +120,61 @@ impl Reader {
                             .child("Restoring sessions is not available yet."),
                     )
                     .child(label(&theme, "Recent").mt(px(28.0)).mb(px(8.0)))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.faint)
-                            .child("Recent files are not available yet."),
-                    ),
+                    .child(self.recent_list(cx)),
             )
+    }
+
+    fn recent_list(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.chrome.theme;
+        let entries = self.recent.entries();
+        if entries.is_empty() {
+            return div()
+                .text_size(px(12.0))
+                .text_color(theme.faint)
+                .child("Files you open appear here.")
+                .into_any_element();
+        }
+        div()
+            .flex()
+            .flex_col()
+            .children(
+                entries
+                    .iter()
+                    .take(RECENT_ROWS)
+                    .enumerate()
+                    .map(|(index, entry)| {
+                        let hover = theme.hover;
+                        let path = entry.path.clone();
+                        clickable(("recent-file", index))
+                            .h(px(36.0))
+                            .px(px(10.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(10.0))
+                            .rounded(px(RADIUS))
+                            .cursor_pointer()
+                            .hover(move |style| style.bg(hover))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_recent(&OpenRecent { path: path.clone() }, window, cx)
+                            }))
+                            .child(icon(Icon::File, theme.muted))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_color(theme.ink)
+                                    .child(crate::app::recent_title(&entry.path)),
+                            )
+                            .child(
+                                mono(format!("page {}", entry.page + 1))
+                                    .text_size(px(12.0))
+                                    .text_color(theme.faint),
+                            )
+                    }),
+            )
+            .into_any_element()
     }
 }

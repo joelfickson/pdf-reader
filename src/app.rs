@@ -1,4 +1,4 @@
-use crate::{pdf::Worker, reader::*, ui::icon::Assets};
+use crate::{pdf::Worker, reader::*, recent::RecentFile, ui::icon::Assets};
 use gpui::AppContext;
 use gpui::{
     App, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds,
@@ -6,10 +6,65 @@ use gpui::{
 };
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
+const RECENT_MENU_ITEMS: usize = 10;
+
+fn decode_percent(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hex = std::str::from_utf8(bytes.get(index + 1..index + 3)?).ok()?;
+            decoded.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).ok()
+}
+
+pub(crate) fn paths_from_urls(urls: &[String]) -> Vec<PathBuf> {
+    urls.iter()
+        .filter_map(|url| {
+            let rest = url.strip_prefix("file://")?;
+            let path = rest.strip_prefix("localhost").unwrap_or(rest);
+            path.starts_with('/')
+                .then(|| decode_percent(path))
+                .flatten()
+                .map(PathBuf::from)
+        })
+        .collect()
+}
+
+pub(crate) fn recent_title(path: &std::path::Path) -> String {
+    path.file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .into_owned()
+}
+
 const READER: &str = "Reader";
 const READER_NOT_TYPING: &str = "Reader && !TextInput";
 
-fn menus() -> Vec<Menu> {
+pub(crate) fn menus(recent: &[RecentFile]) -> Vec<Menu> {
+    let mut recent_items: Vec<MenuItem> = recent
+        .iter()
+        .take(RECENT_MENU_ITEMS)
+        .map(|entry| {
+            MenuItem::action(
+                recent_title(&entry.path),
+                OpenRecent {
+                    path: entry.path.clone(),
+                },
+            )
+        })
+        .collect();
+    if !recent_items.is_empty() {
+        recent_items.push(MenuItem::separator());
+    }
+    recent_items.push(MenuItem::action("Clear Menu", ClearRecent));
     vec![
         Menu {
             name: "PDF Reader".into(),
@@ -23,6 +78,10 @@ fn menus() -> Vec<Menu> {
             name: "File".into(),
             items: vec![
                 MenuItem::action("Open PDF…", Open),
+                MenuItem::submenu(Menu {
+                    name: "Open Recent".into(),
+                    items: recent_items,
+                }),
                 MenuItem::action("Save", Save),
                 MenuItem::separator(),
                 MenuItem::action("Export…", ShowExport),
@@ -84,6 +143,8 @@ pub(crate) fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("pagedown", Next, reading),
         KeyBinding::new("home", FirstPage, reading),
         KeyBinding::new("end", LastPage, reading),
+        KeyBinding::new(&format!("{m}-home"), FirstPage, any),
+        KeyBinding::new(&format!("{m}-end"), LastPage, any),
         KeyBinding::new(&format!("{m}-="), ZoomIn, any),
         KeyBinding::new(&format!("{m}--"), ZoomOut, any),
         KeyBinding::new(&format!("{m}-0"), Fit, any),
@@ -110,45 +171,114 @@ pub(crate) fn run(paths: Vec<PathBuf>) -> anyhow::Result<()> {
     let (worker, events) = Worker::start()?;
     let startup_error = Rc::new(RefCell::new(None));
     let error_slot = startup_error.clone();
-    Application::new()
-        .with_assets(Assets)
-        .run(move |cx: &mut App| {
-            cx.on_action(|_: &Quit, cx| cx.quit());
-            cx.set_menus(menus());
-            cx.bind_keys(bindings());
-            cx.on_window_closed(|cx| {
-                if cx.windows().is_empty() {
-                    cx.quit()
-                }
-            })
-            .detach();
-            let mut bounds = Bounds::centered(None, size(px(1180.0), px(860.0)), cx);
-            if cfg!(debug_assertions) && std::env::var_os("PDF_READER_PREVIEW").is_some() {
-                bounds.origin = point(px(24.0), px(48.0));
+    let (open_sender, opened_files) = async_channel::unbounded();
+    let application = Application::new().with_assets(Assets);
+    application.on_open_urls(move |urls| {
+        let paths = paths_from_urls(&urls);
+        if !paths.is_empty() {
+            let _ = open_sender.try_send(paths);
+        }
+    });
+    application.run(move |cx: &mut App| {
+        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.set_menus(menus(&[]));
+        cx.bind_keys(bindings());
+        cx.on_window_closed(|cx| {
+            if cx.windows().is_empty() {
+                cx.quit()
             }
-            let opened = cx.open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    window_min_size: Some(size(px(820.0), px(520.0))),
-                    titlebar: Some(TitlebarOptions {
-                        title: Some("PDF Reader".into()),
-                        appears_transparent: cfg!(target_os = "macos"),
-                        traffic_light_position: cfg!(target_os = "macos")
-                            .then(|| point(px(14.0), px(14.0))),
-                    }),
-                    ..Default::default()
-                },
-                |window, cx| cx.new(|cx| Reader::new(paths, worker, events, window, cx)),
-            );
-            if let Err(error) = opened {
+        })
+        .detach();
+        let mut bounds = Bounds::centered(None, size(px(1180.0), px(860.0)), cx);
+        if cfg!(debug_assertions) && std::env::var_os("PDF_READER_PREVIEW").is_some() {
+            bounds.origin = point(px(24.0), px(48.0));
+        }
+        let opened = cx.open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(bounds)),
+                window_min_size: Some(size(px(820.0), px(520.0))),
+                titlebar: Some(TitlebarOptions {
+                    title: Some("PDF Reader".into()),
+                    appears_transparent: cfg!(target_os = "macos"),
+                    traffic_light_position: cfg!(target_os = "macos")
+                        .then(|| point(px(14.0), px(14.0))),
+                }),
+                ..Default::default()
+            },
+            |window, cx| cx.new(|cx| Reader::new(paths, worker, events, window, cx)),
+        );
+        let window = match opened {
+            Ok(window) => window,
+            Err(error) => {
                 *error_slot.borrow_mut() = Some(error);
                 cx.quit();
                 return;
             }
-            cx.activate(true);
-        });
+        };
+        cx.spawn(async move |cx| {
+            while let Ok(paths) = opened_files.recv().await {
+                let delivered = window.update(cx, |reader, window, cx| {
+                    reader.open_paths(paths, window, cx);
+                    window.activate_window();
+                });
+                if delivered.is_err() {
+                    return;
+                }
+            }
+        })
+        .detach();
+        cx.activate(true);
+    });
     if let Some(error) = startup_error.take() {
         return Err(error);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_urls_decode_to_paths_and_other_urls_are_ignored() {
+        let urls = [
+            "file:///Users/me/Documents/Office%20Lease.pdf".to_string(),
+            "file://localhost/tmp/caf%C3%A9.pdf".to_string(),
+            "https://example.com/a.pdf".to_string(),
+            "file:///broken%2".to_string(),
+            "file:///bad%ZZ.pdf".to_string(),
+            "file://server/share.pdf".to_string(),
+        ];
+        assert_eq!(
+            paths_from_urls(&urls),
+            [
+                PathBuf::from("/Users/me/Documents/Office Lease.pdf"),
+                PathBuf::from("/tmp/café.pdf"),
+            ]
+        );
+    }
+
+    #[test]
+    fn recent_menu_lists_files_then_clear() {
+        let recent: Vec<RecentFile> = (0..12)
+            .map(|index| RecentFile {
+                path: PathBuf::from(format!("/docs/{index}.pdf")),
+                page: 0,
+                zoom: None,
+            })
+            .collect();
+        let file_menu = |recent: &[RecentFile]| {
+            let menus = menus(recent);
+            let file = menus.into_iter().find(|menu| menu.name == "File").unwrap();
+            file.items
+                .into_iter()
+                .find_map(|item| match item {
+                    MenuItem::Submenu(menu) if menu.name == "Open Recent" => Some(menu.items.len()),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        assert_eq!(file_menu(&recent), RECENT_MENU_ITEMS + 2);
+        assert_eq!(file_menu(&[]), 1);
+    }
 }

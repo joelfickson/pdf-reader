@@ -3,6 +3,7 @@
 mod app;
 mod pdf;
 mod reader;
+mod recent;
 mod ui;
 
 use std::path::PathBuf;

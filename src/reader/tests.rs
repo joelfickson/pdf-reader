@@ -380,6 +380,94 @@ fn find_searches_steps_between_matches_and_clears(cx: &mut TestAppContext) {
     });
 }
 
+#[gpui::test]
+fn recent_files_restore_position_clamp_and_prune(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let reading = root
+        .join("tests/fixtures/reading.pdf")
+        .canonicalize()
+        .unwrap();
+    let selection = root
+        .join("tests/fixtures/selection.pdf")
+        .canonicalize()
+        .unwrap();
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.recent.touch(&reading);
+            reader.recent.update(&reading, 7, Some(150));
+            reader.open_paths(vec![reading.clone()], window, cx);
+            let tab = reader.tabs.current().unwrap();
+            assert_eq!((tab.page, tab.zoom), (7, Some(150)));
+            assert_eq!(reader.last_request.as_ref().unwrap().0.page, 7);
+            let generation = reader.generation;
+            reader.receive(
+                Event::Metadata {
+                    generation,
+                    count: 3,
+                },
+                window,
+                cx,
+            );
+            assert_eq!(reader.tabs.current().unwrap().page, 2);
+            assert_ne!(reader.generation, generation);
+            assert_eq!(reader.last_request.as_ref().unwrap().0.page, 2);
+            reader.focus.focus(window);
+        })
+    });
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    cx.simulate_keystrokes(&format!("{modifier}-home"));
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.current().unwrap().page, 0));
+    cx.simulate_keystrokes(&format!("{modifier}-end"));
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.current().unwrap().page, 2));
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.open_paths(vec![selection.clone()], window, cx);
+            assert_eq!(reader.recent.entries()[0].path, selection);
+            assert_eq!(reader.recent.get(&reading).unwrap().page, 2);
+            reader.close_tab(0, window, cx);
+            assert_eq!(reader.tabs.entries.len(), 1);
+            assert_eq!(reader.recent.get(&reading).unwrap().page, 2);
+
+            let missing = root.join("tests/fixtures/missing.pdf");
+            reader.recent.touch(&missing);
+            reader.open_recent(
+                &OpenRecent {
+                    path: missing.clone(),
+                },
+                window,
+                cx,
+            );
+            assert!(reader.recent.get(&missing).is_none());
+            assert_eq!(
+                reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+                "This file is no longer available"
+            );
+            assert_eq!(reader.tabs.entries.len(), 1);
+
+            reader.open_recent(
+                &OpenRecent {
+                    path: reading.clone(),
+                },
+                window,
+                cx,
+            );
+            assert_eq!(reader.tabs.entries.len(), 2);
+            assert_eq!(reader.tabs.current().unwrap().page, 2);
+            reader.clear_recent(&ClearRecent, window, cx);
+            assert!(reader.recent.entries().is_empty());
+        })
+    });
+}
+
 fn load_document(
     reader: &mut Reader,
     window: &mut gpui::Window,
