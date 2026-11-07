@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandMark } from "./brand-mark";
+import { MobileMenu } from "./mobile-menu";
 import { NavLinks } from "./nav-links";
 
 export function SiteHeader() {
@@ -15,6 +16,7 @@ export function SiteHeader() {
           <Link className="btn small primary" href="/download">
             Download
           </Link>
+          <MobileMenu />
         </div>
       </div>
     </header>

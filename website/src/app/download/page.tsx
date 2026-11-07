@@ -9,6 +9,7 @@ import {
   type Platform,
 } from "@/lib/site";
 import { type BuildRow, BuildRows } from "./_components/build-rows";
+import { InstallSteps } from "./_components/install-steps";
 import { PlatformCta } from "./_components/platform-cta";
 import "./download.css";
 
@@ -69,6 +70,49 @@ function releaseKind(
   return { label: "Release", className: "kind" };
 }
 
+function SourceText() {
+  return (
+    <>
+      <p>
+        Install Rust stable and uv. On macOS, install Xcode and select its
+        command-line tools. If GPUI reports a missing Metal compiler, run{" "}
+        <code>xcodebuild -downloadComponent MetalToolchain</code>.
+      </p>
+      <p>
+        On Windows, use the MSVC Rust toolchain and install Visual Studio Build
+        Tools with the Desktop development with C++ workload and the Windows
+        SDK.
+      </p>
+      <p>
+        The setup script downloads PDFium for your platform and verifies its
+        pinned SHA-256 digest. It needs Python 3.12 or newer, which uv can
+        provide.
+      </p>
+    </>
+  );
+}
+
+function SourceCommands() {
+  return (
+    <div className="source-commands">
+      <h3>Clone</h3>
+      <pre>
+        {
+          "git clone https://github.com/joelfickson/pdf-reader.git\ncd pdf-reader"
+        }
+      </pre>
+      <h3>Run</h3>
+      <pre>{"uv run scripts/setup_pdfium.py\ncargo run --release"}</pre>
+      <h3>Package a macOS app</h3>
+      <pre>
+        {
+          'uv run scripts/package_macos.py\nopen "target/release/PDF Reader.app"'
+        }
+      </pre>
+    </div>
+  );
+}
+
 export default async function DownloadPage() {
   const [latest, releases] = await Promise.all([
     getLatestRelease(),
@@ -118,62 +162,67 @@ export default async function DownloadPage() {
               any other app.
             </p>
           </div>
-          <div className="steps">
-            <div>
-              <h3>macOS</h3>
-              <ol>
-                <li>
-                  <span>
-                    Download the zip for your Mac and open it to unzip.
-                  </span>
-                </li>
-                <li>
-                  <span>
-                    Move <b>PDF Reader</b> to your{" "}
-                    <span className="path">Applications</span> folder.
-                  </span>
-                </li>
-                <li>
-                  <span>
-                    Open it. This build is not notarized, so macOS blocks the
-                    first launch.
-                  </span>
-                </li>
-                <li>
-                  <span>
-                    Open <b>System Settings</b>, go to{" "}
-                    <b>Privacy and Security</b>, and click <b>Open Anyway</b>{" "}
-                    next to the PDF Reader message.
-                  </span>
-                </li>
-              </ol>
-            </div>
-            <div>
-              <h3>Windows</h3>
-              <ol>
-                <li>
-                  <span>Download the zip and extract it to a folder.</span>
-                </li>
-                <li>
-                  <span>
-                    Keep <span className="path">pdfium.dll</span> in the same
-                    folder as <span className="path">pdf-reader.exe</span>.
-                  </span>
-                </li>
-                <li>
-                  <span>
-                    Run <span className="path">pdf-reader.exe</span>. This build
-                    is not code signed, so SmartScreen may warn on first launch.
-                  </span>
-                </li>
-                <li>
-                  <span>
-                    Click <b>More info</b>, then <b>Run anyway</b>.
-                  </span>
-                </li>
-              </ol>
-            </div>
-          </div>
+          <InstallSteps
+            macos={
+              <>
+                <h3>macOS</h3>
+                <ol>
+                  <li>
+                    <span>
+                      Download the zip for your Mac and open it to unzip.
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      Move <b>PDF Reader</b> to your{" "}
+                      <span className="path">Applications</span> folder.
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      Open it. This build is not notarized, so macOS blocks the
+                      first launch.
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      Open <b>System Settings</b>, go to{" "}
+                      <b>Privacy and Security</b>, and click <b>Open Anyway</b>{" "}
+                      next to the PDF Reader message.
+                    </span>
+                  </li>
+                </ol>
+              </>
+            }
+            windows={
+              <>
+                <h3>Windows</h3>
+                <ol>
+                  <li>
+                    <span>Download the zip and extract it to a folder.</span>
+                  </li>
+                  <li>
+                    <span>
+                      Keep <span className="path">pdfium.dll</span> in the same
+                      folder as <span className="path">pdf-reader.exe</span>.
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      Run <span className="path">pdf-reader.exe</span>. This
+                      build is not code signed, so SmartScreen may warn on first
+                      launch.
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      Click <b>More info</b>, then <b>Run anyway</b>.
+                    </span>
+                  </li>
+                </ol>
+              </>
+            }
+          />
         </div>
       </section>
 
@@ -243,44 +292,28 @@ export default async function DownloadPage() {
       </section>
 
       <section id="source">
-        <div className="wrap source">
+        <div className="wrap source source-wide">
           <div>
             <div className="eyebrow">Build from source</div>
             <h2 className="source-title">
               Prefer to <em>build it yourself?</em>
             </h2>
-            <p>
-              Install Rust stable and uv. On macOS, install Xcode and select its
-              command-line tools. If GPUI reports a missing Metal compiler, run{" "}
-              <code>xcodebuild -downloadComponent MetalToolchain</code>.
-            </p>
-            <p>
-              On Windows, use the MSVC Rust toolchain and install Visual Studio
-              Build Tools with the Desktop development with C++ workload and the
-              Windows SDK.
-            </p>
-            <p>
-              The setup script downloads PDFium for your platform and verifies
-              its pinned SHA-256 digest. It needs Python 3.12 or newer, which uv
-              can provide.
-            </p>
+            <SourceText />
           </div>
           <div>
-            <h3>Clone</h3>
-            <pre>
-              {
-                "git clone https://github.com/joelfickson/pdf-reader.git\ncd pdf-reader"
-              }
-            </pre>
-            <h3>Run</h3>
-            <pre>{"uv run scripts/setup_pdfium.py\ncargo run --release"}</pre>
-            <h3>Package a macOS app</h3>
-            <pre>
-              {
-                'uv run scripts/package_macos.py\nopen "target/release/PDF Reader.app"'
-              }
-            </pre>
+            <SourceCommands />
           </div>
+        </div>
+        <div className="wrap source-fold">
+          <details>
+            <summary>
+              <h2 className="source-title">
+                Prefer to <em>build it yourself?</em>
+              </h2>
+            </summary>
+            <SourceText />
+            <SourceCommands />
+          </details>
         </div>
       </section>
     </div>
