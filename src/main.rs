@@ -1,25 +1,23 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod app;
+mod cli;
 mod mcp;
 mod pdf;
 mod reader;
 mod recent;
 mod ui;
 
-use std::path::PathBuf;
+use cli::Command;
 
 fn main() -> anyhow::Result<()> {
-    let mut args = std::env::args_os().skip(1);
-    let first = args.next();
-    if first.as_deref() == Some(std::ffi::OsStr::new("mcp")) {
-        return mcp::serve();
+    match cli::parse(std::env::args_os().skip(1))? {
+        Command::Open(paths) => app::run(paths),
+        Command::Check(path) => pdf::inspect(&path),
+        Command::Mcp => mcp::serve(),
+        Command::Version => {
+            println!("{}", cli::VERSION_LINE);
+            Ok(())
+        }
     }
-    if first.as_deref() == Some(std::ffi::OsStr::new("--check")) {
-        let path = args
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("Usage: pdf-reader --check <file.pdf>"))?;
-        return pdf::inspect(&PathBuf::from(path));
-    }
-    app::run(first.into_iter().chain(args).map(PathBuf::from).collect())
 }

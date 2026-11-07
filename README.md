@@ -37,15 +37,37 @@ Tagged commits matching `v*` are packaged by GitHub Actions for macOS arm64, mac
 
 Use this release app for normal reading and performance checks. `--debug` creates a separate `PDF Reader Debug.app` for development. The bundles are unsigned local builds.
 
-Open a document immediately:
-
-```sh
-cargo run --release -- tests/fixtures/reading.pdf
-```
-
 The setup script selects the Mac or Windows archive for the current architecture, verifies its pinned SHA-256 digest, and extracts PDFium with its upstream license notices to `vendor/pdfium`. It requires Python 3.12 or newer; uv can provision Python if needed. PDFium is a native C++ dependency. The first Cargo build downloads and compiles GPUI and its dependencies.
 
 The app looks for the PDFium library using `PDFIUM_LIBRARY_PATH`, next to its executable, in a macOS app's `Frameworks` directory, or in this checkout's `vendor/pdfium/lib` and `vendor/pdfium/bin` directories. `PDFIUM_LIBRARY_PATH` can point to the library file or its directory.
+
+## Command line
+
+| Command | What it does |
+| --- | --- |
+| `pdf-reader a.pdf b.pdf` | Opens each file in its own tab |
+| `pdf-reader --check <file.pdf>` | Opens and renders the first page without a window, prints one line of timings, and exits |
+| `pdf-reader --version` | Prints the name and version, such as `pdf-reader 0.1.2`, and exits |
+| `pdf-reader mcp` | Runs the MCP server for AI agents (see below) |
+
+From a source checkout:
+
+```sh
+cargo run --release -- tests/fixtures/reading.pdf tests/fixtures/outline.pdf
+cargo run --release -- --check tests/fixtures/reading.pdf
+cargo run --release -- --version
+```
+
+`--check` prints these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `pages` | Page count |
+| `engine_ms` | Time to load the PDFium library |
+| `open_ms` | Time to parse the document |
+| `first_page_ms` | Time from start until the first page is rendered, including the two steps above |
+| `bitmap_bytes` | Size of the first page's bitmap |
+| `dimensions` | First page bitmap size in pixels |
 
 ## Use with AI agents (MCP)
 
@@ -106,7 +128,8 @@ Source is organized by responsibility:
 
 ```text
 src/
-  main.rs             Command-line entry point (GUI, --check, and mcp)
+  main.rs             Entry point that dispatches the parsed command
+  cli.rs              Command-line parsing (paths, --check, --version, and mcp)
   app.rs              Window startup, native menus, key bindings
   reader/
     mod.rs            Window state, worker event handling, shared caches
