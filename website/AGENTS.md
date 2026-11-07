@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Site rules
 
-- Visual changes start as a standalone HTML mock in `../design/` and wait for approval. Copy and data changes do not.
+- Visual changes start as a standalone local HTML mock and wait for approval. Mocks live in the ignored `design/` folder at the repo root and are never committed. Copy and data changes do not need a mock.
 - Every claim about the app must be true today. Label unreleased work "Next release" and agent work "In development" with a link to issue 18.
 - Numbers come from measurements recorded in `../SPEC.md` with their machine and method. Never round them into new claims.
 - Release data is fetched, not hardcoded. Keep zod validation on every GitHub response.
