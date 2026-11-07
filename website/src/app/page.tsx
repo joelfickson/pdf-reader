@@ -10,6 +10,7 @@ import {
 } from "@/lib/site";
 import { AgentStage } from "./_home/agent-stage";
 import { HeroScene } from "./_home/hero-scene";
+import { PhoneDemo } from "./_home/phone-demo";
 import "./_home/home.css";
 
 type Feature = {
@@ -141,6 +142,7 @@ export default async function HomePage() {
             <span>{latest.tag}</span>
             <span>Apple silicon, Intel and Windows</span>
           </div>
+          <PhoneDemo />
         </div>
         <HeroScene />
       </div>
@@ -286,6 +288,20 @@ export default async function HomePage() {
               </p>
             </div>
           </div>
+          <ul className="numfacts">
+            <li>
+              <b>0.5 s</b> to search all 457 pages of a technical book, from 425
+              to 620 ms across three runs.
+            </li>
+            <li>
+              <b>40 ms</b> until the first matches appear while the rest of the
+              book is still being searched.
+            </li>
+            <li>
+              <b>18 ms</b> at most to render a new page while a full search is
+              running.
+            </li>
+          </ul>
           <p className="footnote">
             Measured on an Apple M1 Max with 32 GB of memory, release build,
             searching Rust in Action (457 pages, 18 MB) through the reader's

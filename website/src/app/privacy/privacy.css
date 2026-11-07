@@ -140,10 +140,76 @@
 }
 @media (max-width: 620px) {
   .privacy-page .intro {
-    padding-top: 72px;
+    padding: 40px 0 24px;
+  }
+  .privacy-page .intro h1 {
+    font-size: 46px;
+    margin-top: 14px;
+  }
+  .privacy-page .intro .lede {
+    font-size: 16px;
+    margin-top: 16px;
+  }
+  .privacy-page .updated {
+    margin-top: 14px;
+    font-size: 12px;
+  }
+  .privacy-page .promises {
+    margin-top: 40px;
+    row-gap: 20px;
+  }
+  .privacy-page .promises div {
+    padding-top: 14px;
+  }
+  .privacy-page .promises strong {
+    font-size: 24px;
+  }
+  .privacy-page .promises p {
+    margin-top: 6px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .privacy-page .topic {
+    gap: 14px;
+    padding: 40px 0;
+  }
+  .privacy-page .topic h2 {
+    font-size: 32px;
+    line-height: 1.06;
+    margin-top: 10px;
+  }
+  .privacy-page .topic .status {
+    margin-top: 12px;
+  }
+  .privacy-page .topic .body {
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  .privacy-page .topic .body p {
+    margin-bottom: 14px;
   }
   .privacy-page .topic .body li {
     grid-template-columns: 1fr;
     gap: 4px;
+    font-size: 15px;
+    min-width: 0;
+  }
+  .privacy-page .topic .body li span {
+    font-size: 12px;
+    padding-top: 0;
+  }
+  .privacy-page .topic .body code {
+    font-size: 13.5px;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  .privacy-page .topic .body a {
+    padding: 12px 0;
+    margin: -12px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .privacy-page .plain {
+    margin: 40px 0 0;
+    font-size: 15px;
   }
 }
