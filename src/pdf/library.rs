@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use pdfium_render::prelude::*;
 use std::path::{Path, PathBuf};
 
-pub(super) fn bind() -> Result<Pdfium> {
+pub(crate) fn bind() -> Result<Pdfium> {
     let name = Pdfium::pdfium_platform_library_name();
     let mut candidates = Vec::new();
     if let Some(path) = std::env::var_os("PDFIUM_LIBRARY_PATH") {
@@ -24,11 +24,13 @@ pub(super) fn bind() -> Result<Pdfium> {
     candidates.push(root.join("bin").join(&name));
     for candidate in candidates {
         if candidate.is_file() {
-            return Pdfium::bind_to_library(&candidate)
-                .map(Pdfium::new)
-                .context(
+            return match Pdfium::bind_to_library(&candidate) {
+                Ok(bindings) => Ok(Pdfium::new(bindings)),
+                Err(PdfiumError::PdfiumLibraryBindingsAlreadyInitialized) => Ok(Pdfium::default()),
+                Err(error) => Err(error).context(
                     "The installed PDF engine could not be loaded. Run the PDFium setup again.",
-                );
+                ),
+            };
         }
     }
     bail!("The PDF engine is not installed. Run: uv run scripts/setup_pdfium.py")

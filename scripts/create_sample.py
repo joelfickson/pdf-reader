@@ -32,7 +32,31 @@ def escape(text):
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
-def create_pdf(destination, pages, rotations=(), blank_pages=()):
+def add_outline(objects, page_refs, outline):
+    root_id = len(objects) + 1
+    objects.append(b"")
+
+    def add_level(entries, parent_id):
+        ids = [len(objects) + 1 + index for index in range(len(entries))]
+        objects.extend([b""] * len(entries))
+        for index, (title, page, children) in enumerate(entries):
+            fields = [f"/Title ({escape(title)})", f"/Parent {parent_id} 0 R", f"/Dest [{page_refs[page]} /Fit]"]
+            if index > 0:
+                fields.append(f"/Prev {ids[index - 1]} 0 R")
+            if index < len(entries) - 1:
+                fields.append(f"/Next {ids[index + 1]} 0 R")
+            if children:
+                child_ids = add_level(children, ids[index])
+                fields.append(f"/First {child_ids[0]} 0 R /Last {child_ids[-1]} 0 R /Count {len(child_ids)}")
+            objects[ids[index] - 1] = f"<< {' '.join(fields)} >>".encode()
+        return ids
+
+    top = add_level(outline, root_id)
+    objects[root_id - 1] = f"<< /Type /Outlines /First {top[0]} 0 R /Last {top[-1]} 0 R /Count {len(top)} >>".encode()
+    objects[0] = f"<< /Type /Catalog /Pages 2 0 R /Outlines {root_id} 0 R /PageMode /UseOutlines >>".encode()
+
+
+def create_pdf(destination, pages, rotations=(), blank_pages=(), outline=()):
     objects = [b"<< /Type /Catalog /Pages 2 0 R >>", b"", b"<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>", b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"]
     children = []
     for index, (title, subtitle, lines) in enumerate(pages):
@@ -50,6 +74,8 @@ def create_pdf(destination, pages, rotations=(), blank_pages=()):
         objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate {rotation} /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {stream_id} 0 R >>".encode())
         objects.append(f"<< /Length {len(data)} >>\nstream\n".encode() + data + b"\nendstream")
     objects[1] = f"<< /Type /Pages /Kids [{' '.join(children)}] /Count {len(children)} >>".encode()
+    if outline:
+        add_outline(objects, children, outline)
     output = bytearray(b"%PDF-1.4\n")
     offsets = [0]
     for index, body in enumerate(objects, 1):
@@ -77,4 +103,14 @@ if __name__ == "__main__":
         ],
         rotations=(0, 90, 0),
         blank_pages=(2,),
+    )
+
+    create_pdf(
+        Path(__file__).resolve().parent.parent / "tests/fixtures/outline.pdf",
+        PAGES,
+        outline=[
+            ("Part one: attention", 0, [("Begin with the page", 0, [])]),
+            ("Part two: margins", 1, [("Leave room in the margins", 1, []), ("Find your own pace", 1, [])]),
+            ("Keep what helps you read", 2, []),
+        ],
     )
