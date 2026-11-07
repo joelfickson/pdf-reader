@@ -276,23 +276,36 @@ fn link_target(link: &PdfLink<'_>) -> Option<LinkTarget> {
 
 fn page_target(destination: &PdfDestination<'_>) -> Option<LinkTarget> {
     let index = usize::try_from(destination.page_index().ok()?).ok()?;
-    let anchor = destination
-        .view_settings()
-        .ok()
-        .and_then(|settings| match settings {
-            PdfDestinationViewSettings::SpecificCoordinatesAndZoom(left, top, _) => {
-                top.map(|top| (left.map_or(0.0, |left| left.value), top.value))
-            }
-            PdfDestinationViewSettings::FitPageHorizontallyToWindow(top)
-            | PdfDestinationViewSettings::FitBoundsHorizontallyToWindow(top) => {
-                top.map(|top| (0.0, top.value))
-            }
-            PdfDestinationViewSettings::FitPageToRectangle(rect) => {
-                Some((rect.left().value, rect.top().value))
-            }
+    Some(LinkTarget::Page {
+        index,
+        anchor: destination_anchor(destination),
+    })
+}
+
+pub(super) fn bookmark_target(bookmark: &PdfBookmark<'_>) -> Option<LinkTarget> {
+    match bookmark.destination() {
+        Some(destination) => page_target(&destination),
+        None => match bookmark.action()? {
+            PdfAction::LocalDestination(action) => page_target(&action.destination().ok()?),
             _ => None,
-        });
-    Some(LinkTarget::Page { index, anchor })
+        },
+    }
+}
+
+fn destination_anchor(destination: &PdfDestination<'_>) -> Option<(f32, f32)> {
+    match destination.view_settings().ok()? {
+        PdfDestinationViewSettings::SpecificCoordinatesAndZoom(left, top, _) => {
+            top.map(|top| (left.map_or(0.0, |left| left.value), top.value))
+        }
+        PdfDestinationViewSettings::FitPageHorizontallyToWindow(top)
+        | PdfDestinationViewSettings::FitBoundsHorizontallyToWindow(top) => {
+            top.map(|top| (0.0, top.value))
+        }
+        PdfDestinationViewSettings::FitPageToRectangle(rect) => {
+            Some((rect.left().value, rect.top().value))
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]

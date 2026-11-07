@@ -834,3 +834,85 @@ fn links_jump_and_back_forward_retrace_each_tab(cx: &mut TestAppContext) {
     cx.dispatch_action(GoForward);
     assert_eq!(page(cx), 8);
 }
+
+#[gpui::test]
+fn outline_panel_expands_jumps_and_follows_reading(cx: &mut TestAppContext) {
+    use crate::pdf::tools::{Outline, OutlineEntry};
+
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let entry = |title: &str, level, page, anchor| OutlineEntry {
+        title: title.into(),
+        level,
+        page: Some(page),
+        anchor,
+    };
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 9);
+            let session = reader.tabs.current().unwrap().session;
+            reader.receive(
+                Event::Outline {
+                    session: session + 100,
+                    outline: Arc::new(Outline {
+                        entries: vec![entry("Elsewhere", 1, 1, None)],
+                        truncated: false,
+                    }),
+                },
+                window,
+                cx,
+            );
+            assert!(reader.tabs.current().unwrap().outline.is_none());
+            reader.receive(
+                Event::Outline {
+                    session,
+                    outline: Arc::new(Outline {
+                        entries: vec![
+                            entry("Introduction", 1, 1, None),
+                            entry("Part one", 1, 3, None),
+                            entry("Chapter one", 2, 5, Some((0.0, 0.25))),
+                            entry("Section", 3, 7, None),
+                        ],
+                        truncated: false,
+                    }),
+                },
+                window,
+                cx,
+            );
+            reader.chrome.panel = chrome::Panel::Outline;
+        })
+    });
+    cx.run_until_parked();
+    let page = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| reader.read(cx).tabs.current().unwrap().page)
+    };
+    let center = |cx: &mut gpui::VisualTestContext, selector: &'static str| {
+        cx.debug_bounds(selector)
+            .unwrap_or_else(|| panic!("{selector} is not visible"))
+            .center()
+    };
+    assert!(cx.debug_bounds("outline-entry-1").is_some());
+    assert!(cx.debug_bounds("outline-entry-2").is_none());
+
+    let toggle = center(cx, "outline-toggle-1");
+    cx.simulate_click(toggle, Default::default());
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("outline-entry-2").is_some());
+    assert!(cx.debug_bounds("outline-entry-3").is_none());
+    assert_eq!(page(cx), 0);
+
+    let chapter = center(cx, "outline-entry-2");
+    cx.simulate_click(chapter, Default::default());
+    assert_eq!(page(cx), 4);
+    assert_eq!(
+        cx.read(|cx| reader.read(cx).tabs.current().unwrap().pending_anchor),
+        Some((0.0, 0.25))
+    );
+    cx.dispatch_action(GoBack);
+    assert_eq!(page(cx), 0);
+
+    cx.update(|window, cx| reader.update(cx, |reader, cx| reader.go(6, window, cx)));
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("outline-entry-3").is_some());
+}

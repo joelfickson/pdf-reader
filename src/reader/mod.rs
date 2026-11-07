@@ -7,6 +7,7 @@ mod history;
 mod images;
 mod jumps;
 mod navigation;
+mod outline;
 #[cfg(debug_assertions)]
 mod preview;
 mod scheduling;
@@ -145,7 +146,19 @@ impl Reader {
     fn receive(&mut self, event: Event, window: &mut Window, cx: &mut Context<Self>) {
         match event.generation() {
             None => {
-                self.receive_search(event, window, cx);
+                if let Event::Outline { session, outline } = event {
+                    if let Some(tab) = self
+                        .tabs
+                        .entries
+                        .iter_mut()
+                        .find(|tab| tab.session == session && tab.outline.is_none())
+                    {
+                        tab.outline = Some(outline::OutlineTree::new(outline));
+                        cx.notify();
+                    }
+                } else {
+                    self.receive_search(event, window, cx);
+                }
                 return;
             }
             Some(generation) if generation != self.generation => return,
@@ -210,7 +223,10 @@ impl Reader {
                 tab.error = Some(message);
                 self.busy = false;
             }
-            Event::SearchBatch { .. } | Event::SearchDone { .. } | Event::SearchFailed { .. } => {}
+            Event::SearchBatch { .. }
+            | Event::SearchDone { .. }
+            | Event::SearchFailed { .. }
+            | Event::Outline { .. } => {}
         }
         cx.notify();
     }
