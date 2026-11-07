@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic PDF Changelog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@200..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+
+:root{
+  --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --dot:#F2C230;
+  --dot-deep:#D99A00;
+  --paper:#FBF8F1;
+  --paper-ink:#1B1E22;
+  color-scheme:light;
+  --bg:#F2EEE5;
+  --ink:#15171B;
+  --muted:#4F555E;
+  --faint:#7A808A;
+  --hair:rgba(21,23,27,.12);
+  --hair-strong:rgba(21,23,27,.22);
+  --blob-a:rgba(242,194,48,.55);
+  --blob-b:rgba(125,178,255,.42);
+  --blob-c:rgba(255,170,140,.38);
+  --glass:rgba(255,255,255,.46);
+  --glass-strong:rgba(255,255,255,.7);
+  --glass-edge:rgba(255,255,255,.85);
+  --glass-shadow:0 30px 80px -30px rgba(40,34,20,.35),0 2px 10px rgba(40,34,20,.06);
+  --glass-ink:#15171B;
+  --glass-muted:#3F454D;
+  --ok:#17804A;
+  --next:#1D5BC8;
+  --soon:#8A5E00;
+  --cite:#1D5BC8;
+  --btn-bg:#15171B;
+  --btn-ink:#FBF8F1;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0A0B0E;
+  --ink:#EEF0F3;
+  --muted:#A6ADB6;
+  --faint:#737A84;
+  --hair:rgba(255,255,255,.1);
+  --hair-strong:rgba(255,255,255,.2);
+  --blob-a:rgba(242,194,48,.28);
+  --blob-b:rgba(90,140,255,.26);
+  --blob-c:rgba(255,120,90,.18);
+  --glass:rgba(28,32,40,.42);
+  --glass-strong:rgba(22,25,31,.72);
+  --glass-edge:rgba(255,255,255,.18);
+  --glass-shadow:0 40px 100px -30px rgba(0,0,0,.8),0 2px 10px rgba(0,0,0,.3);
+  --glass-ink:#EEF0F3;
+  --glass-muted:#B7BDC6;
+  --ok:#5FD08A;
+  --next:#8FBCFF;
+  --soon:#F2C230;
+  --cite:#8FBCFF;
+  --btn-bg:#EEF0F3;
+  --btn-ink:#0A0B0E;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 var(--font);font-weight:380;-webkit-font-smoothing:antialiased;overflow-x:hidden;transition:background .6s,color .6s}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+
+.field{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.field span{position:absolute;border-radius:50%;filter:blur(80px);will-change:transform}
+.field .a{width:52vw;height:52vw;left:-8vw;top:-12vw;background:var(--blob-a);animation:drift-a 26s ease-in-out infinite alternate}
+.field .b{width:46vw;height:46vw;right:-10vw;top:18vh;background:var(--blob-b);animation:drift-b 32s ease-in-out infinite alternate}
+.field .c{width:40vw;height:40vw;left:24vw;bottom:-18vw;background:var(--blob-c);animation:drift-c 29s ease-in-out infinite alternate}
+@keyframes drift-a{to{transform:translate(14vw,10vh) scale(1.12)}}
+@keyframes drift-b{to{transform:translate(-12vw,-6vh) scale(.92)}}
+@keyframes drift-c{to{transform:translate(-8vw,-12vh) scale(1.08)}}
+.caustics{position:fixed;inset:-35%;width:170%;height:170%;z-index:0;pointer-events:none;opacity:.32;mix-blend-mode:soft-light;animation:caustic 40s linear infinite}
+:root[data-theme="dark"] .caustics{opacity:.07;mix-blend-mode:screen}
+@keyframes caustic{from{transform:translate3d(0,0,0) rotate(0deg)}to{transform:translate3d(-4%,3%,0) rotate(6deg)}}
+.content{position:relative;z-index:1}
+
+.mockbar{position:fixed;left:16px;bottom:16px;z-index:60;display:flex;gap:6px;font:12px var(--mono);background:rgba(20,22,26,.86);color:#d4d8dd;padding:6px 8px;border-radius:12px;backdrop-filter:blur(10px)}
+.mockbar button{font:inherit;color:inherit;background:transparent;border:0;padding:4px 8px;border-radius:7px;cursor:pointer}
+.mockbar button:hover{background:rgba(255,255,255,.12)}
+
+header.nav{position:sticky;top:0;z-index:30}
+.nav .bar{margin:12px auto 0;max-width:1180px;padding:0 24px}
+.nav .inner{display:flex;align-items:center;gap:24px;height:56px;padding:0 10px 0 16px;border-radius:999px;background:var(--glass);backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);box-shadow:inset 0 0 0 1px var(--glass-edge),var(--glass-shadow)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:560;letter-spacing:-.01em}
+.brand svg{width:24px;height:24px}
+.nav nav{display:flex;gap:22px;margin-left:auto;font-size:14px;color:var(--muted)}
+.nav nav a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:10px;height:46px;padding:0 20px;border-radius:999px;font-weight:520;font-size:15px;white-space:nowrap;transition:transform .25s,box-shadow .25s}
+.btn.primary{background:var(--btn-bg);color:var(--btn-ink);box-shadow:0 10px 30px -12px rgba(0,0,0,.45)}
+.btn.primary:hover{transform:translateY(-1px);box-shadow:0 14px 36px -10px rgba(242,194,48,.55)}
+.btn.glass{color:var(--ink);background:var(--glass);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);box-shadow:inset 0 0 0 1px var(--glass-edge)}
+.btn.glass:hover{transform:translateY(-1px)}
+.btn.small{height:38px;font-size:14px;padding:0 16px}
+.btn svg{width:16px;height:16px}
+
+footer{position:relative;z-index:1;padding:48px 0 80px;border-top:1px solid var(--hair);color:var(--faint);font-size:14px}
+footer .wrap{display:flex;gap:24px;flex-wrap:wrap;align-items:center}
+footer nav{display:flex;gap:20px;margin-left:auto}
+footer a:hover{color:var(--ink)}
+
+.reveal{opacity:0;transform:translateY(22px);filter:blur(6px);transition:opacity 1s ease,transform 1s ease,filter 1s ease}
+.reveal.in{opacity:1;transform:none;filter:none}
+
+.nav nav a[aria-current="page"]{color:var(--ink);font-weight:520}
+.head{padding-top:120px;padding-bottom:40px}
+.head h1{font-size:clamp(46px,8vw,104px);line-height:.98;letter-spacing:-.05em;font-weight:250;margin:22px 0 0}
+.head h1 em{font-style:normal;font-weight:520}
+.head p{font-size:clamp(18px,2vw,21px);color:var(--muted);max-width:56ch;margin:26px 0 0;font-weight:360}
+.head p a{color:var(--ink);border-bottom:1px solid var(--hair-strong)}
+.log{display:grid;grid-template-columns:200px minmax(0,1fr);gap:72px;padding-top:48px;padding-bottom:140px;align-items:start}
+.index{position:sticky;top:110px;display:flex;flex-direction:column;gap:2px;font:13px var(--mono)}
+.index .eyebrow{margin-bottom:12px}
+.index a{display:flex;justify-content:space-between;gap:12px;padding:8px 0;color:var(--muted);border-top:1px solid var(--hair)}
+.index a:hover,.index a.active{color:var(--ink)}
+.index a.active b{color:var(--ink)}
+.index a b{font-weight:500;color:inherit}
+.index a span{color:var(--faint)}
+.entry{padding:40px 0 48px;border-top:1px solid var(--hair-strong);scroll-margin-top:100px}
+.entry:first-child{border-top:0;padding-top:0}
+.entry-head{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap}
+.entry-head h2{font-size:clamp(34px,4.6vw,56px);letter-spacing:-.045em;font-weight:280;margin:0;line-height:1}
+.entry-head h2 em{font-style:normal;font-weight:520}
+.entry-head time{font:13px var(--mono);color:var(--faint)}
+.tag{font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.tag i{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}
+.tag.unreleased{color:var(--next)}
+.tag.latest{color:var(--ok)}
+.tag.pre{color:var(--soon)}
+.tag.quiet{color:var(--faint)}
+.tag.quiet i{box-shadow:none}
+.entry .summary{color:var(--muted);margin:16px 0 0;max-width:62ch}
+.group{margin-top:30px}
+.group .eyebrow{margin-bottom:6px}
+.change{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--hair)}
+.change p{margin:0;color:var(--ink);font-weight:400}
+.change p span{color:var(--muted)}
+.change a{font:13px var(--mono);color:var(--cite);white-space:nowrap}
+.change a:hover{text-decoration:underline}
+.thanks{margin-top:22px;color:var(--muted);font-size:15px}
+.thanks a{color:var(--ink);border-bottom:1px solid var(--hair-strong)}
+.compare{display:inline-block;margin-top:22px;font:13px var(--mono);color:var(--muted)}
+.compare:hover{color:var(--ink)}
+@media (max-width:980px){
+  .nav nav{display:none}
+  .log{grid-template-columns:1fr;gap:28px}
+  .index{position:static;flex-direction:row;flex-wrap:wrap;gap:6px 18px}
+  .index .eyebrow{width:100%;margin-bottom:4px}
+  .index a{border-top:0;padding:4px 0}
+  .index a span{display:none}
+}
+@media (max-width:620px){
+  .head{padding-top:88px;padding-bottom:24px}
+  .change{grid-template-columns:1fr;gap:4px}
+  footer nav{margin-left:0;flex-wrap:wrap}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none;filter:none}
+}
+
+</style>
+</head>
+<body>
+<div class="field" aria-hidden="true"><span class="a"></span><span class="b"></span><span class="c"></span></div>
+<svg class="caustics" aria-hidden="true" width="100%" height="100%" preserveAspectRatio="none">
+  <filter id="caustic-noise"><feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="3" seed="7"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.8  0 0 0 2.2 -0.9"/></filter>
+  <rect width="100%" height="100%" filter="url(#caustic-noise)"/>
+</svg>
+
+<div class="mockbar" aria-label="Mock controls">
+  <span style="padding:4px 6px;color:#8a929c">Changelog</span>
+  <button id="themeBtn">Light / dark</button>
+</div>
+
+<div class="content">
+<header class="nav">
+  <div class="bar">
+    <div class="inner">
+      <a class="brand" href="website-v3-liquid-light.html">
+        <svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" rx="230" fill="#111418"/><rect x="124" y="164" width="522" height="696" rx="50" fill="#F4F1E8"/><rect x="196" y="467" width="373" height="90" rx="45" fill="#1B1E22"/><circle cx="810" cy="512" r="77" fill="#F2C230"/></svg>
+        Agentic PDF
+      </a>
+      <nav>
+        <a href="website-v3-liquid-light.html">Home</a>
+        <a href="website-v3-agent.html">Agent</a>
+        <a href="website-v3-download.html">Download</a>
+        <a href="website-v3-changelog.html" aria-current="page">Changelog</a>
+        <a href="website-v3-privacy.html">Privacy</a>
+        <a href="https://github.com/joelfickson/pdf-reader">GitHub</a>
+      </nav>
+      <a class="btn small primary" href="website-v3-download.html">Download</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap head">
+    <div class="eyebrow">Changelog</div>
+    <h1>What is <em>new</em></h1>
+    <p>Every change lands through a public pull request. The full history lives on <a href="https://github.com/joelfickson/pdf-reader/releases">GitHub releases</a>.</p>
+  </div>
+  <div class="wrap log">
+    <nav class="index" aria-label="Versions">
+      <div class="eyebrow">Versions</div>
+      <a href="#unreleased" data-id="unreleased"><b>Unreleased</b><span>next</span></a>
+      <a href="#v0.1.2" data-id="v0.1.2"><b>v0.1.2</b><span>6 Nov</span></a>
+      <a href="#v0.1.2-beta.1" data-id="v0.1.2-beta.1"><b>v0.1.2 beta 1</b><span>5 Nov</span></a>
+      <a href="#v0.1.1" data-id="v0.1.1"><b>v0.1.1</b><span>14 Oct</span></a>
+      <a href="#v0.1.0" data-id="v0.1.0"><b>v0.1.0</b><span>14 Oct</span></a>
+    </nav>
+    <div class="entries">
+      <article class="entry reveal" id="unreleased">
+        <div class="entry-head"><h2>Unreleased</h2><span class="tag unreleased"><i></i>On main</span></div>
+        <p class="summary">Merged to main after v0.1.2. These ship in the next release.</p>
+        <div class="group">
+          <div class="eyebrow">New</div>
+          <div class="change"><p>Search the whole document from the find bar, with Match case and Whole word, highlights on the page, and every result listed by page.</p><a href="https://github.com/joelfickson/pdf-reader/pull/20">#20</a></div>
+          <div class="change"><p>A new app icon: a page with a reading line and the agent dot beside it.</p><a href="https://github.com/joelfickson/pdf-reader/pull/19">#19</a></div>
+        </div>
+        <div class="group">
+          <div class="eyebrow">Fixed</div>
+          <div class="change"><p>Small macOS icon sizes no longer render corrupted in Finder list views.</p><a href="https://github.com/joelfickson/pdf-reader/pull/19">#19</a></div>
+        </div>
+        <div class="group">
+          <div class="eyebrow">Under the hood</div>
+          <div class="change"><p>Apple silicon release builds use an updated macOS runner.</p><a href="https://github.com/joelfickson/pdf-reader/pull/17">#17</a></div>
+        </div>
+        <a class="compare" href="https://github.com/joelfickson/pdf-reader/compare/v0.1.2...main">Compare v0.1.2 to main</a>
+      </article>
+      <article class="entry reveal" id="v0.1.2">
+        <div class="entry-head"><h2>v0.1.2</h2><span class="tag latest"><i></i>Latest</span><time datetime="2026-11-06">6 Nov 2026</time></div>
+                <div class="group">
+          <div class="eyebrow">New</div>
+          <div class="change"><p>A redesigned reader interface.</p><a href="https://github.com/joelfickson/pdf-reader/pull/13">#13</a></div>
+          <div class="change"><p>The first app icon, an open book.</p><a href="https://github.com/joelfickson/pdf-reader/pull/1">#1</a></div>
+        </div>
+        <div class="group">
+          <div class="eyebrow">Fixed</div>
+          <div class="change"><p>Release downloads now open on macOS and Windows.</p><a href="https://github.com/joelfickson/pdf-reader/pull/2">#2</a></div>
+          <div class="change"><p>macOS releases now verify their stapled notarization ticket before publishing.</p><a href="https://github.com/joelfickson/pdf-reader/pull/16">#16</a></div>
+        </div>
+        <div class="group">
+          <div class="eyebrow">Under the hood</div>
+          <div class="change"><p>Releases can target specific platforms and channels.</p><a href="https://github.com/joelfickson/pdf-reader/pull/14">#14</a></div>
+          <div class="change"><p>Build and release workflows updated to Node.js 24.</p><a href="https://github.com/joelfickson/pdf-reader/pull/15">#15</a></div>
+        </div>
+        <p class="thanks">Welcome to our first contributor, <a href="https://github.com/jelome265">jelome265</a>.</p>
+        <a class="compare" href="https://github.com/joelfickson/pdf-reader/compare/v0.1.1...v0.1.2">Compare v0.1.1 to v0.1.2</a>
+      </article>
+      <article class="entry reveal" id="v0.1.2-beta.1">
+        <div class="entry-head"><h2>v0.1.2 <em>beta 1</em></h2><span class="tag pre"><i></i>Pre-release</span><time datetime="2026-11-05">5 Nov 2026</time></div>
+        <p class="summary">A preview of v0.1.2 for testing.</p>
+        <div class="group">
+          <div class="eyebrow">Included</div>
+          <div class="change"><p>A redesigned reader interface.</p><a href="https://github.com/joelfickson/pdf-reader/pull/13">#13</a></div>
+          <div class="change"><p>The first app icon, an open book.</p><a href="https://github.com/joelfickson/pdf-reader/pull/1">#1</a></div>
+          <div class="change"><p>Release downloads open on macOS and Windows.</p><a href="https://github.com/joelfickson/pdf-reader/pull/2">#2</a></div>
+          <div class="change"><p>Releases can target specific platforms and channels.</p><a href="https://github.com/joelfickson/pdf-reader/pull/14">#14</a></div>
+        </div>
+        <a class="compare" href="https://github.com/joelfickson/pdf-reader/compare/v0.1.1...v0.1.2-beta.1">Compare v0.1.1 to v0.1.2 beta 1</a>
+      </article>
+      <article class="entry reveal" id="v0.1.1">
+        <div class="entry-head"><h2>v0.1.1</h2><span class="tag quiet"><i></i>Release</span><time datetime="2026-10-14">14 Oct 2026</time></div>
+        <p class="summary">A release pipeline fix. No changes to the app itself.</p>
+        <div class="group">
+          <div class="eyebrow">Under the hood</div>
+          <div class="change"><p>Release builds skip a redundant Metal toolchain download.</p><span></span></div>
+        </div>
+        <a class="compare" href="https://github.com/joelfickson/pdf-reader/compare/v0.1.0...v0.1.1">Compare v0.1.0 to v0.1.1</a>
+      </article>
+      <article class="entry reveal" id="v0.1.0">
+        <div class="entry-head"><h2>v0.1.0</h2><span class="tag quiet"><i></i>Tag only</span><time datetime="2026-10-14">14 Oct 2026</time></div>
+        <p class="summary">The first tagged version of the reader, built in Rust with GPUI. It was tagged without a published release page.</p>
+        <a class="compare" href="https://github.com/joelfickson/pdf-reader/tree/v0.1.0">Browse the v0.1.0 source</a>
+      </article>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Agentic PDF, MIT licensed</span>
+    <nav>
+      <a href="website-v3-download.html">Download</a>
+      <a href="website-v3-agent.html">Agent</a>
+      <a href="website-v3-changelog.html">Changelog</a>
+      <a href="website-v3-privacy.html">Privacy</a>
+      <a href="https://github.com/joelfickson/pdf-reader">GitHub</a>
+    </nav>
+  </div>
+</footer>
+</div>
+
+<script>
+(function(){
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }), {threshold:.08});
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+  const links = [...document.querySelectorAll(".index a")];
+  const spy = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) links.forEach(a => a.classList.toggle("active", a.dataset.id === e.target.id));
+  }), {rootMargin:"-30% 0px -60% 0px"});
+  document.querySelectorAll(".entry").forEach(el => spy.observe(el));
+  document.getElementById("themeBtn").onclick = () => {
+    const r = document.documentElement;
+    r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
+  };
+})();
+</script>
+</body>
+</html>

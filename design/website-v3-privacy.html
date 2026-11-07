@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@200..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --dot:#F2C230;
+  --dot-deep:#D99A00;
+  --paper:#FBF8F1;
+  --paper-ink:#1B1E22;
+  color-scheme:light;
+  --bg:#F2EEE5;
+  --ink:#15171B;
+  --muted:#4F555E;
+  --faint:#7A808A;
+  --hair:rgba(21,23,27,.12);
+  --hair-strong:rgba(21,23,27,.22);
+  --blob-a:rgba(242,194,48,.55);
+  --blob-b:rgba(125,178,255,.42);
+  --blob-c:rgba(255,170,140,.38);
+  --glass:rgba(255,255,255,.46);
+  --glass-strong:rgba(255,255,255,.7);
+  --glass-edge:rgba(255,255,255,.85);
+  --glass-shadow:0 30px 80px -30px rgba(40,34,20,.35),0 2px 10px rgba(40,34,20,.06);
+  --glass-ink:#15171B;
+  --glass-muted:#3F454D;
+  --ok:#17804A;
+  --next:#1D5BC8;
+  --soon:#8A5E00;
+  --cite:#1D5BC8;
+  --btn-bg:#15171B;
+  --btn-ink:#FBF8F1;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0A0B0E;
+  --ink:#EEF0F3;
+  --muted:#A6ADB6;
+  --faint:#737A84;
+  --hair:rgba(255,255,255,.1);
+  --hair-strong:rgba(255,255,255,.2);
+  --blob-a:rgba(242,194,48,.28);
+  --blob-b:rgba(90,140,255,.26);
+  --blob-c:rgba(255,120,90,.18);
+  --glass:rgba(28,32,40,.42);
+  --glass-strong:rgba(22,25,31,.72);
+  --glass-edge:rgba(255,255,255,.18);
+  --glass-shadow:0 40px 100px -30px rgba(0,0,0,.8),0 2px 10px rgba(0,0,0,.3);
+  --glass-ink:#EEF0F3;
+  --glass-muted:#B7BDC6;
+  --ok:#5FD08A;
+  --next:#8FBCFF;
+  --soon:#F2C230;
+  --cite:#8FBCFF;
+  --btn-bg:#EEF0F3;
+  --btn-ink:#0A0B0E;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 var(--font);font-weight:380;-webkit-font-smoothing:antialiased;overflow-x:hidden;transition:background .6s,color .6s}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+
+.field{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.field span{position:absolute;border-radius:50%;filter:blur(80px);will-change:transform}
+.field .a{width:52vw;height:52vw;left:-8vw;top:-12vw;background:var(--blob-a);animation:drift-a 26s ease-in-out infinite alternate}
+.field .b{width:46vw;height:46vw;right:-10vw;top:18vh;background:var(--blob-b);animation:drift-b 32s ease-in-out infinite alternate}
+.field .c{width:40vw;height:40vw;left:24vw;bottom:-18vw;background:var(--blob-c);animation:drift-c 29s ease-in-out infinite alternate}
+@keyframes drift-a{to{transform:translate(14vw,10vh) scale(1.12)}}
+@keyframes drift-b{to{transform:translate(-12vw,-6vh) scale(.92)}}
+@keyframes drift-c{to{transform:translate(-8vw,-12vh) scale(1.08)}}
+.caustics{position:fixed;inset:-35%;width:170%;height:170%;z-index:0;pointer-events:none;opacity:.32;mix-blend-mode:soft-light;animation:caustic 40s linear infinite}
+:root[data-theme="dark"] .caustics{opacity:.07;mix-blend-mode:screen}
+@keyframes caustic{from{transform:translate3d(0,0,0) rotate(0deg)}to{transform:translate3d(-4%,3%,0) rotate(6deg)}}
+.content{position:relative;z-index:1}
+
+.mockbar{position:fixed;left:16px;bottom:16px;z-index:60;display:flex;gap:6px;font:12px var(--mono);background:rgba(20,22,26,.86);color:#d4d8dd;padding:6px 8px;border-radius:12px;backdrop-filter:blur(10px)}
+.mockbar button{font:inherit;color:inherit;background:transparent;border:0;padding:4px 8px;border-radius:7px;cursor:pointer}
+.mockbar button:hover{background:rgba(255,255,255,.12)}
+
+header.nav{position:sticky;top:0;z-index:30}
+.nav .bar{margin:12px auto 0;max-width:1180px;padding:0 24px}
+.nav .inner{display:flex;align-items:center;gap:24px;height:56px;padding:0 10px 0 16px;border-radius:999px;background:var(--glass);backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);box-shadow:inset 0 0 0 1px var(--glass-edge),var(--glass-shadow)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:560;letter-spacing:-.01em}
+.brand svg{width:24px;height:24px}
+.nav nav{display:flex;gap:22px;margin-left:auto;font-size:14px;color:var(--muted)}
+.nav nav a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:10px;height:46px;padding:0 20px;border-radius:999px;font-weight:520;font-size:15px;white-space:nowrap;transition:transform .25s,box-shadow .25s}
+.btn.primary{background:var(--btn-bg);color:var(--btn-ink);box-shadow:0 10px 30px -12px rgba(0,0,0,.45)}
+.btn.primary:hover{transform:translateY(-1px);box-shadow:0 14px 36px -10px rgba(242,194,48,.55)}
+.btn.glass{color:var(--ink);background:var(--glass);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);box-shadow:inset 0 0 0 1px var(--glass-edge)}
+.btn.glass:hover{transform:translateY(-1px)}
+.btn.small{height:38px;font-size:14px;padding:0 16px}
+.btn svg{width:16px;height:16px}
+
+footer{position:relative;z-index:1;padding:48px 0 80px;border-top:1px solid var(--hair);color:var(--faint);font-size:14px}
+footer .wrap{display:flex;gap:24px;flex-wrap:wrap;align-items:center}
+footer nav{display:flex;gap:20px;margin-left:auto}
+footer a:hover{color:var(--ink)}
+
+.reveal{opacity:0;transform:translateY(22px);filter:blur(6px);transition:opacity 1s ease,transform 1s ease,filter 1s ease}
+.reveal.in{opacity:1;transform:none;filter:none}
+
+
+.nav nav a[aria-current="page"]{color:var(--ink);font-weight:520}
+.intro{padding:120px 0 40px}
+.intro h1{font-size:clamp(44px,7.4vw,104px);line-height:.98;letter-spacing:-.05em;font-weight:250;margin:22px 0 0;max-width:13ch}
+.intro h1 em{font-style:normal;font-weight:520}
+.intro .lede{font-size:clamp(18px,2vw,22px);color:var(--muted);max-width:640px;margin:28px 0 0;font-weight:360}
+.updated{margin-top:22px;font:13px var(--mono);color:var(--faint)}
+.promises{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:44px;margin-top:72px}
+.promises div{padding-top:22px;border-top:1px solid var(--hair-strong)}
+.promises strong{display:block;font-size:clamp(24px,2.6vw,32px);font-weight:300;letter-spacing:-.03em;line-height:1.15}
+.promises strong em{font-style:normal;font-weight:520}
+.promises p{margin:12px 0 0;color:var(--muted);font-size:16px}
+.topic{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.6fr);gap:48px;padding:56px 0;border-top:1px solid var(--hair)}
+.topic:last-of-type{border-bottom:1px solid var(--hair)}
+.topic h2{font-size:clamp(26px,3vw,38px);line-height:1.08;letter-spacing:-.035em;font-weight:300;margin:14px 0 0}
+.topic h2 em{font-style:normal;font-weight:520}
+.topic .body p{margin:0 0 16px;color:var(--muted)}
+.topic .body p b{color:var(--ink);font-weight:520}
+.topic .body ul{margin:0 0 16px;padding:0;list-style:none}
+.topic .body li{padding:12px 0;border-top:1px solid var(--hair);color:var(--muted);display:grid;grid-template-columns:150px 1fr;gap:16px}
+.topic .body li:last-child{border-bottom:1px solid var(--hair)}
+.topic .body li span{font:13px var(--mono);color:var(--faint);padding-top:3px}
+.topic .body code{font:14px var(--mono);color:var(--ink);word-break:break-word}
+.topic .body a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--hair-strong);text-underline-offset:3px}
+.topic .body a:hover{text-decoration-color:var(--ink)}
+.status{font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;margin-top:16px}
+.status i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.status.now{color:var(--ok)}
+.status.next{color:var(--next)}
+.status.soon{color:var(--soon)}
+.plain{margin:64px 0 120px;color:var(--faint);font-size:15px;max-width:70ch}
+@media (max-width:980px){
+  .nav nav{display:none}
+  .promises{grid-template-columns:1fr;row-gap:32px}
+  .topic{grid-template-columns:1fr;gap:20px;padding:44px 0}
+}
+@media (max-width:620px){
+  .intro{padding-top:72px}
+  .nav .inner{gap:12px}
+  .topic .body li{grid-template-columns:1fr;gap:4px}
+  footer nav{flex-wrap:wrap;margin-left:0;gap:14px 20px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none;filter:none}
+}
+</style>
+</head>
+<body>
+<div class="field" aria-hidden="true"><span class="a"></span><span class="b"></span><span class="c"></span></div>
+<svg class="caustics" aria-hidden="true" width="100%" height="100%" preserveAspectRatio="none">
+  <filter id="caustic-noise"><feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="3" seed="7"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.8  0 0 0 2.2 -0.9"/></filter>
+  <rect width="100%" height="100%" filter="url(#caustic-noise)"/>
+</svg>
+
+<div class="mockbar" aria-label="Mock controls">
+  <span style="padding:4px 6px;color:#8a929c">Liquid light</span>
+  <button id="themeBtn">Light / dark</button>
+</div>
+
+<div class="content">
+<header class="nav">
+  <div class="bar">
+    <div class="inner">
+      <a class="brand" href="website-v3-liquid-light.html">
+        <svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" rx="230" fill="#111418"/><rect x="124" y="164" width="522" height="696" rx="50" fill="#F4F1E8"/><rect x="196" y="467" width="373" height="90" rx="45" fill="#1B1E22"/><circle cx="810" cy="512" r="77" fill="#F2C230"/></svg>
+        Agentic PDF
+      </a>
+      <nav>
+        <a href="website-v3-liquid-light.html">Home</a>
+        <a href="website-v3-agent.html">Agent</a>
+        <a href="website-v3-changelog.html">Changelog</a>
+        <a href="website-v3-privacy.html" aria-current="page">Privacy</a>
+        <a href="https://github.com/joelfickson/pdf-reader">GitHub</a>
+      </nav>
+      <a class="btn small primary" href="website-v3-download.html">Download</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+  <div class="intro">
+    <div class="eyebrow">Privacy</div>
+    <h1>Your documents stay <em>yours.</em></h1>
+    <p class="lede">Agentic PDF reads your files on your own computer. This page explains, in plain language, what the app does with your data, what it keeps, and how to remove it.</p>
+    <div class="updated">Last updated 7 November 2026</div>
+    <div class="promises">
+      <div><strong>No <em>account.</em></strong><p>There is nothing to sign up for or sign in to. You download the app and open a file.</p></div>
+      <div><strong>No <em>tracking.</em></strong><p>The reader's code contains no telemetry, no analytics and no network requests.</p></div>
+      <div><strong>No <em>uploads.</em></strong><p>Documents are opened and rendered on your computer by the PDFium engine. They are never sent anywhere.</p></div>
+    </div>
+  </div>
+
+  <section class="topic">
+    <div><div class="eyebrow">The reader</div><h2>What happens when you <em>open a PDF</em></h2></div>
+    <div class="body">
+      <p>The app reads the file from your disk, renders its pages and extracts its text on your computer. Page images and text are kept in memory while you read and are released when you close the tab.</p>
+      <p>When you copy text, the selected text is placed on your system clipboard, as with any app. Nothing else leaves the reader.</p>
+      <p>Version 0.1.2 writes no files of its own to your computer.</p>
+    </div>
+  </section>
+
+  <section class="topic">
+    <div><div class="eyebrow">Stored on your computer</div><h2>A short list of <em>recent files</em></h2><span class="status next"><i></i>Next release</span></div>
+    <div class="body">
+      <p>Starting with the next release, the app remembers the PDFs you opened so it can list them under Recent and reopen them where you left off. It keeps only this:</p>
+      <ul>
+        <li><span>Saved</span>The file's location on your computer, the page you were on, and your zoom level</li>
+        <li><span>Limit</span>The 20 most recent files. Older entries are dropped.</li>
+        <li><span>Not saved</span>The document's contents, its text, your searches or your selections</li>
+        <li><span>When</span>Written when you open or close a file and when you quit the app</li>
+        <li><span>macOS</span><code>~/Library/Application Support/org.pdfreader.desktop/recent.tsv</code></li>
+        <li><span>Windows</span><code>%APPDATA%\PDF Reader\recent.tsv</code></li>
+      </ul>
+      <p>The list never leaves your computer.</p>
+    </div>
+  </section>
+
+  <section class="topic">
+    <div><div class="eyebrow">Your control</div><h2>How to <em>delete it</em></h2></div>
+    <div class="body">
+      <p><b>Clear the list:</b> choose File, then Open Recent, then Clear Menu.</p>
+      <p><b>Remove everything:</b> quit the app and delete the <code>recent.tsv</code> file shown above. Deleting the app removes the program itself; the recent list is a separate file, so delete it too if you want no trace.</p>
+      <p>If a file in the list was moved or deleted, choosing it removes it from the list.</p>
+    </div>
+  </section>
+
+  <section class="topic">
+    <div><div class="eyebrow">The agent panel</div><h2>You choose who <em>reads along</em></h2><span class="status soon"><i></i>In development</span></div>
+    <div class="body">
+      <p>The agent panel is being built in the open, tracked in <a href="https://github.com/joelfickson/pdf-reader/issues/18">issue #18</a>. It is not in any release yet. This is how it is designed to work:</p>
+      <p><b>Only the agent you pick.</b> The panel connects to an agent already installed on your computer, such as Claude Code, Codex or Gemini CLI. Parts of your document are shared only with that agent, through that agent's own connection, under its provider's terms.</p>
+      <p><b>Reading is not writing.</b> The agent can read the outline, search and read text through the reader's tools. Adding highlights or notes to your document always waits for your approval.</p>
+      <p><b>Nothing by default.</b> If you never open the panel, no agent is started and nothing is shared.</p>
+    </div>
+  </section>
+
+  <section class="topic">
+    <div><div class="eyebrow">This website</div><h2>No <em>cookies</em> here</h2></div>
+    <div class="body">
+      <p>This site is a static page. It sets no cookies and uses no analytics.</p>
+      <p>Its fonts are loaded from Google Fonts, so your browser contacts Google when the page loads. Downloads are hosted on GitHub Releases, so GitHub's privacy statement applies when you download.</p>
+    </div>
+  </section>
+
+  <section class="topic">
+    <div><div class="eyebrow">Questions</div><h2>Something <em>looks wrong?</em></h2></div>
+    <div class="body">
+      <p>Agentic PDF is open source, so every claim on this page can be checked in the <a href="https://github.com/joelfickson/pdf-reader">source code</a>.</p>
+      <p>To report a privacy concern, open an issue on <a href="https://github.com/joelfickson/pdf-reader/issues">GitHub</a>. Issues are public, so please leave out personal details and document contents.</p>
+    </div>
+  </section>
+
+  <p class="plain">This is a plain-language summary of how the app handles data, not a legal policy. When the app's behavior changes, this page changes with it.</p>
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Agentic PDF, MIT licensed</span>
+    <nav>
+      <a href="website-v3-download.html">Download</a>
+      <a href="website-v3-agent.html">Agent</a>
+      <a href="website-v3-changelog.html">Changelog</a>
+      <a href="website-v3-privacy.html">Privacy</a>
+      <a href="https://github.com/joelfickson/pdf-reader">GitHub</a>
+    </nav>
+  </div>
+</footer>
+</div>
+
+<script>
+document.getElementById("themeBtn").onclick = () => {
+  const r = document.documentElement;
+  r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
+};
+</script>
+</body>
+</html>
