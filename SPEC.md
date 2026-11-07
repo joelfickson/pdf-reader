@@ -31,7 +31,7 @@ The worker retains up to four document handles and reopens evicted handles lazil
 
 ## Interface
 
-Use a warm neutral canvas, compact toolbar and tab strip, blue interaction accent, collapsible sidebar, and ample reading space. Group controls with whitespace, typography, alignment, and hairline rules. Approved design sources are in design/.
+Use a warm neutral canvas, compact toolbar and tab strip, blue interaction accent, collapsible sidebar, and ample reading space. Group controls with whitespace, typography, alignment, and hairline rules. Approved design mocks are kept locally in an ignored design/ folder and are not committed.
 
 ## Validation
 

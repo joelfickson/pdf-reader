@@ -3,7 +3,7 @@
 /.local/
 .DS_Store
 
-/design/*-preview.png
+/design/
 __pycache__/
 .env
 .env.*
