@@ -47,6 +47,30 @@ The setup script selects the Mac or Windows archive for the current architecture
 
 The app looks for the PDFium library using `PDFIUM_LIBRARY_PATH`, next to its executable, in a macOS app's `Frameworks` directory, or in this checkout's `vendor/pdfium/lib` and `vendor/pdfium/bin` directories. `PDFIUM_LIBRARY_PATH` can point to the library file or its directory.
 
+## Use with AI agents (MCP)
+
+`pdf-reader mcp` runs a read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so coding agents such as Claude Code and Codex can read your PDFs. It needs no window and no account.
+
+| Tool | What it returns |
+| --- | --- |
+| `document_info` | Page count, metadata, and pages without a text layer |
+| `get_outline` | The table of contents with nesting levels and page numbers |
+| `get_text` | Text of consecutive pages up to `max_chars` (default 20,000, at most 100,000), with `next_page` to continue |
+| `search` | Matches with their page and surrounding text, ignoring case and accents by default |
+
+Page numbers are 1-based. The server only opens `.pdf` files, never writes to them, and bounds every response.
+
+Add it to Claude Code or Codex. With the macOS app installed in Applications:
+
+```sh
+claude mcp add agentic-pdf -- "/Applications/PDF Reader.app/Contents/MacOS/pdf-reader" mcp
+codex mcp add agentic-pdf -- "/Applications/PDF Reader.app/Contents/MacOS/pdf-reader" mcp
+```
+
+From a source build, use `target/release/pdf-reader mcp`. On Windows, use the path to `pdf-reader.exe` with `pdfium.dll` beside it. The Windows server has not been tested yet.
+
+The PDF content only leaves your computer if the agent you use sends it to its model provider.
+
 ## Controls
 
 | Action | Mac | Windows |
@@ -82,7 +106,7 @@ Source is organized by responsibility:
 
 ```text
 src/
-  main.rs             Command-line entry point
+  main.rs             Command-line entry point (GUI, --check, and mcp)
   app.rs              Window startup, native menus, key bindings
   reader/
     mod.rs            Window state, worker event handling, shared caches
@@ -102,6 +126,10 @@ src/
     worker.rs         Background scheduling and bounded document handles
     text.rs           Character extraction, coordinates, and hit testing
     search.rs         Case-folded, cross-line matching over page characters
+    tools.rs          Transport-independent document info, outline, text ranges, and search
+  mcp/
+    engine.rs         Dedicated PDFium thread with a bounded document cache
+    server.rs         MCP tool definitions over stdio
 website/              Next.js site for downloads, the agent roadmap, and the changelog
 ```
 

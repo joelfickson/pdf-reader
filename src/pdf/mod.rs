@@ -1,10 +1,11 @@
 mod library;
 pub(crate) mod search;
 pub(crate) mod text;
+pub(crate) mod tools;
 mod worker;
 
 use anyhow::{Result, bail};
-use library::bind;
+pub(crate) use library::bind;
 use pdfium_render::prelude::*;
 use std::{
     path::{Path, PathBuf},
