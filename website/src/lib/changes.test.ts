@@ -16,6 +16,26 @@ describe("describeChange", () => {
     );
   });
 
+  it("handles breaking changes, performance and scoped internal work", () => {
+    expect(describeChange("feat!: drop old option", 30)).toEqual({
+      kind: "new",
+      text: "Drop old option",
+      pullRequest: 30,
+    });
+    expect(describeChange("perf: faster search", null)).toEqual({
+      kind: "fixed",
+      text: "Faster search",
+      pullRequest: null,
+    });
+    expect(
+      describeChange("docs(readme): document the command line", 26),
+    ).toEqual({
+      kind: "internal",
+      text: "Document the command line",
+      pullRequest: 26,
+    });
+  });
+
   it("accepts slash-style branch titles and plain titles", () => {
     expect(describeChange("Feat/UI overhaul", 13)).toEqual({
       kind: "new",
@@ -43,6 +63,16 @@ describe("parseReleaseNotes", () => {
     expect(parseReleaseNotes(body)).toEqual([
       { kind: "new", text: "Add open-book application icon", pullRequest: 1 },
       { kind: "new", text: "UI overhaul", pullRequest: 13 },
+    ]);
+  });
+
+  it("tolerates extra spaces around the bullet, prefix and author", () => {
+    expect(
+      parseReleaseNotes(
+        "  *   fix:   keep scroll position   by   @joelfickson   in   https://github.com/joelfickson/pdf-reader/pull/9   ",
+      ),
+    ).toEqual([
+      { kind: "fixed", text: "Keep scroll position", pullRequest: 9 },
     ]);
   });
 });
