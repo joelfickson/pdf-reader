@@ -496,7 +496,6 @@
   transform-origin: 0 50%;
 }
 .agent-page .sumstage .page .gap {
-  display: block;
   height: 120px;
   margin: 10px 0 12px;
   border-radius: 4px;
@@ -736,4 +735,350 @@
 }
 .agent-page .ahero .ctas {
   margin-top: 34px;
+}
+
+@media (max-width: 620px) {
+  .agent-page .ahero {
+    padding-top: 28px;
+  }
+  .agent-page .ahero h1 {
+    font-size: 40px;
+    margin-top: 10px;
+  }
+  .agent-page .ahero .lede {
+    font-size: 16px;
+    margin-top: 14px;
+  }
+  .agent-page .ahero .statusline {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: 16px;
+    font-size: 15px;
+  }
+  .agent-page .ahero .statusline a {
+    display: inline-block;
+    padding: 12px 0;
+    margin: -12px 0;
+  }
+  .agent-page .ahero .ctas {
+    display: grid;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .agent-page .ahero .ctas .btn,
+  .agent-page .cta .act .btn {
+    width: 100%;
+    height: 48px;
+    justify-content: center;
+    font-size: 16px;
+  }
+  .agent-page .map {
+    margin-top: 48px;
+  }
+  .agent-page .map .node {
+    position: relative;
+    padding: 6px 0 6px 32px;
+  }
+  .agent-page .map .node::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 13px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--ink);
+  }
+  .agent-page .map .node:last-child::before {
+    background: var(--dot);
+    box-shadow: 0 0 10px rgba(242, 194, 48, 0.8);
+  }
+  .agent-page .map .node b {
+    font-size: 17px;
+    font-weight: 540;
+    white-space: normal;
+  }
+  .agent-page .map .node span {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: normal;
+  }
+  .agent-page .map .link {
+    height: 34px;
+    margin: 0 0 0 10px;
+  }
+  .agent-page .map .link em {
+    left: 22px;
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .agent-page .map .link i {
+    display: block;
+    left: -3px;
+    width: 7px;
+    height: 7px;
+    top: 0;
+    animation: run-down 2.4s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  }
+  .agent-page .map .link:nth-of-type(4) i {
+    animation-delay: 0.8s;
+  }
+  .agent-page .map .link:nth-of-type(6) i {
+    animation-delay: 1.6s;
+  }
+  .agent-page .map .caption {
+    gap: 0;
+    margin-top: 18px;
+  }
+  .agent-page .map .caption p {
+    padding: 10px 0;
+    border-top: 1px solid var(--hair);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .agent-page .map .caption p:last-child {
+    border-bottom: 1px solid var(--hair);
+  }
+  .agent-page .map .caption b {
+    margin-bottom: 3px;
+  }
+  .agent-page .steps {
+    margin-top: 22px;
+  }
+  .agent-page .steps .st {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 0 10px;
+    padding: 12px 0;
+  }
+  .agent-page .steps .st::before {
+    padding-top: 3px;
+  }
+  .agent-page .steps h3 {
+    font-size: 17px;
+    font-weight: 520;
+    letter-spacing: -0.015em;
+  }
+  .agent-page .steps p {
+    grid-column: 2;
+    margin-top: 3px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .agent-page .seq {
+    margin-top: 40px;
+  }
+  .agent-page .seq .label {
+    margin-bottom: 10px;
+  }
+  .agent-page .seq .msg {
+    gap: 2px;
+    padding: 10px 0;
+  }
+  .agent-page .seq .wire b {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+  }
+  .agent-page .seq .msg.r .wire b::after,
+  .agent-page .seq .msg.l .wire b::after {
+    display: inline-block;
+    margin-left: 8px;
+    white-space: nowrap;
+    font-family: var(--mono);
+  }
+  .agent-page .seq .side {
+    font-size: 15px;
+  }
+  .agent-page .tools {
+    margin-top: 20px;
+  }
+  .agent-page .tools .t {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name kind" "desc desc";
+    gap: 3px 10px;
+    padding: 11px 0;
+    align-items: center;
+  }
+  .agent-page .tools .t code {
+    grid-area: name;
+    font-size: 14px;
+  }
+  .agent-page .tools .t p {
+    grid-area: desc;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .agent-page .tools .kind {
+    grid-area: kind;
+    justify-self: end;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+  .agent-page .note {
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .agent-page .sum {
+    gap: 26px;
+    margin-top: 22px;
+  }
+  .agent-page .sum ol > li {
+    grid-template-columns: 30px 1fr;
+    gap: 10px;
+    padding: 12px 0;
+  }
+  .agent-page .sum ol > li b {
+    font-size: 17px;
+    margin-bottom: 3px;
+  }
+  .agent-page .sum ol > li span {
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .agent-page .sumstage .page {
+    height: 210px;
+    margin-right: 40px;
+    width: auto;
+    padding: 18px 18px 0;
+    font-size: 13px;
+    overflow: hidden;
+    transform: rotate(1deg);
+  }
+  .agent-page .sumstage .page::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 70px;
+    background: linear-gradient(rgba(251, 248, 241, 0), var(--paper));
+  }
+  .agent-page .sumstage .page h4 {
+    font-size: 14px;
+  }
+  .agent-page .sumstage .page .sub {
+    margin-bottom: 8px;
+  }
+  .agent-page .sumstage .page .gap {
+    height: 48px;
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .agent-page .sumstage .light {
+    margin: -64px 0 0 40px;
+    width: auto;
+    padding: 14px 16px;
+    border-radius: 24px;
+  }
+  .agent-page .sumstage .light .head {
+    margin-bottom: 6px;
+  }
+  .agent-page .sumstage .light h5 {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .agent-page .sumstage .light .terms {
+    margin-bottom: 6px;
+  }
+  .agent-page .sumstage .light .terms li {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 3px 0;
+    font-size: 14px;
+  }
+  .agent-page .sumstage .light .gapnote {
+    font-size: 13px;
+    margin: 4px 0 0;
+  }
+  .agent-page .light .tag {
+    position: static;
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  .agent-page .light .cite {
+    font-size: 13px;
+  }
+  .agent-page .trust {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 18px;
+    margin-top: 28px;
+  }
+  .agent-page .trust div {
+    padding-top: 12px;
+    border-top: 1px solid var(--hair-strong);
+  }
+  .agent-page .trust h3 {
+    font-size: 16px;
+    font-weight: 560;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    margin-bottom: 4px;
+  }
+  .agent-page .trust p {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .agent-page .open {
+    margin-top: 22px;
+  }
+  .agent-page .open .o {
+    gap: 4px;
+    padding: 14px 0;
+  }
+  .agent-page .open h3 {
+    font-size: 17px;
+    font-weight: 520;
+    letter-spacing: -0.015em;
+  }
+  .agent-page .open p {
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .agent-page .cta h2 {
+    font-size: 32px;
+    line-height: 1.06;
+    letter-spacing: -0.035em;
+    margin-top: 10px;
+  }
+  .agent-page .cta .acts {
+    margin-top: 20px;
+  }
+  .agent-page .cta .act {
+    gap: 2px;
+    padding: 12px 0;
+  }
+  .agent-page .cta .act b {
+    font-size: 17px;
+    font-weight: 540;
+  }
+  .agent-page .cta .act span {
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+}
+
+@keyframes run-down {
+  0% {
+    top: 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 7px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-page .map .link i {
+    display: none;
+  }
 }
