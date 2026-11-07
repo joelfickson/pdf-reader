@@ -1,3 +1,4 @@
+use super::jumps::Jumps;
 use gpui::{Pixels, Point, ScrollHandle, UniformListScrollHandle};
 use std::{collections::BTreeSet, ops::Range, path::PathBuf};
 
@@ -13,6 +14,8 @@ pub(super) struct DocumentTab {
     pub sidebar_scroll: UniformListScrollHandle,
     pub failed_thumbnails: BTreeSet<usize>,
     pub error: Option<String>,
+    pub jumps: Jumps,
+    pub pending_anchor: Option<(f32, f32)>,
 }
 
 impl DocumentTab {
@@ -29,6 +32,8 @@ impl DocumentTab {
             sidebar_scroll: UniformListScrollHandle::new(),
             failed_thumbnails: BTreeSet::new(),
             error: None,
+            jumps: Jumps::default(),
+            pending_anchor: None,
         }
     }
 

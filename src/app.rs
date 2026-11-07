@@ -109,6 +109,8 @@ pub(crate) fn menus(recent: &[RecentFile]) -> Vec<Menu> {
                 MenuItem::action("Previous Page", Previous),
                 MenuItem::action("Next Page", Next),
                 MenuItem::action("Go to Page…", GoToPage),
+                MenuItem::action("Back", GoBack),
+                MenuItem::action("Forward", GoForward),
                 MenuItem::separator(),
                 MenuItem::action("Zoom In", ZoomIn),
                 MenuItem::action("Zoom Out", ZoomOut),
@@ -128,6 +130,11 @@ pub(crate) fn bindings() -> Vec<KeyBinding> {
     } else {
         "ctrl"
     };
+    let (back, forward) = if cfg!(target_os = "macos") {
+        ("cmd-[", "cmd-]")
+    } else {
+        ("alt-left", "alt-right")
+    };
     let any = Some(READER);
     let reading = Some(READER_NOT_TYPING);
     vec![
@@ -145,6 +152,8 @@ pub(crate) fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("end", LastPage, reading),
         KeyBinding::new(&format!("{m}-home"), FirstPage, any),
         KeyBinding::new(&format!("{m}-end"), LastPage, any),
+        KeyBinding::new(back, GoBack, any),
+        KeyBinding::new(forward, GoForward, any),
         KeyBinding::new(&format!("{m}-="), ZoomIn, any),
         KeyBinding::new(&format!("{m}--"), ZoomOut, any),
         KeyBinding::new(&format!("{m}-0"), Fit, any),

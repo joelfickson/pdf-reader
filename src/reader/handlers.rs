@@ -128,14 +128,14 @@ impl Reader {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.go(0, window, cx);
+        self.jump(0, None, window, cx);
     }
 
     pub(super) fn last_page(&mut self, _: &LastPage, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(count) = self.tabs.current().map(|tab| tab.count)
             && count > 0
         {
-            self.go(count - 1, window, cx);
+            self.jump(count - 1, None, window, cx);
         }
     }
 
@@ -256,7 +256,7 @@ impl Reader {
                     let count = self.tabs.current().map_or(0, |tab| tab.count);
                     match self.chrome.page_input.text.parse::<usize>() {
                         Ok(number) if (1..=count).contains(&number) => {
-                            self.go(number - 1, window, cx)
+                            self.jump(number - 1, None, window, cx)
                         }
                         _ => self.unavailable_reason(
                             "No such page",

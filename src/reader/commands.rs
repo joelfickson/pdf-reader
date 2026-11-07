@@ -65,6 +65,14 @@ pub(super) fn modifier() -> &'static str {
     }
 }
 
+pub(super) fn back_forward() -> String {
+    if cfg!(target_os = "macos") {
+        "Cmd [ ]".into()
+    } else {
+        "Alt Left Right".into()
+    }
+}
+
 impl Command {
     pub const ALL: [Command; 28] = [
         Self::GoToPage,
@@ -267,7 +275,7 @@ impl Reader {
         self.chrome.overlay = Overlay::None;
         self.chrome.input = super::chrome::Input::None;
         match entry {
-            Entry::Page(page) => self.go(page, window, cx),
+            Entry::Page(page) => self.jump(page, None, window, cx),
             Entry::Tab(index) => self.activate_tab(index, window, cx),
             Entry::Command(command) => self.run_command(command, window, cx),
         }

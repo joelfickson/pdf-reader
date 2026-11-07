@@ -226,7 +226,7 @@ impl Reader {
                                     .gap(px(6.0))
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.go(index, window, cx)
+                                        this.jump(index, None, window, cx)
                                     }))
                                     .child(
                                         div()

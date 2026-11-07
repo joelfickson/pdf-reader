@@ -76,6 +76,7 @@ impl Reader {
                 tab.scroll.set_offset(offset);
             }
         }
+        self.reveal_anchor();
         let render_page = self.image_key.as_ref() != Some(&view);
         let extract_text = self.text.is_none();
         self.last_request = Some((view.clone(), visible));

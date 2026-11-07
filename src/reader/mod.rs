@@ -5,6 +5,7 @@ mod commands;
 mod handlers;
 mod history;
 mod images;
+mod jumps;
 mod navigation;
 #[cfg(debug_assertions)]
 mod preview;
@@ -16,7 +17,10 @@ mod tabs;
 mod tests;
 mod view;
 
-use crate::pdf::{Event, ViewKey, Worker, text::PageText};
+use crate::pdf::{
+    Event, ViewKey, Worker,
+    text::{Link, PageText},
+};
 use crate::recent::RecentFiles;
 use crate::ui::theme::Theme;
 pub(crate) use actions::*;
@@ -53,6 +57,7 @@ pub(crate) struct Reader {
     search: Option<search::SearchState>,
     reveal: bool,
     recent: RecentFiles,
+    pressed_link: Option<Link>,
 }
 
 impl Reader {
@@ -127,6 +132,7 @@ impl Reader {
             search: None,
             reveal: false,
             recent,
+            pressed_link: None,
         };
         reader.notice = recent_error;
         cx.set_menus(crate::app::menus(reader.recent.entries()));
@@ -169,6 +175,7 @@ impl Reader {
                         self.image = Some(image);
                         self.image_key = Some(view);
                         self.reveal_match();
+                        self.reveal_anchor();
                         #[cfg(debug_assertions)]
                         self.preview_after_page(window, cx);
                     }
@@ -180,8 +187,9 @@ impl Reader {
                     self.text = Some(text.clone());
                     self.texts.insert(key, text);
                     self.reveal_match();
+                    self.reveal_anchor();
                     #[cfg(debug_assertions)]
-                    self.preview_after_text(cx);
+                    self.preview_after_text(window, cx);
                 }
             }
             Event::Thumbnail { page, raster, .. } => match PageImage::new(raster) {

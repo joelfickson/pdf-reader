@@ -1,6 +1,10 @@
 use super::super::Reader;
+use crate::pdf::text::TextRect;
 use crate::ui::kit::clickable;
-use gpui::{Bounds, Context, IntoElement, MouseButton, canvas, img, point, prelude::*, px, size};
+use gpui::{
+    Bounds, Context, CursorStyle, HitboxBehavior, IntoElement, MouseButton, Pixels, canvas, img,
+    point, prelude::*, px, size,
+};
 use std::ops::Range;
 
 impl Reader {
@@ -9,7 +13,9 @@ impl Reader {
         if let Some(image) = &self.image {
             let theme = self.chrome.theme;
             let mut rects = Vec::new();
+            let mut links = Vec::new();
             if let Some(Ok(text)) = &self.text {
+                links.extend(text.links.iter().map(|link| link.bounds));
                 let glyphs = |range: Range<usize>| {
                     text.glyphs
                         .get(range.start.min(text.glyphs.len())..range.end.min(text.glyphs.len()))
@@ -46,29 +52,50 @@ impl Reader {
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
-                        this.select_at(event.position, this.page_bounds.get(), true, window, cx);
+                        this.pressed_link = this.link_at(event.position);
+                        if this.pressed_link.is_some() {
+                            this.focus.focus(window);
+                        } else {
+                            this.select_at(
+                                event.position,
+                                this.page_bounds.get(),
+                                true,
+                                window,
+                                cx,
+                            );
+                        }
                         cx.stop_propagation();
+                    }),
+                )
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
+                        if let Some(pressed) = this.pressed_link.take()
+                            && this.link_at(event.position).as_ref() == Some(&pressed)
+                        {
+                            this.follow_link(pressed, window, cx);
+                        }
                     }),
                 )
                 .child(img(image.image.clone()).size_full().rounded(px(2.0)))
                 .child(
                     canvas(
-                        move |bounds, _, _| {
+                        move |bounds, window, _| {
                             page_bounds.set(bounds);
+                            links
+                                .iter()
+                                .map(|rect| {
+                                    window
+                                        .insert_hitbox(place(bounds, rect), HitboxBehavior::Normal)
+                                })
+                                .collect::<Vec<_>>()
                         },
-                        move |bounds, _, window, _| {
+                        move |bounds, hitboxes, window, _| {
                             for (rect, color) in rects {
-                                let highlight = Bounds::new(
-                                    point(
-                                        bounds.origin.x + bounds.size.width * rect.left,
-                                        bounds.origin.y + bounds.size.height * rect.top,
-                                    ),
-                                    size(
-                                        bounds.size.width * (rect.right - rect.left),
-                                        bounds.size.height * (rect.bottom - rect.top),
-                                    ),
-                                );
-                                window.paint_quad(gpui::fill(highlight, color));
+                                window.paint_quad(gpui::fill(place(bounds, &rect), color));
+                            }
+                            for hitbox in &hitboxes {
+                                window.set_cursor_style(CursorStyle::PointingHand, hitbox);
                             }
                         },
                     )
@@ -79,4 +106,17 @@ impl Reader {
         }
         page
     }
+}
+
+fn place(bounds: Bounds<Pixels>, rect: &TextRect) -> Bounds<Pixels> {
+    Bounds::new(
+        point(
+            bounds.origin.x + bounds.size.width * rect.left,
+            bounds.origin.y + bounds.size.height * rect.top,
+        ),
+        size(
+            bounds.size.width * (rect.right - rect.left),
+            bounds.size.height * (rect.bottom - rect.top),
+        ),
+    )
 }
