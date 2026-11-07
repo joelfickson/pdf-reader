@@ -131,6 +131,7 @@ Source is organized by responsibility:
 src/
   main.rs             Entry point that dispatches the parsed command
   cli.rs              Command-line parsing (paths, --check, --version, and mcp)
+  bench.rs            Launch-to-first-page timing, enabled by PDF_READER_BENCH
   app.rs              Window startup, native menus, key bindings
   reader/
     mod.rs            Window state, worker event handling, shared caches
@@ -141,6 +142,7 @@ src/
     navigation.rs     File picking, tab lifecycle, page and zoom actions
     scheduling.rs     Cached view lookup and worker requests
     selection.rs      Selection ranges and clipboard actions
+    jumps.rs          Link following and per-tab back and forward history
     search.rs         Find bar state, stepping between matches, revealing results
     tests.rs          GPUI interaction regression tests
     view/             Tab strip, toolbar, sidebar, canvas, and text highlights
@@ -148,7 +150,7 @@ src/
     mod.rs            Render requests, results, and rasterization
     library.rs        Native PDFium discovery and loading
     worker.rs         Background scheduling and bounded document handles
-    text.rs           Character extraction, coordinates, and hit testing
+    text.rs           Character and link extraction, coordinates, and hit testing
     search.rs         Case-folded, cross-line matching over page characters
     tools.rs          Transport-independent document info, outline, text ranges, and search
   mcp/
@@ -186,6 +188,15 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
 The ignored test exercises the native PDF engine and requires the setup script. The check command reports engine initialization, document parsing, first-page rendering, and bitmap size for the supplied file. It does not measure time until the GUI presents the page or total process memory.
+
+To measure time from launch to the first painted page and peak memory, build a release binary and run:
+
+```sh
+cargo build --release
+uv run scripts/bench_first_page.py --runs 5 path/to/extra.pdf
+```
+
+It generates 500- and 2,000-page PDFs, launches the reader once per run with `PDF_READER_BENCH=first-page` (the app prints stage times and quits after the first painted page), and points `HOME` and `APPDATA` at a temporary folder so your Recent list is not used or changed. Each launch briefly opens a window.
 
 The sample PDF is original test content, reproducible with `uv run scripts/create_sample.py`. GitHub Actions is configured to build and test on Mac and Windows. Windows runtime behavior still requires testing on a Windows machine.
 

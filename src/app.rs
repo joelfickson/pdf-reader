@@ -189,6 +189,7 @@ pub(crate) fn run(paths: Vec<PathBuf>) -> anyhow::Result<()> {
         }
     });
     application.run(move |cx: &mut App| {
+        crate::bench::mark("app_ready");
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.set_menus(menus(&[]));
         cx.bind_keys(bindings());
@@ -216,6 +217,7 @@ pub(crate) fn run(paths: Vec<PathBuf>) -> anyhow::Result<()> {
             },
             |window, cx| cx.new(|cx| Reader::new(paths, worker, events, window, cx)),
         );
+        crate::bench::mark("window_opened");
         let window = match opened {
             Ok(window) => window,
             Err(error) => {

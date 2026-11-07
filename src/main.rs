@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod app;
+mod bench;
 mod cli;
 mod mcp;
 mod pdf;
@@ -11,6 +12,7 @@ mod ui;
 use cli::Command;
 
 fn main() -> anyhow::Result<()> {
+    bench::start();
     match cli::parse(std::env::args_os().skip(1))? {
         Command::Open(paths) => app::run(paths),
         Command::Check(path) => pdf::inspect(&path),

@@ -262,6 +262,7 @@ fn render_job<'a>(
 ) -> Result<()> {
     let generation = job.generation;
     let document = document(engine, documents, job.view.session, &job.path)?;
+    crate::bench::mark("document_open");
     if !current() {
         return Ok(());
     }
@@ -279,7 +280,9 @@ fn render_job<'a>(
             .map_or(job.view.available_width as f32, |zoom| {
                 base_width * zoom as f32 / 100.0
             });
+        crate::bench::mark("render_start");
         let raster = render(&page, logical_width, job.view.scale as f32 / 100.0, 4096)?;
+        crate::bench::mark("render_done");
         if current() {
             sender.send_blocking(Event::Page {
                 generation,
