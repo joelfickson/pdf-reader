@@ -72,6 +72,14 @@ def main():
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": version,
         "CFBundleVersion": version,
+        "CFBundleDocumentTypes": [
+            {
+                "CFBundleTypeName": "PDF Document",
+                "CFBundleTypeRole": "Viewer",
+                "LSHandlerRank": "Alternate",
+                "LSItemContentTypes": ["com.adobe.pdf"],
+            }
+        ],
         "NSHighResolutionCapable": True,
         "NSPrincipalClass": "NSApplication",
     }

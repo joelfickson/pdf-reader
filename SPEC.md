@@ -6,12 +6,14 @@ Build an open-source desktop PDF reader for macOS and Windows using Rust, GPUI, 
 
 ## Implemented scope
 
-- Open multiple local PDFs through the native file picker or external file drops.
+- Open multiple local PDFs through the native file picker, external file drops, the command line, or Finder (Open With, and double-click when PDF Reader is the default viewer). On macOS the bundle declares PDF as a viewable document type, and files sent while the app is running open as tabs in the existing window.
+- Remember up to 20 recently opened files with their last page and zoom, restore both on reopen (clamping to the last page if the file has shrunk), and list them in File > Open Recent and on the empty screen. Files that no longer exist are removed when chosen. The list is stored locally in `recent.tsv` under Application Support (macOS) or `%APPDATA%` (Windows), separately for debug and release builds, and is written atomically on open, tab switch, tab close, and quit.
 - Show documents in tabs and focus an existing tab when its canonical path is reopened.
 - Preserve each tab's page, zoom, canvas scroll, and sidebar scroll position.
 - Display one page at a time with previous/next navigation, zoom, and fit-to-width.
 - Provide a collapsible virtualized thumbnail sidebar.
 - Select text on the current page by dragging; copy with the toolbar or platform shortcut.
+- Go to a page with Cmd G (Ctrl G on Windows) or the page field, and to the first or last page with Home and End or Cmd Home and Cmd End.
 - Support select-all on the current page and Escape to clear selection.
 - Search the whole document from the find bar (Cmd F, Ctrl F on Windows): case-insensitive by default, with Match case and Whole word options. Matches span line breaks and fold Unicode case. Enter and Shift+Enter, the arrow keys, or the bar's buttons step between matches and move to their page. Matches on the visible page are highlighted, the bar shows the position ("3 of 41"), and the Results panel lists matches by page with surrounding text.
 - Transform text geometry to match rotated pages and preserve Unicode and line breaks when copying.
@@ -35,7 +37,9 @@ Use a warm neutral canvas, compact toolbar and tab strip, blue interaction accen
 
 ## Validation
 
-Formatting, strict Clippy, and 33 tests (2 of them PDFium-backed and ignored by default) pass locally on macOS. Tests cover bounded caches, request cancellation, document-handle reuse and eviction, malformed-file recovery, Unicode text, rotated geometry overlapping rendered ink, image-only pages, and search matching (line breaks, Unicode case, whole word, match case, limits) against both synthetic text and the PDFium fixture, including a page render submitted mid-search. GPUI interaction tests cover the external-drop event route, path filtering and deduplication, selection and clipboard actions, stale-event rejection, cached and uncached tab scroll restoration, tab closing, and the find flow (debounced search, stale-result rejection, stepping and wrapping between matches, option changes, and clearing on close).
+Formatting, strict Clippy, and 41 tests (2 of them PDFium-backed and ignored by default) pass locally on macOS. Tests cover bounded caches, request cancellation, document-handle reuse and eviction, malformed-file recovery, Unicode text, rotated geometry overlapping rendered ink, image-only pages, and search matching (line breaks, Unicode case, whole word, match case, limits) against both synthetic text and the PDFium fixture, including a page render submitted mid-search. GPUI interaction tests cover the external-drop event route, path filtering and deduplication, selection and clipboard actions, stale-event rejection, cached and uncached tab scroll restoration, tab closing, the find flow (debounced search, stale-result rejection, stepping and wrapping between matches, option changes, and clearing on close), and recent files (position restore, clamping, recording on close, pruning missing files, clearing). Unit tests cover the recent-file store (ordering, cap, round trip, malformed lines, unreadable store), file URL decoding, and the Open Recent menu.
+
+The installed macOS release bundle appears in Open With for PDFs. Opening a PDF through Launch Services (`open -a`, which sends the same open-documents event as Finder) opened it when the app was closed, and opened a second file as a new tab in the same process while it was running. Quitting wrote `recent.tsv`, a relaunch listed both files under Recent, and reopening a file with a stored position restored page 3 at 125 percent. Double-clicking was not tested, because it requires making PDF Reader the default PDF viewer.
 
 The packaged macOS engine opens and renders the authored fixtures. Full native interaction verification for the tabs/selection build remains incomplete because desktop automation loses window access after the native picker closes. Windows runtime validation is pending. CI is configured for macOS and Windows; compilation and unit tests alone do not establish Windows runtime behavior.
 

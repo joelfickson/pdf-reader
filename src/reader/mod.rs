@@ -3,6 +3,7 @@ mod cache;
 mod chrome;
 mod commands;
 mod handlers;
+mod history;
 mod images;
 mod navigation;
 #[cfg(debug_assertions)]
@@ -16,6 +17,7 @@ mod tests;
 mod view;
 
 use crate::pdf::{Event, ViewKey, Worker, text::PageText};
+use crate::recent::RecentFiles;
 use crate::ui::theme::Theme;
 pub(crate) use actions::*;
 use cache::PageCache;
@@ -50,6 +52,7 @@ pub(crate) struct Reader {
     chrome: Chrome,
     search: Option<search::SearchState>,
     reveal: bool,
+    recent: RecentFiles,
 }
 
 impl Reader {
@@ -83,6 +86,18 @@ impl Reader {
             cx.notify();
         })
         .detach();
+        cx.on_app_quit(|this, cx| {
+            this.persist_recent(cx);
+            async {}
+        })
+        .detach();
+        let (recent, recent_error) = match RecentFiles::load() {
+            Ok(recent) => (recent, None),
+            Err(error) => (
+                RecentFiles::default(),
+                Some(format!("Recent files could not be loaded. {error:#}")),
+            ),
+        };
         let theme = Theme::resolve(Default::default(), window.appearance());
         let focus = cx.focus_handle();
         focus.focus(window);
@@ -111,7 +126,10 @@ impl Reader {
             chrome: Chrome::new(theme),
             search: None,
             reveal: false,
+            recent,
         };
+        reader.notice = recent_error;
+        cx.set_menus(crate::app::menus(reader.recent.entries()));
         #[cfg(debug_assertions)]
         reader.preview_theme(window, cx);
         reader.open_paths(paths, window, cx);
@@ -131,7 +149,14 @@ impl Reader {
             return;
         };
         match event {
-            Event::Metadata { count, .. } => tab.count = count,
+            Event::Metadata { count, .. } => {
+                tab.count = count;
+                if tab.page >= count {
+                    tab.page = count.saturating_sub(1);
+                    self.reset_request(window);
+                    self.request(window);
+                }
+            }
             Event::Page { view, raster, .. } => {
                 self.busy = false;
                 match PageImage::new(raster) {

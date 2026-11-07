@@ -51,9 +51,20 @@ impl Reader {
                     Some("Only PDF files can be opened. Other items were skipped.".into());
                 continue;
             }
-            target = Some(self.tabs.open(path));
+            let existing = self.tabs.entries.len();
+            let index = self.tabs.open(path);
+            let opened = self.tabs.entries.len() > existing;
+            let tab = &mut self.tabs.entries[index];
+            if opened && let Some(entry) = self.recent.get(&tab.path) {
+                tab.page = entry.page;
+                tab.zoom = entry.zoom;
+            }
+            let path = tab.path.clone();
+            self.recent.touch(&path);
+            target = Some(index);
         }
         if let Some(index) = target {
+            self.persist_recent(cx);
             self.activate_tab(index, window, cx);
         }
         cx.notify();
@@ -73,6 +84,7 @@ impl Reader {
         {
             tab.restore_scroll = Some(tab.scroll.offset());
         }
+        self.sync_recent();
         self.reset_request(window);
         self.tabs.active = index;
         self.clear_search();
@@ -90,6 +102,7 @@ impl Reader {
         if index >= self.tabs.entries.len() {
             return;
         }
+        self.sync_recent();
         let active = index == self.tabs.active;
         if active {
             self.reset_request(window);
@@ -112,6 +125,7 @@ impl Reader {
                 self.notice = None;
             }
         }
+        self.persist_recent(cx);
         cx.notify();
     }
 

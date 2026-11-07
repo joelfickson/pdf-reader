@@ -6,7 +6,7 @@ A fast, native PDF reader for macOS and Windows, built with Rust, GPUI, and PDFi
 
 Website and downloads: <https://agentic-pdf-eta.vercel.app>
 
-This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, and searching the whole document. OCR, annotations, password entry, editing, and the agent panel are not implemented yet. The app is still named PDF Reader in its bundle and menus.
+This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, searching the whole document, opening PDFs from Finder, and reopening recent files at the page and zoom you left them. OCR, annotations, password entry, editing, and the agent panel are not implemented yet. The app is still named PDF Reader in its bundle and menus.
 
 ## Run
 
@@ -61,7 +61,7 @@ The app looks for the PDFium library using `PDFIUM_LIBRARY_PATH`, next to its ex
 | Find in document | Command+F | Ctrl+F |
 | Next / previous match | Enter / Shift+Enter | Enter / Shift+Enter |
 | Go to page | Command+G | Ctrl+G |
-| First / last page | Home / End | Home / End |
+| First / last page | Home / End, Command+Home / Command+End | Home / End, Ctrl+Home / Ctrl+End |
 | Command palette | Command+K | Ctrl+K |
 | Close active tab | Command+W | Ctrl+W |
 | Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab | Ctrl+Tab / Ctrl+Shift+Tab |

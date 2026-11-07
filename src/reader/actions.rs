@@ -1,4 +1,5 @@
-use gpui::actions;
+use gpui::{Action, actions};
+use std::path::PathBuf;
 
 actions!(
     reader,
@@ -33,6 +34,13 @@ actions!(
         ToggleSplit,
         TogglePresent,
         FirstPage,
-        LastPage
+        LastPage,
+        ClearRecent
     ]
 );
+
+#[derive(Clone, PartialEq, Debug, Action)]
+#[action(namespace = reader, no_json)]
+pub(crate) struct OpenRecent {
+    pub path: PathBuf,
+}
