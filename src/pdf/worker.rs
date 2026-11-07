@@ -307,6 +307,12 @@ fn render_job<'a>(
             })?;
         }
     }
+    if job.outline && current() {
+        sender.send_blocking(Event::Outline {
+            session: job.view.session,
+            outline: Arc::new(super::tools::outline(document)),
+        })?;
+    }
     for index in job.thumbnails {
         if !current() {
             break;
@@ -484,6 +490,7 @@ mod tests {
             render_page: true,
             extract_text: false,
             thumbnails: vec![],
+            outline: false,
         });
         let (mut rendered, mut finished) = (false, false);
         while !(rendered && finished) {
@@ -540,6 +547,7 @@ mod tests {
             render_page: true,
             extract_text: true,
             thumbnails: vec![0, 2],
+            outline: false,
         };
         let receive = || {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -719,6 +727,7 @@ mod tests {
                 render_page: true,
                 extract_text: true,
                 thumbnails: vec![],
+                outline: false,
             });
         }
         let pending = queue.pending.lock();
