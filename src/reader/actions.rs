@@ -35,7 +35,9 @@ actions!(
         TogglePresent,
         FirstPage,
         LastPage,
-        ClearRecent
+        ClearRecent,
+        GoBack,
+        GoForward
     ]
 );
 

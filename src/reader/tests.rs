@@ -1,7 +1,7 @@
 use super::*;
 use crate::pdf::{
     Raster,
-    text::{Glyph, PageText, TextRect},
+    text::{Geometry, Glyph, Link, LinkTarget, PageText, TextRect},
 };
 use gpui::{ExternalPaths, FileDropEvent, MouseButton, TestAppContext, point, px};
 
@@ -71,6 +71,8 @@ fn drop_selection_clipboard_and_tabs(cx: &mut TestAppContext) {
                     generation,
                     key: (view.session, 0),
                     text: Ok(Arc::new(PageText {
+                        links: Vec::new(),
+                        geometry: Geometry::UNIT,
                         glyphs: "Café"
                             .chars()
                             .enumerate()
@@ -500,6 +502,8 @@ fn load_document(
             generation,
             key: (view.session, 0),
             text: Ok(Arc::new(PageText {
+                links: Vec::new(),
+                geometry: Geometry::UNIT,
                 glyphs: "Selected words on the page"
                     .chars()
                     .enumerate()
@@ -681,4 +685,152 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
             });
         }
     }
+}
+
+fn link_page(links: Vec<Link>) -> TextResult {
+    Ok(Arc::new(PageText {
+        glyphs: Vec::new(),
+        links,
+        geometry: Geometry::UNIT,
+    }))
+}
+
+#[gpui::test]
+fn links_jump_and_back_forward_retrace_each_tab(cx: &mut TestAppContext) {
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let rect = |top: f32| TextRect {
+        left: 0.1,
+        top,
+        right: 0.4,
+        bottom: top + 0.05,
+    };
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 9);
+            let generation = reader.generation;
+            let session = reader.tabs.current().unwrap().session;
+            reader.receive(
+                Event::Text {
+                    generation,
+                    key: (session, 0),
+                    text: link_page(vec![
+                        Link {
+                            bounds: rect(0.5),
+                            target: LinkTarget::Page {
+                                index: 6,
+                                anchor: Some((0.0, 0.25)),
+                            },
+                        },
+                        Link {
+                            bounds: rect(0.6),
+                            target: LinkTarget::Uri("javascript:alert(1)".into()),
+                        },
+                    ]),
+                },
+                window,
+                cx,
+            );
+        })
+    });
+    cx.run_until_parked();
+    let click = |cx: &mut gpui::VisualTestContext, y: f32| {
+        let bounds = cx.read(|cx| reader.read(cx).page_bounds.get());
+        assert!(bounds.size.width > px(0.0));
+        let at = bounds.origin + point(bounds.size.width * 0.25, bounds.size.height * y);
+        cx.simulate_mouse_down(at, MouseButton::Left, Default::default());
+        cx.simulate_mouse_up(at, MouseButton::Left, Default::default());
+    };
+    let page = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| reader.read(cx).tabs.current().unwrap().page)
+    };
+
+    click(cx, 0.625);
+    assert_eq!(page(cx), 0);
+    assert_eq!(
+        cx.read(|cx| reader
+            .read(cx)
+            .chrome
+            .toast
+            .as_ref()
+            .unwrap()
+            .title
+            .to_string()),
+        "This link was not opened"
+    );
+
+    click(cx, 0.525);
+    assert_eq!(page(cx), 6);
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            assert!(reader.selection.is_none());
+            let generation = reader.generation;
+            let view = reader.last_request.as_ref().unwrap().0.clone();
+            reader.receive(
+                Event::Page {
+                    generation,
+                    view: view.clone(),
+                    raster: Raster {
+                        bytes: vec![255; 400 * 1200 * 4],
+                        width: 400,
+                        height: 1200,
+                        logical_width: 400.0,
+                        logical_height: 1200.0,
+                        zoom_percent: 100.0,
+                    },
+                },
+                window,
+                cx,
+            );
+            assert!(reader.tabs.current().unwrap().pending_anchor.is_some());
+            reader.receive(
+                Event::Text {
+                    generation,
+                    key: (view.session, 6),
+                    text: link_page(Vec::new()),
+                },
+                window,
+                cx,
+            );
+            let tab = reader.tabs.current().unwrap();
+            assert!(tab.pending_anchor.is_none());
+            assert_eq!(tab.scroll.offset().y, px(-(28.0 + 0.75 * 1200.0 - 16.0)));
+        })
+    });
+
+    cx.dispatch_action(GoBack);
+    assert_eq!(page(cx), 0);
+    cx.dispatch_action(GoBack);
+    assert_eq!(page(cx), 0);
+    cx.dispatch_action(GoForward);
+    assert_eq!(page(cx), 6);
+    cx.dispatch_action(GoBack);
+    cx.dispatch_action(LastPage);
+    assert_eq!(page(cx), 8);
+    cx.dispatch_action(GoForward);
+    assert_eq!(page(cx), 8);
+    cx.dispatch_action(GoBack);
+    assert_eq!(page(cx), 0);
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            reader.open_paths(vec![root.join("tests/fixtures/selection.pdf")], window, cx);
+            let generation = reader.generation;
+            reader.receive(
+                Event::Metadata {
+                    generation,
+                    count: 3,
+                },
+                window,
+                cx,
+            );
+        })
+    });
+    cx.dispatch_action(GoBack);
+    assert_eq!(page(cx), 0);
+    cx.dispatch_action(PreviousTab);
+    cx.dispatch_action(GoForward);
+    assert_eq!(page(cx), 8);
 }

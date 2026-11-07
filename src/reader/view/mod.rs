@@ -117,6 +117,8 @@ impl Render for Reader {
             .on_action(cx.listener(Self::next))
             .on_action(cx.listener(Self::first_page))
             .on_action(cx.listener(Self::last_page))
+            .on_action(cx.listener(Self::go_back))
+            .on_action(cx.listener(Self::go_forward))
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::fit))

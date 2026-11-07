@@ -1,7 +1,7 @@
 use super::super::{
     Reader,
     chrome::{Input, Overlay},
-    commands::{Entry, modifier},
+    commands::{Entry, back_forward, modifier},
 };
 use super::floating::field;
 use crate::ui::{
@@ -773,6 +773,7 @@ impl Reader {
                     ("Go to page", format!("{m} G")),
                     ("Next or previous page", "Right Left".into()),
                     ("First or last page", "Home End".into()),
+                    ("Back or forward", back_forward()),
                     ("Next or previous tab", "Ctrl Tab".into()),
                     ("Open", format!("{m} O")),
                 ],

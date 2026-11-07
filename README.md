@@ -108,6 +108,7 @@ The PDF content only leaves your computer if the agent you use sends it to its m
 | Next / previous match | Enter / Shift+Enter | Enter / Shift+Enter |
 | Go to page | Command+G | Ctrl+G |
 | First / last page | Home / End, Command+Home / Command+End | Home / End, Ctrl+Home / Ctrl+End |
+| Back / forward | Command+[ / Command+] | Alt+Left / Alt+Right |
 | Command palette | Command+K | Ctrl+K |
 | Close active tab | Command+W | Ctrl+W |
 | Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab | Ctrl+Tab / Ctrl+Shift+Tab |
@@ -116,7 +117,7 @@ The PDF content only leaves your computer if the agent you use sends it to its m
 | Clear selection | Escape | Escape |
 | Quit | Command+Q | Ctrl+Q |
 
-Click a sidebar thumbnail to jump to that page. Use the scroll wheel or trackpad to move within a page. Drop one or several PDFs anywhere in the window to open them in tabs. Reopening the same path focuses its existing tab. Each tab retains its page, zoom, and scroll position. Closing the final tab returns to the empty reader; the close shortcut from an empty reader closes the window.
+Click a sidebar thumbnail to jump to that page. Links inside a PDF go to their target page and position; web and email links open in your browser or mail app, and other link types are not opened. Back and forward retrace jumps from links, go to page, first and last page, the command palette, and thumbnails. Each tab keeps its own history. Use the scroll wheel or trackpad to move within a page. Drop one or several PDFs anywhere in the window to open them in tabs. Reopening the same path focuses its existing tab. Each tab retains its page, zoom, and scroll position. Closing the final tab returns to the empty reader; the close shortcut from an empty reader closes the window.
 
 Search runs on the background PDF thread and lists every match in the Results panel. It folds case and accents unless Match case is on, matches phrases across line breaks, and supports whole words. Matches on the visible page are highlighted.
 

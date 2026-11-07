@@ -56,7 +56,23 @@ def add_outline(objects, page_refs, outline):
     objects[0] = f"<< /Type /Catalog /Pages 2 0 R /Outlines {root_id} 0 R /PageMode /UseOutlines >>".encode()
 
 
-def create_pdf(destination, pages, rotations=(), blank_pages=(), outline=()):
+def add_links(objects, page_refs, links):
+    annotations = {}
+    for page, rect, target in links:
+        if target[0] == "page":
+            _, index, top = target
+            action = f"/Dest [{page_refs[index]} /XYZ 0 {top} null]" if top is not None else f"/Dest [{page_refs[index]} /Fit]"
+        else:
+            action = f"/A << /S /URI /URI ({escape(target[1])}) >>"
+        objects.append(f"<< /Type /Annot /Subtype /Link /Rect [{' '.join(str(value) for value in rect)}] /Border [0 0 0] {action} >>".encode())
+        annotations.setdefault(page, []).append(f"{len(objects)} 0 R")
+    for page, refs in annotations.items():
+        page_id = int(page_refs[page].split()[0])
+        body = objects[page_id - 1]
+        objects[page_id - 1] = body[:-3] + f" /Annots [{' '.join(refs)}] >>".encode()
+
+
+def create_pdf(destination, pages, rotations=(), blank_pages=(), outline=(), links=()):
     objects = [b"<< /Type /Catalog /Pages 2 0 R >>", b"", b"<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>", b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"]
     children = []
     for index, (title, subtitle, lines) in enumerate(pages):
@@ -76,6 +92,8 @@ def create_pdf(destination, pages, rotations=(), blank_pages=(), outline=()):
     objects[1] = f"<< /Type /Pages /Kids [{' '.join(children)}] /Count {len(children)} >>".encode()
     if outline:
         add_outline(objects, children, outline)
+    if links:
+        add_links(objects, children, links)
     output = bytearray(b"%PDF-1.4\n")
     offsets = [0]
     for index, body in enumerate(objects, 1):
@@ -112,5 +130,20 @@ if __name__ == "__main__":
             ("Part one: attention", 0, [("Begin with the page", 0, [])]),
             ("Part two: margins", 1, [("Leave room in the margins", 1, []), ("Find your own pace", 1, [])]),
             ("Keep what helps you read", 2, []),
+        ],
+    )
+
+    create_pdf(
+        Path(__file__).resolve().parent.parent / "tests/fixtures/links.pdf",
+        [
+            ("Links", "Internal and web links", ["Go to the last page", "Visit example.com"]),
+            ("Rotated links", "Links follow the page rotation", ["Back to the first page"]),
+            ("The last page", "A link target", ["", "", "", "", "", "", "", "", "", "You arrived here from a link."]),
+        ],
+        rotations=(0, 90, 0),
+        links=[
+            (0, [64, 520, 260, 540], ("page", 2, 340)),
+            (0, [64, 499, 260, 519], ("uri", "https://example.com/")),
+            (1, [64, 520, 260, 540], ("page", 0, None)),
         ],
     )

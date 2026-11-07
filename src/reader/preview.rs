@@ -89,10 +89,24 @@ impl Reader {
         cx.notify();
     }
 
-    pub(super) fn preview_after_text(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn preview_after_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(state) = requested() else {
             return;
         };
+        if state == "follow-link" {
+            let link =
+                self.text.as_ref().and_then(|text| {
+                    text.as_ref().ok()?.links.iter().find(|link| {
+                        matches!(link.target, crate::pdf::text::LinkTarget::Page { .. })
+                    })
+                });
+            if let Some(link) = link.cloned()
+                && !SELECTED.swap(true, Ordering::SeqCst)
+            {
+                self.follow_link(link, window, cx);
+            }
+            return;
+        }
         if !matches!(state.as_str(), "selection" | "inspector-selection") {
             return;
         }

@@ -1,0 +1,107 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 0 /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R /Annots [11 0 R 12 0 R] >>
+endobj
+6 0 obj
+<< /Length 387 >>
+stream
+0.16 0.18 0.17 rg
+BT /F2 9 Tf 64 724 Td (NOTES ON EVERYDAY THINGS) Tj ET
+0.82 0.83 0.80 RG 64 708 m 548 708 l S
+BT /F1 30 Tf 64 632 Td (Links) Tj ET
+BT /F1 19 Tf 64 573 Td (Internal and web links) Tj ET
+BT /F1 13 Tf 21 TL 64 525 Td
+(Go to the last page) Tj T*
+(Visit example.com) Tj T*
+ET
+0.16 0.34 0.64 rg 64 248 80 5 re f
+BT /F2 10 Tf 64 52 Td (PDF Reader sample) Tj 460 0 Td (1) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 90 /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 8 0 R /Annots [13 0 R] >>
+endobj
+8 0 obj
+<< /Length 380 >>
+stream
+0.16 0.18 0.17 rg
+BT /F2 9 Tf 64 724 Td (NOTES ON EVERYDAY THINGS) Tj ET
+0.82 0.83 0.80 RG 64 708 m 548 708 l S
+BT /F1 30 Tf 64 632 Td (Rotated links) Tj ET
+BT /F1 19 Tf 64 573 Td (Links follow the page rotation) Tj ET
+BT /F1 13 Tf 21 TL 64 525 Td
+(Back to the first page) Tj T*
+ET
+0.16 0.34 0.64 rg 64 248 80 5 re f
+BT /F2 10 Tf 64 52 Td (PDF Reader sample) Tj 460 0 Td (2) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate 0 /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 10 0 R >>
+endobj
+10 0 obj
+<< /Length 451 >>
+stream
+0.16 0.18 0.17 rg
+BT /F2 9 Tf 64 724 Td (NOTES ON EVERYDAY THINGS) Tj ET
+0.82 0.83 0.80 RG 64 708 m 548 708 l S
+BT /F1 30 Tf 64 632 Td (The last page) Tj ET
+BT /F1 19 Tf 64 573 Td (A link target) Tj ET
+BT /F1 13 Tf 21 TL 64 525 Td
+() Tj T*
+() Tj T*
+() Tj T*
+() Tj T*
+() Tj T*
+() Tj T*
+() Tj T*
+() Tj T*
+() Tj T*
+(You arrived here from a link.) Tj T*
+ET
+0.16 0.34 0.64 rg 64 248 80 5 re f
+BT /F2 10 Tf 64 52 Td (PDF Reader sample) Tj 460 0 Td (3) Tj ET
+endstream
+endobj
+11 0 obj
+<< /Type /Annot /Subtype /Link /Rect [64 520 260 540] /Border [0 0 0] /Dest [9 0 R /XYZ 0 340 null] >>
+endobj
+12 0 obj
+<< /Type /Annot /Subtype /Link /Rect [64 499 260 519] /Border [0 0 0] /A << /S /URI /URI (https://example.com/) >> >>
+endobj
+13 0 obj
+<< /Type /Annot /Subtype /Link /Rect [64 520 260 540] /Border [0 0 0] /Dest [5 0 R /Fit] >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000226 00000 n 
+0000000323 00000 n 
+0000000493 00000 n 
+0000000931 00000 n 
+0000001095 00000 n 
+0000001526 00000 n 
+0000001673 00000 n 
+0000002176 00000 n 
+0000002295 00000 n 
+0000002429 00000 n 
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+2537
+%%EOF
