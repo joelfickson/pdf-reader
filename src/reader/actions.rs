@@ -37,7 +37,8 @@ actions!(
         LastPage,
         ClearRecent,
         GoBack,
-        GoForward
+        GoForward,
+        ToggleAgent
     ]
 );
 

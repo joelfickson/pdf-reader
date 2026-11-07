@@ -21,6 +21,11 @@ impl Reader {
             } else {
                 0.0
             }
+            - if self.agent.open {
+                view::AGENT_WIDTH
+            } else {
+                0.0
+            }
             - view::CANVAS_PADDING * 2.0)
             .max(160.0);
         let view = ViewKey {

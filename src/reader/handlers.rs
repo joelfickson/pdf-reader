@@ -142,7 +142,7 @@ impl Reader {
     pub(super) fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<Self>) {
         if self.chrome.overlay != Overlay::None {
             self.set_overlay(Overlay::None, cx);
-        } else if self.chrome.input == Input::Page {
+        } else if matches!(self.chrome.input, Input::Page | Input::Agent) {
             self.chrome.input = Input::None;
         } else if self.chrome.find_open {
             self.close_find(cx);
@@ -176,6 +176,7 @@ impl Reader {
                     Input::Palette => self.chrome.palette.insert(&line),
                     Input::Find => self.chrome.find.insert(&line),
                     Input::Page => self.chrome.page_input.insert(&line),
+                    Input::Agent => self.agent.composer.insert(&line),
                     Input::None => false,
                 };
                 if edited && self.chrome.input == Input::Palette {
@@ -249,6 +250,11 @@ impl Reader {
                     cx.notify();
                 }
             },
+            Input::Agent => {
+                if self.agent_key(keystroke, cx) {
+                    cx.stop_propagation();
+                }
+            }
             Input::Page => match self.chrome.page_input.handle(keystroke) {
                 FieldKey::Ignored => {}
                 FieldKey::Submit => {

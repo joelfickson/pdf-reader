@@ -84,9 +84,20 @@ impl Reader {
                 self.notice = Some("Only PDF files can be opened. Other items were skipped.".into())
             }
             "no-sidebar" => self.sidebar = false,
+            "agent" | "agent-summary" => {
+                self.toggle_agent(&super::actions::ToggleAgent, window, cx)
+            }
             _ => {}
         }
         cx.notify();
+    }
+
+    pub(super) fn preview_after_agent_ready(&mut self, cx: &mut Context<Self>) {
+        if requested().as_deref() == Some("agent-summary")
+            && self.agent.conversation.entries.is_empty()
+        {
+            self.ask_agent(None, cx);
+        }
     }
 
     pub(super) fn preview_after_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {

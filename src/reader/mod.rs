@@ -1,4 +1,5 @@
 mod actions;
+mod agent;
 mod cache;
 mod chrome;
 mod commands;
@@ -59,6 +60,7 @@ pub(crate) struct Reader {
     reveal: bool,
     recent: RecentFiles,
     pressed_link: Option<Link>,
+    agent: agent::AgentPanel,
 }
 
 impl Reader {
@@ -134,6 +136,7 @@ impl Reader {
             reveal: false,
             recent,
             pressed_link: None,
+            agent: agent::AgentPanel::default(),
         };
         reader.notice = recent_error;
         cx.set_menus(crate::app::menus(reader.recent.entries()));

@@ -69,6 +69,18 @@ cargo run --release -- --version
 | `bitmap_bytes` | Size of the first page's bitmap |
 | `dimensions` | First page bitmap size in pixels |
 
+## Agent panel
+
+Click Agent in the title bar, or press Command+J (Ctrl+J on Windows), to talk to a coding agent you already have about the open PDF. The reader ships no model, keys, or billing: it starts your agent over the [Agent Client Protocol](https://agentclientprotocol.com) and gives it the read-only PDF tools below, so the agent uses your own subscription.
+
+| Agent | Needs | Started with |
+| --- | --- | --- |
+| Claude Code | `claude` and Node.js | `npx -y @agentclientprotocol/claude-agent-acp@0.101.0` |
+| Codex | `codex` and Node.js | `npx -y @zed-industries/codex-acp@0.16.0` |
+| Gemini CLI | `gemini` | `gemini --acp` |
+
+The panel finds agents on your login shell's PATH and starts the first available one. Summarize document asks for a summary that cites pages; you can also type a question about the open page. Page references such as (p. 4) in answers jump to that page. Plans, tool calls, and permission requests from the agent appear in the panel, and Stop cancels a turn. The agent reads the PDF through local tools, then sends what it reads to its own model provider.
+
 ## Use with AI agents (MCP)
 
 `pdf-reader mcp` runs a read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so coding agents such as Claude Code and Codex can read your PDFs. It needs no window and no account.
@@ -104,6 +116,7 @@ The PDF content only leaves your computer if the agent you use sends it to its m
 | Zoom out | Command+- | Ctrl+- |
 | Fit to width | Command+0 | Ctrl+0 |
 | Toggle sidebar | Command+B | Ctrl+B |
+| Agent panel | Command+J | Ctrl+J |
 | Find in document | Command+F | Ctrl+F |
 | Next / previous match | Enter / Shift+Enter | Enter / Shift+Enter |
 | Go to page | Command+G | Ctrl+G |
@@ -132,6 +145,7 @@ src/
   main.rs             Entry point that dispatches the parsed command
   cli.rs              Command-line parsing (paths, --check, --version, and mcp)
   bench.rs            Launch-to-first-page timing, enabled by PDF_READER_BENCH
+  agent/              Agent detection, ACP sessions, and the conversation model
   app.rs              Window startup, native menus, key bindings
   reader/
     mod.rs            Window state, worker event handling, shared caches
@@ -144,6 +158,7 @@ src/
     selection.rs      Selection ranges and clipboard actions
     jumps.rs          Link following and per-tab back and forward history
     outline.rs        Outline tree, reading position, and expanded sections
+    agent.rs          Agent panel state, prompts, and permission replies
     search.rs         Find bar state, stepping between matches, revealing results
     tests.rs          GPUI interaction regression tests
     view/             Tab strip, toolbar, sidebar, canvas, and text highlights

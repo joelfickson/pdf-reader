@@ -785,6 +785,7 @@ impl Reader {
                     ("Fit width", format!("{m} 0")),
                     ("Sidebar", format!("{m} B")),
                     ("Inspector", format!("{m} I")),
+                    ("Agent", format!("{m} J")),
                     ("Close tab", format!("{m} W")),
                     ("Shortcuts", "?".into()),
                 ],
