@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/joelfickson/pdf-reader/security/advisories/new
+    about: Report security issues privately. Do not open a public issue.
+  - name: Agentic PDF website
+    url: https://agentic-pdf-eta.vercel.app
+    about: Downloads, the agent roadmap and the changelog.

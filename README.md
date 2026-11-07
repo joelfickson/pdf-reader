@@ -1,8 +1,12 @@
-# PDF Reader
+# Agentic PDF
 
-A local desktop PDF reader for macOS and Windows, built with Rust, GPUI, and PDFium.
+[![Check](https://github.com/joelfickson/pdf-reader/actions/workflows/check.yml/badge.svg)](https://github.com/joelfickson/pdf-reader/actions/workflows/check.yml) [![Website](https://github.com/joelfickson/pdf-reader/actions/workflows/website.yml/badge.svg)](https://github.com/joelfickson/pdf-reader/actions/workflows/website.yml)
 
-This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, and selecting/copying text. Search, OCR, annotations, password entry, and editing are not implemented.
+A fast, native PDF reader for macOS and Windows, built with Rust, GPUI, and PDFium. Next, the AI agents you already use will read alongside you through the Agent Client Protocol ([issue #18](https://github.com/joelfickson/pdf-reader/issues/18)).
+
+Website and downloads: <https://agentic-pdf-eta.vercel.app>
+
+This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, and searching the whole document. OCR, annotations, password entry, editing, and the agent panel are not implemented yet. The app is still named PDF Reader in its bundle and menus.
 
 ## Run
 
@@ -54,6 +58,11 @@ The app looks for the PDFium library using `PDFIUM_LIBRARY_PATH`, next to its ex
 | Zoom out | Command+- | Ctrl+- |
 | Fit to width | Command+0 | Ctrl+0 |
 | Toggle sidebar | Command+B | Ctrl+B |
+| Find in document | Command+F | Ctrl+F |
+| Next / previous match | Enter / Shift+Enter | Enter / Shift+Enter |
+| Go to page | Command+G | Ctrl+G |
+| First / last page | Home / End | Home / End |
+| Command palette | Command+K | Ctrl+K |
 | Close active tab | Command+W | Ctrl+W |
 | Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab | Ctrl+Tab / Ctrl+Shift+Tab |
 | Copy selected text | Command+C | Ctrl+C |
@@ -62,6 +71,8 @@ The app looks for the PDFium library using `PDFIUM_LIBRARY_PATH`, next to its ex
 | Quit | Command+Q | Ctrl+Q |
 
 Click a sidebar thumbnail to jump to that page. Use the scroll wheel or trackpad to move within a page. Drop one or several PDFs anywhere in the window to open them in tabs. Reopening the same path focuses its existing tab. Each tab retains its page, zoom, and scroll position. Closing the final tab returns to the empty reader; the close shortcut from an empty reader closes the window.
+
+Search runs on the background PDF thread and lists every match in the Results panel. It folds case and accents unless Match case is on, matches phrases across line breaks, and supports whole words. Matches on the visible page are highlighted.
 
 Drag across text to select it, then use the Copy text button or keyboard shortcut. Selection is limited to the current page and follows the PDF's text order. Scanned pages without a text layer require OCR, which is not included. The title bar uses the platform's standard window controls.
 
@@ -82,6 +93,7 @@ src/
     navigation.rs     File picking, tab lifecycle, page and zoom actions
     scheduling.rs     Cached view lookup and worker requests
     selection.rs      Selection ranges and clipboard actions
+    search.rs         Find bar state, stepping between matches, revealing results
     tests.rs          GPUI interaction regression tests
     view/             Tab strip, toolbar, sidebar, canvas, and text highlights
   pdf/
@@ -89,9 +101,11 @@ src/
     library.rs        Native PDFium discovery and loading
     worker.rs         Background scheduling and bounded document handles
     text.rs           Character extraction, coordinates, and hit testing
+    search.rs         Case-folded, cross-line matching over page characters
+website/              Next.js site for downloads, the agent roadmap, and the changelog
 ```
 
-Tests live beside the behavior they verify. `tests/fixtures` contains sample documents, `scripts` contains development setup utilities, and `design` contains the approved local mock. Build output and local verification files are ignored by Git.
+Tests live beside the behavior they verify. `tests/fixtures` contains sample documents, `scripts` contains development setup utilities, and `website` contains the public site. Design mocks are kept locally and are not committed. Build output and local verification files are ignored by Git.
 
 PDFium runs on one dedicated thread. The pending request is replaced when a newer view is requested; results from obsolete requests are discarded. An in-progress PDFium call is not forcibly interrupted. The visible page renders first, followed by its text and visible thumbnails. Up to four document handles are retained across tabs; evicted handles reopen lazily. Closing a tab releases its handle and cached content.
 
@@ -109,6 +123,14 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 cargo test -- --ignored
 cargo run --release -- --check tests/fixtures/reading.pdf
+```
+
+For the website:
+
+```sh
+cd website
+pnpm install
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
 The ignored test exercises the native PDF engine and requires the setup script. The check command reports engine initialization, document parsing, first-page rendering, and bitmap size for the supplied file. It does not measure time until the GUI presents the page or total process memory.

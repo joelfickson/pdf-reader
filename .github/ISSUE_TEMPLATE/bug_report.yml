@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in the reader or the website does not work as expected.
+labels:
+  - bug
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the attached PDF
+        2. Press Cmd+F and type ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release version (for example v0.1.2) or the commit you built from.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS, Apple silicon
+        - macOS, Intel
+        - Windows x64
+        - Website
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system version
+  - type: textarea
+    id: pdf
+    attributes:
+      label: Sample PDF
+      description: For rendering, search or selection problems, attach a small PDF you are allowed to share. Remove personal or confidential content first.
+  - type: checkboxes
+    id: restart
+    attributes:
+      label: Checks
+      options:
+        - label: If I built the app myself, I restarted it after rebuilding.
