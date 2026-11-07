@@ -117,7 +117,7 @@ The PDF content only leaves your computer if the agent you use sends it to its m
 | Clear selection | Escape | Escape |
 | Quit | Command+Q | Ctrl+Q |
 
-Click a sidebar thumbnail to jump to that page. Links inside a PDF go to their target page and position; web and email links open in your browser or mail app, and other link types are not opened. Back and forward retrace jumps from links, go to page, first and last page, the command palette, and thumbnails. Each tab keeps its own history. Use the scroll wheel or trackpad to move within a page. Drop one or several PDFs anywhere in the window to open them in tabs. Reopening the same path focuses its existing tab. Each tab retains its page, zoom, and scroll position. Closing the final tab returns to the empty reader; the close shortcut from an empty reader closes the window.
+Click a sidebar thumbnail to jump to that page. The Outline tab lists the PDF's table of contents as a collapsible tree; it highlights the section you are reading, expands its branch as you move through the document, and jumps to an entry's page and position when clicked. Links inside a PDF go to their target page and position; web and email links open in your browser or mail app, and other link types are not opened. Back and forward retrace jumps from links, go to page, first and last page, the command palette, and thumbnails. Each tab keeps its own history. Use the scroll wheel or trackpad to move within a page. Drop one or several PDFs anywhere in the window to open them in tabs. Reopening the same path focuses its existing tab. Each tab retains its page, zoom, and scroll position. Closing the final tab returns to the empty reader; the close shortcut from an empty reader closes the window.
 
 Search runs on the background PDF thread and lists every match in the Results panel. It folds case and accents unless Match case is on, matches phrases across line breaks, and supports whole words. Matches on the visible page are highlighted.
 
@@ -143,6 +143,7 @@ src/
     scheduling.rs     Cached view lookup and worker requests
     selection.rs      Selection ranges and clipboard actions
     jumps.rs          Link following and per-tab back and forward history
+    outline.rs        Outline tree, reading position, and expanded sections
     search.rs         Find bar state, stepping between matches, revealing results
     tests.rs          GPUI interaction regression tests
     view/             Tab strip, toolbar, sidebar, canvas, and text highlights

@@ -4,6 +4,7 @@ mod empty;
 mod floating;
 mod inspector;
 mod organize;
+mod outline;
 mod results;
 mod settings;
 mod sidebar;

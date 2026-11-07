@@ -143,6 +143,20 @@ impl Reader {
             .items_center()
             .justify_between()
             .child(label(&theme, panel.title()).text_color(theme.muted))
+            .when_some(
+                self.tabs
+                    .current()
+                    .and_then(|tab| tab.outline.as_ref())
+                    .map(|outline| outline.entries().len())
+                    .filter(|count| panel == Panel::Outline && *count > 0),
+                |header, count| {
+                    header.child(
+                        mono(count.to_string())
+                            .text_size(px(11.0))
+                            .text_color(theme.faint),
+                    )
+                },
+            )
             .when(panel == Panel::Pages, |header| {
                 header.child(
                     mono(count.to_string())
@@ -166,6 +180,8 @@ impl Reader {
             self.thumbnails(cx).into_any_element()
         } else if panel == Panel::Results {
             self.results(cx)
+        } else if panel == Panel::Outline {
+            self.outline_panel(cx)
         } else {
             let (title, body) = panel.placeholder();
             div()
