@@ -1,6 +1,6 @@
 # Agentic PDF website
 
-The public site for Agentic PDF: home, download, agent, changelog and privacy pages. Built with Next.js 16 (App Router, Cache Components), React 19 and plain CSS ported from the approved mocks in `../design/`.
+The public site for Agentic PDF: home, download, agent, changelog and privacy pages. Built with Next.js 16 (App Router, Cache Components), React 19 and plain CSS ported from the approved design mocks, which are kept locally and not committed.
 
 ## Develop
 
