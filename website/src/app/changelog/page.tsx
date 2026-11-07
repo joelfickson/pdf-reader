@@ -57,19 +57,22 @@ function ChangeGroups({ changes }: ChangeGroupsProps) {
         return (
           <div className="group" key={group.kind}>
             <div className="eyebrow">{group.label}</div>
-            {matching.map((change) => (
-              <div
-                className="change"
-                key={`${change.pullRequest ?? "none"}-${change.text}`}
-              >
-                <p>{change.text}</p>
-                {change.pullRequest !== null ? (
-                  <a href={`${REPO_URL}/pull/${change.pullRequest}`}>
-                    #{change.pullRequest}
-                  </a>
-                ) : null}
-              </div>
-            ))}
+            {matching.map((change) =>
+              change.pullRequest !== null ? (
+                <a
+                  className="change"
+                  key={`${change.pullRequest}-${change.text}`}
+                  href={`${REPO_URL}/pull/${change.pullRequest}`}
+                >
+                  <span className="text">{change.text}</span>
+                  <span className="pr">#{change.pullRequest}</span>
+                </a>
+              ) : (
+                <div className="change" key={`none-${change.text}`}>
+                  <span className="text">{change.text}</span>
+                </div>
+              ),
+            )}
           </div>
         );
       })}
