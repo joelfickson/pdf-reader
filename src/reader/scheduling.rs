@@ -77,11 +77,12 @@ impl Reader {
             }
         }
         self.reveal_anchor();
+        let outline = self.tabs.current().is_some_and(|tab| tab.outline.is_none());
         let render_page = self.image_key.as_ref() != Some(&view);
         let extract_text = self.text.is_none();
         self.last_request = Some((view.clone(), visible));
         self.busy = render_page;
-        if !render_page && !extract_text && thumbnails.is_empty() {
+        if !render_page && !extract_text && thumbnails.is_empty() && !outline {
             self.generation = self.worker.cancel();
             return;
         }
@@ -92,6 +93,7 @@ impl Reader {
             render_page,
             extract_text,
             thumbnails,
+            outline,
         });
     }
 }

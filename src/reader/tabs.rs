@@ -1,4 +1,4 @@
-use super::jumps::Jumps;
+use super::{jumps::Jumps, outline::OutlineTree};
 use gpui::{Pixels, Point, ScrollHandle, UniformListScrollHandle};
 use std::{collections::BTreeSet, ops::Range, path::PathBuf};
 
@@ -16,6 +16,8 @@ pub(super) struct DocumentTab {
     pub error: Option<String>,
     pub jumps: Jumps,
     pub pending_anchor: Option<(f32, f32)>,
+    pub outline: Option<OutlineTree>,
+    pub outline_scroll: ScrollHandle,
 }
 
 impl DocumentTab {
@@ -34,6 +36,8 @@ impl DocumentTab {
             error: None,
             jumps: Jumps::default(),
             pending_anchor: None,
+            outline: None,
+            outline_scroll: ScrollHandle::new(),
         }
     }
 

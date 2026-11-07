@@ -37,6 +37,9 @@ pub(crate) struct OutlineEntry {
     pub level: usize,
     #[schemars(description = "1-based page the entry points to, if any")]
     pub page: Option<usize>,
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub anchor: Option<(f32, f32)>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -162,13 +165,15 @@ fn collect_outline(first: Option<PdfBookmark<'_>>, level: usize, outline: &mut O
             outline.truncated = true;
             return;
         }
+        let (page, anchor) = match super::text::bookmark_target(&bookmark) {
+            Some(super::text::LinkTarget::Page { index, anchor }) => (Some(index + 1), anchor),
+            _ => (None, None),
+        };
         outline.entries.push(OutlineEntry {
             title: bookmark.title().unwrap_or_default().trim().to_string(),
             level,
-            page: bookmark
-                .destination()
-                .and_then(|destination| destination.page_index().ok())
-                .map(|index| index as usize + 1),
+            page,
+            anchor,
         });
         if level < MAX_OUTLINE_DEPTH {
             collect_outline(bookmark.first_child(), level + 1, outline);

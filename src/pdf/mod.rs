@@ -38,6 +38,7 @@ pub struct Job {
     pub render_page: bool,
     pub extract_text: bool,
     pub thumbnails: Vec<usize>,
+    pub outline: bool,
 }
 
 pub struct SearchJob {
@@ -71,6 +72,10 @@ pub enum Event {
         generation: u64,
         count: usize,
     },
+    Outline {
+        session: u64,
+        outline: std::sync::Arc<tools::Outline>,
+    },
     Page {
         generation: u64,
         view: ViewKey,
@@ -94,7 +99,10 @@ pub enum Event {
 impl Event {
     pub fn generation(&self) -> Option<u64> {
         match self {
-            Self::SearchBatch { .. } | Self::SearchDone { .. } | Self::SearchFailed { .. } => None,
+            Self::SearchBatch { .. }
+            | Self::SearchDone { .. }
+            | Self::SearchFailed { .. }
+            | Self::Outline { .. } => None,
             Self::Text { generation, .. }
             | Self::Metadata { generation, .. }
             | Self::Page { generation, .. }
