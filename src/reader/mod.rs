@@ -164,6 +164,7 @@ impl Reader {
                 }
             }
             Event::Page { view, raster, .. } => {
+                crate::bench::mark("page_received");
                 self.busy = false;
                 match PageImage::new(raster) {
                     Ok(image) => {

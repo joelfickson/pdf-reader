@@ -90,13 +90,14 @@ impl Reader {
                                 })
                                 .collect::<Vec<_>>()
                         },
-                        move |bounds, hitboxes, window, _| {
+                        move |bounds, hitboxes, window, cx| {
                             for (rect, color) in rects {
                                 window.paint_quad(gpui::fill(place(bounds, &rect), color));
                             }
                             for hitbox in &hitboxes {
                                 window.set_cursor_style(CursorStyle::PointingHand, hitbox);
                             }
+                            crate::bench::page_painted(cx);
                         },
                     )
                     .absolute()
