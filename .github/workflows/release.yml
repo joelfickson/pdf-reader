@@ -94,6 +94,10 @@ jobs:
             *-rc.*) release_channel=rc ;;
             *) release_channel=stable ;;
           esac
+          if [ "$release_channel" = "stable" ] && [ "$release_platform" != "all" ]; then
+            echo "::error::Stable releases must include every platform so the download links always resolve"
+            exit 1
+          fi
           case "$release_platform" in
             macos)
               matrix='{"include":[{"os":"macos-15","platform":"macos-arm64"},{"os":"macos-15-intel","platform":"macos-x64"}]}'
@@ -210,6 +214,9 @@ jobs:
     name: Publish GitHub Release
     needs: [prepare, package]
     runs-on: ubuntu-latest
+    env:
+      WEBSITE_REVALIDATE_SECRET: ${{ secrets.WEBSITE_REVALIDATE_SECRET }}
+      WEBSITE_URL: ${{ vars.WEBSITE_URL }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -246,3 +253,6 @@ jobs:
             args+=(--prerelease)
           fi
           gh release create "$RELEASE_TAG" "${args[@]}"
+      - if: env.WEBSITE_REVALIDATE_SECRET != '' && env.WEBSITE_URL != ''
+        name: Refresh the website download page
+        run: curl --fail-with-body --silent --show-error --max-time 30 --retry 3 -X POST -H "Authorization: Bearer $WEBSITE_REVALIDATE_SECRET" "$WEBSITE_URL/api/revalidate"
