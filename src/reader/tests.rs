@@ -46,6 +46,7 @@ fn drop_selection_clipboard_and_tabs(cx: &mut TestAppContext) {
                 Event::Metadata {
                     generation,
                     count: 3,
+                    sizes: None,
                 },
                 window,
                 cx,
@@ -205,6 +206,7 @@ fn palette_find_and_dismiss_keyboard_flow(cx: &mut TestAppContext) {
                 Event::Metadata {
                     generation,
                     count: 5,
+                    sizes: None,
                 },
                 window,
                 cx,
@@ -271,6 +273,7 @@ fn find_searches_steps_between_matches_and_clears(cx: &mut TestAppContext) {
                 Event::Metadata {
                     generation,
                     count: 5,
+                    sizes: None,
                 },
                 window,
                 cx,
@@ -410,6 +413,7 @@ fn recent_files_restore_position_clamp_and_prune(cx: &mut TestAppContext) {
                 Event::Metadata {
                     generation,
                     count: 3,
+                    sizes: None,
                 },
                 window,
                 cx,
@@ -480,7 +484,15 @@ fn load_document(
     reader.open_paths(vec![root.join("tests/fixtures/reading.pdf")], window, cx);
     let generation = reader.generation;
     let view = reader.last_request.as_ref().unwrap().0.clone();
-    reader.receive(Event::Metadata { generation, count }, window, cx);
+    reader.receive(
+        Event::Metadata {
+            generation,
+            count,
+            sizes: None,
+        },
+        window,
+        cx,
+    );
     reader.receive(
         Event::Page {
             generation,
@@ -868,6 +880,7 @@ fn links_jump_and_back_forward_retrace_each_tab(cx: &mut TestAppContext) {
                 Event::Metadata {
                     generation,
                     count: 3,
+                    sizes: None,
                 },
                 window,
                 cx,
@@ -961,4 +974,130 @@ fn outline_panel_expands_jumps_and_follows_reading(cx: &mut TestAppContext) {
     cx.update(|window, cx| reader.update(cx, |reader, cx| reader.go(6, window, cx)));
     cx.run_until_parked();
     assert!(cx.debug_bounds("outline-entry-3").is_some());
+}
+
+#[gpui::test]
+fn continuous_layout_tracks_scrolling_navigation_and_tabs(cx: &mut TestAppContext) {
+    use gpui::{ScrollDelta, ScrollWheelEvent};
+
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let open = |reader: &mut Reader,
+                window: &mut gpui::Window,
+                cx: &mut gpui::Context<Reader>,
+                file: &str| {
+        reader.open_paths(vec![root.join(file)], window, cx);
+        let generation = reader.generation;
+        reader.receive(
+            Event::Metadata {
+                generation,
+                count: 9,
+                sizes: Some(Arc::new(vec![(612.0, 792.0); 9])),
+            },
+            window,
+            cx,
+        );
+        reader.request(window);
+        let view = reader.last_request.as_ref().unwrap().0.clone();
+        let width = view.available_width as f32;
+        reader.receive(
+            Event::Page {
+                generation: reader.generation,
+                view,
+                raster: Raster {
+                    bytes: vec![255; 40 * 52 * 4],
+                    width: 40,
+                    height: 52,
+                    logical_width: width,
+                    logical_height: width * 792.0 / 612.0,
+                    zoom_percent: 100.0,
+                },
+            },
+            window,
+            cx,
+        );
+    };
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            open(reader, window, cx, "tests/fixtures/reading.pdf");
+            assert!(reader.continuous());
+        })
+    });
+    cx.run_until_parked();
+    let state = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| {
+            let reader = reader.read(cx);
+            let tab = reader.tabs.current().unwrap();
+            (
+                tab.page,
+                f32::from(tab.scroll.offset().y),
+                reader.last_request.as_ref().unwrap().2.clone(),
+            )
+        })
+    };
+    let (page, offset, nearby) = state(cx);
+    assert_eq!((page, offset), (0, 0.0));
+    assert!(nearby.contains(&1), "nearby pages requested: {nearby:?}");
+
+    cx.dispatch_action(Next);
+    cx.run_until_parked();
+    let column = cx.read(|cx| {
+        reader
+            .read(cx)
+            .tabs
+            .current()
+            .unwrap()
+            .column
+            .clone()
+            .unwrap()
+    });
+    let (page, offset, _) = state(cx);
+    assert_eq!(page, 1);
+    assert_eq!(offset, -column.scroll_to(1));
+
+    let bounds = cx
+        .debug_bounds("document-canvas")
+        .expect("the document canvas is on screen");
+    cx.simulate_event(ScrollWheelEvent {
+        position: bounds.center(),
+        delta: ScrollDelta::Pixels(point(px(0.0), px(-(column.heights[0] * 3.0)))),
+        ..Default::default()
+    });
+    cx.run_until_parked();
+    let (page, offset, nearby) = state(cx);
+    let viewport = cx.read(|cx| {
+        f32::from(
+            reader
+                .read(cx)
+                .tabs
+                .current()
+                .unwrap()
+                .scroll
+                .bounds()
+                .size
+                .height,
+        )
+    });
+    assert!(offset < -column.scroll_to(1));
+    assert_eq!(
+        page,
+        column.dominant(-offset - column::COLUMN_TOP, viewport)
+    );
+    assert!(page >= 3, "scrolled to page {page}");
+    assert!(nearby.contains(&(page + 1)));
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            open(reader, window, cx, "tests/fixtures/selection.pdf");
+            assert_eq!(reader.tabs.active, 1);
+        })
+    });
+    cx.run_until_parked();
+    assert_eq!(state(cx).0, 0);
+    cx.dispatch_action(PreviousTab);
+    cx.run_until_parked();
+    let (restored_page, restored, _) = state(cx);
+    assert_eq!((restored_page, restored), (page, offset));
 }

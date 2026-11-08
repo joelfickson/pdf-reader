@@ -2,6 +2,7 @@ mod actions;
 mod agent;
 mod cache;
 mod chrome;
+mod column;
 mod commands;
 mod handlers;
 mod history;
@@ -49,7 +50,7 @@ pub(crate) struct Reader {
     texts: PageCache<TextResult, (u64, usize)>,
     text: Option<TextResult>,
     selection: Option<Selection>,
-    last_request: Option<(ViewKey, Range<usize>)>,
+    last_request: Option<(ViewKey, Range<usize>, Vec<usize>)>,
     busy: bool,
     picker_open: bool,
     notice: Option<String>,
@@ -61,6 +62,7 @@ pub(crate) struct Reader {
     recent: RecentFiles,
     pressed_link: Option<Link>,
     agent: agent::AgentPanel,
+    scroll_probe: Option<crate::bench::ScrollProbe>,
 }
 
 impl Reader {
@@ -137,6 +139,7 @@ impl Reader {
             recent,
             pressed_link: None,
             agent: agent::AgentPanel::default(),
+            scroll_probe: crate::bench::scrolling().then(Default::default),
         };
         reader.notice = recent_error;
         cx.set_menus(crate::app::menus(reader.recent.entries()));
@@ -164,15 +167,25 @@ impl Reader {
                 }
                 return;
             }
-            Some(generation) if generation != self.generation => return,
+            Some(generation) if !self.current_result(generation, &event) => {
+                self.keep_nearby(event, window, cx);
+                return;
+            }
             Some(_) => {}
         }
         let Some(tab) = self.tabs.current_mut() else {
             return;
         };
         match event {
-            Event::Metadata { count, .. } => {
+            Event::Metadata { count, sizes, .. } => {
                 tab.count = count;
+                if let Some(sizes) = sizes
+                    && tab.sizes.is_none()
+                {
+                    tab.sizes = Some(sizes);
+                    tab.column = None;
+                    tab.pending_scroll = tab.restore_scroll.is_none();
+                }
                 if tab.page >= count {
                     tab.page = count.saturating_sub(1);
                     self.reset_request(window);
@@ -232,6 +245,39 @@ impl Reader {
             | Event::Outline { .. } => {}
         }
         cx.notify();
+    }
+
+    fn current_result(&self, generation: u64, event: &Event) -> bool {
+        if generation != self.generation {
+            return false;
+        }
+        let Some(tab) = self.tabs.current() else {
+            return false;
+        };
+        match event {
+            Event::Page { view, .. } => view.session == tab.session && view.page == tab.page,
+            Event::Text { key, .. } => *key == (tab.session, tab.page),
+            _ => true,
+        }
+    }
+
+    fn keep_nearby(&mut self, event: Event, window: &mut Window, cx: &mut Context<Self>) {
+        let open = |session: u64| self.tabs.entries.iter().any(|tab| tab.session == session);
+        match event {
+            Event::Page { view, raster, .. } if open(view.session) => {
+                if let Ok(image) = PageImage::new(raster) {
+                    for old in self.pages.insert(view, image) {
+                        old.release(window);
+                    }
+                    cx.notify();
+                }
+            }
+            Event::Text { key, text, .. } if open(key.0) => {
+                self.texts.insert(key, text);
+                cx.notify();
+            }
+            _ => {}
+        }
     }
 
     fn cache_current_page(&mut self, window: &mut Window) {

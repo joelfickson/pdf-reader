@@ -91,7 +91,14 @@ pub(super) struct Toast {
     pub message: SharedString,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Layout {
+    Single,
+    Continuous,
+}
+
 pub(super) struct Chrome {
+    pub layout: Layout,
     pub overlay: Overlay,
     pub mode: Mode,
     pub panel: Panel,
@@ -128,6 +135,7 @@ pub(super) struct Chrome {
 impl Chrome {
     pub fn new(theme: Theme) -> Self {
         Self {
+            layout: Layout::Continuous,
             overlay: Overlay::None,
             mode: Mode::Read,
             panel: Panel::Pages,
@@ -201,6 +209,26 @@ impl Reader {
         if next == Mode::Annotate {
             self.chrome.panel = Panel::Notes;
             self.sidebar = true;
+        }
+        self.request(window);
+        cx.notify();
+    }
+
+    pub(super) fn set_layout(
+        &mut self,
+        layout: Layout,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.chrome.layout == layout {
+            return;
+        }
+        self.chrome.layout = layout;
+        self.reset_request(window);
+        for tab in &mut self.tabs.entries {
+            tab.column = None;
+            tab.pending_scroll = true;
+            tab.restore_scroll = None;
         }
         self.request(window);
         cx.notify();

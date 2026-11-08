@@ -236,6 +236,7 @@ impl Reader {
         if !self.reveal {
             return;
         }
+        let page_top = self.page_top();
         let (Some(state), Some(tab), Some(Ok(text)), Some(image)) = (
             self.search.as_ref(),
             self.tabs.current(),
@@ -271,7 +272,7 @@ impl Reader {
             return;
         };
         let viewport = f32::from(tab.scroll.bounds().size.height);
-        let target = (REVEAL_MARGIN + top * image.height - viewport / 3.0).max(0.0);
+        let target = (REVEAL_MARGIN + page_top + top * image.height - viewport / 3.0).max(0.0);
         let offset = tab.scroll.offset();
         tab.scroll.set_offset(point(offset.x, px(-target)));
         self.reveal = false;
