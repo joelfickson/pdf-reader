@@ -179,6 +179,28 @@ impl Reader {
                             this.set_inspector(tab, window, cx)
                         })),
                     )
+                    .child({
+                        let open = self.agent.open;
+                        let soft = theme.accent_soft;
+                        clickable("toggle-agent")
+                            .h(px(28.0))
+                            .px(px(10.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .rounded(px(RADIUS))
+                            .text_size(px(13.0))
+                            .text_color(theme.accent_strong)
+                            .when(open, |button| button.bg(soft))
+                            .cursor_pointer()
+                            .hover(move |style| style.bg(if open { soft } else { hover }))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(Box::new(ToggleAgent), cx)
+                            })
+                            .child(icon(Icon::Note, theme.accent_strong))
+                            .child("Agent")
+                    })
                     .child(
                         clickable("palette-trigger")
                             .ml(px(4.0))

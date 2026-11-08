@@ -1,4 +1,5 @@
 mod actions;
+mod agent;
 mod cache;
 mod chrome;
 mod column;
@@ -60,6 +61,7 @@ pub(crate) struct Reader {
     reveal: bool,
     recent: RecentFiles,
     pressed_link: Option<Link>,
+    agent: agent::AgentPanel,
     scroll_probe: Option<crate::bench::ScrollProbe>,
 }
 
@@ -136,6 +138,7 @@ impl Reader {
             reveal: false,
             recent,
             pressed_link: None,
+            agent: agent::AgentPanel::default(),
             scroll_probe: crate::bench::scrolling().then(Default::default),
         };
         reader.notice = recent_error;

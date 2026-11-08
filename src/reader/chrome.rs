@@ -67,6 +67,7 @@ pub(super) enum Input {
     Palette,
     Find,
     Page,
+    Agent,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -244,6 +245,12 @@ impl Reader {
         } else {
             Some(tab)
         };
+        if self.chrome.inspector.is_some() {
+            self.agent.open = false;
+            if self.chrome.input == Input::Agent {
+                self.chrome.input = Input::None;
+            }
+        }
         self.request(window);
         cx.notify();
     }

@@ -599,6 +599,52 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
             r.open_find(cx);
         }),
         ("outline", |r, _, _| r.chrome.panel = Panel::Outline),
+        ("agent-empty", |r, _, _| r.agent.open = true),
+        ("agent-conversation", |r, _, _| {
+            use crate::agent::conversation::{
+                Choice, ChoiceKind, PlanStep, Status, ToolRow, Update,
+            };
+            r.agent.open = true;
+            let conversation = &mut r.agent.conversation;
+            conversation.ask("Summarize this document.", "reading.pdf, 3 pages");
+            conversation.apply(Update::Plan(vec![
+                PlanStep {
+                    text: "Get the document outline".into(),
+                    status: Status::Done,
+                },
+                PlanStep {
+                    text: "Read every page".into(),
+                    status: Status::Running,
+                },
+            ]));
+            conversation.apply(Update::ToolStarted(ToolRow {
+                id: "t1".into(),
+                title: "Read text".into(),
+                detail: "From page 1".into(),
+                status: Status::Done,
+            }));
+            conversation.apply(Update::Text(
+                "## Summary\nA short essay about reading (p. 1).\n\n- Margins give rhythm (p. 2)"
+                    .into(),
+            ));
+            conversation.permission(
+                1,
+                "highlight".into(),
+                vec![
+                    Choice {
+                        id: "yes".into(),
+                        name: "Allow once".into(),
+                        kind: ChoiceKind::AllowOnce,
+                    },
+                    Choice {
+                        id: "no".into(),
+                        name: "Reject".into(),
+                        kind: ChoiceKind::RejectOnce,
+                    },
+                ],
+            );
+            conversation.notice("Stopped.");
+        }),
         ("bookmarks", |r, _, _| r.chrome.panel = Panel::Bookmarks),
         ("results", |r, _, _| r.chrome.panel = Panel::Results),
         ("attachments", |r, _, _| r.chrome.panel = Panel::Attachments),

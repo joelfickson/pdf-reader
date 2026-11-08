@@ -1,3 +1,4 @@
+mod agent;
 mod canvas;
 mod dialogs;
 mod empty;
@@ -20,6 +21,7 @@ use gpui::{Context, IntoElement, Render, Window, div, prelude::*, px};
 
 pub(super) const SIDEBAR_WIDTH: f32 = 220.0;
 pub(super) const INSPECTOR_WIDTH: f32 = 280.0;
+pub(super) const AGENT_WIDTH: f32 = 380.0;
 pub(super) const CANVAS_PADDING: f32 = 32.0;
 
 impl Reader {
@@ -92,6 +94,10 @@ impl Render for Reader {
         let inspector = self
             .inspector_visible()
             .then(|| self.inspector(cx).into_any_element());
+        let agent = self
+            .agent
+            .open
+            .then(|| self.agent_panel(cx).into_any_element());
         let titlebar = self.titlebar(window, cx).into_any_element();
         let stage = self.stage(window, cx).into_any_element();
         let modal = self.modal(window, cx);
@@ -121,6 +127,7 @@ impl Render for Reader {
             .on_action(cx.listener(Self::last_page))
             .on_action(cx.listener(Self::go_back))
             .on_action(cx.listener(Self::go_forward))
+            .on_action(cx.listener(Self::toggle_agent))
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::fit))
@@ -191,7 +198,8 @@ impl Render for Reader {
                     .flex()
                     .children(sidebar)
                     .child(stage)
-                    .children(inspector),
+                    .children(inspector)
+                    .children(agent),
             )
             .children(modal)
     }
