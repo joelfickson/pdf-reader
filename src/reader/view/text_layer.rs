@@ -1,111 +1,118 @@
-use super::super::Reader;
+use super::super::{Reader, TextResult, images::PageImage};
 use crate::pdf::text::TextRect;
 use crate::ui::kit::clickable;
 use gpui::{
     Bounds, Context, CursorStyle, HitboxBehavior, IntoElement, MouseButton, Pixels, canvas, img,
     point, prelude::*, px, size,
 };
-use std::ops::Range;
+use std::{cell::Cell, ops::Range, rc::Rc};
 
 impl Reader {
-    pub(in crate::reader) fn page_element(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut page = clickable("rendered-page").relative().flex_shrink_0();
-        if let Some(image) = &self.image {
-            let theme = self.chrome.theme;
-            let mut rects = Vec::new();
-            let mut links = Vec::new();
-            if let Some(Ok(text)) = &self.text {
-                links.extend(text.links.iter().map(|link| link.bounds));
-                let glyphs = |range: Range<usize>| {
-                    text.glyphs
-                        .get(range.start.min(text.glyphs.len())..range.end.min(text.glyphs.len()))
-                        .unwrap_or_default()
-                        .iter()
-                        .filter_map(|glyph| glyph.bounds)
-                };
-                if let (Some(search), Some(tab)) = (&self.search, self.tabs.current())
-                    && search.session == tab.session
-                {
-                    for index in search.page_hits(tab.page) {
-                        let color = if search.current == Some(index) {
-                            theme.found_current
-                        } else {
-                            theme.found
-                        };
-                        rects.extend(
-                            glyphs(search.hits[index].1.glyphs.clone()).map(|rect| (rect, color)),
-                        );
-                    }
-                }
-                if let Some(selection) = &self.selection {
-                    rects.extend(glyphs(selection.range()).map(|rect| (rect, theme.select)));
+    pub(in crate::reader) fn page_element(
+        &self,
+        page: usize,
+        image: &PageImage,
+        text: Option<&TextResult>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = self.chrome.theme;
+        let current = self.tabs.current().is_some_and(|tab| tab.page == page);
+        let mut rects = Vec::new();
+        let mut links = Vec::new();
+        if let Some(Ok(text)) = text {
+            links.extend(text.links.iter().map(|link| link.bounds));
+            let glyphs = |range: Range<usize>| {
+                text.glyphs
+                    .get(range.start.min(text.glyphs.len())..range.end.min(text.glyphs.len()))
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|glyph| glyph.bounds)
+            };
+            if let (Some(search), Some(tab)) = (&self.search, self.tabs.current())
+                && search.session == tab.session
+            {
+                for index in search.page_hits(page) {
+                    let color = if search.current == Some(index) {
+                        theme.found_current
+                    } else {
+                        theme.found
+                    };
+                    rects.extend(
+                        glyphs(search.hits[index].1.glyphs.clone()).map(|rect| (rect, color)),
+                    );
                 }
             }
-            let page_bounds = self.page_bounds.clone();
-            page = page
-                .w(px(image.width))
-                .h(px(image.height))
-                .when(
-                    matches!(&self.text, Some(Ok(text)) if !text.glyphs.is_empty()),
-                    |page| page.cursor(gpui::CursorStyle::IBeam),
-                )
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
-                        this.pressed_link = this.link_at(event.position);
-                        if this.pressed_link.is_some() {
-                            this.focus.focus(window);
-                        } else {
-                            this.select_at(
-                                event.position,
-                                this.page_bounds.get(),
-                                true,
-                                window,
-                                cx,
-                            );
-                        }
-                        cx.stop_propagation();
-                    }),
-                )
-                .on_mouse_up(
-                    MouseButton::Left,
-                    cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
-                        if let Some(pressed) = this.pressed_link.take()
-                            && this.link_at(event.position).as_ref() == Some(&pressed)
-                        {
-                            this.follow_link(pressed, window, cx);
-                        }
-                    }),
-                )
-                .child(img(image.image.clone()).size_full().rounded(px(2.0)))
-                .child(
-                    canvas(
-                        move |bounds, window, _| {
-                            page_bounds.set(bounds);
-                            links
-                                .iter()
-                                .map(|rect| {
-                                    window
-                                        .insert_hitbox(place(bounds, rect), HitboxBehavior::Normal)
-                                })
-                                .collect::<Vec<_>>()
-                        },
-                        move |bounds, hitboxes, window, cx| {
-                            for (rect, color) in rects {
-                                window.paint_quad(gpui::fill(place(bounds, &rect), color));
-                            }
-                            for hitbox in &hitboxes {
-                                window.set_cursor_style(CursorStyle::PointingHand, hitbox);
-                            }
-                            crate::bench::page_painted(cx);
-                        },
-                    )
-                    .absolute()
-                    .inset_0()
-                    .size_full(),
-                );
+            if current && let Some(selection) = &self.selection {
+                rects.extend(glyphs(selection.range()).map(|rect| (rect, theme.select)));
+            }
         }
-        page
+        let page_bounds = if current {
+            self.page_bounds.clone()
+        } else {
+            Rc::new(Cell::new(Bounds::default()))
+        };
+        let pressed_bounds = page_bounds.clone();
+        clickable(("rendered-page", page))
+            .relative()
+            .flex_shrink_0()
+            .w(px(image.width))
+            .h(px(image.height))
+            .when(
+                matches!(text, Some(Ok(text)) if !text.glyphs.is_empty()),
+                |element| element.cursor(gpui::CursorStyle::IBeam),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                    if !current {
+                        this.focus_page(page, window);
+                        this.page_bounds.set(pressed_bounds.get());
+                    }
+                    this.pressed_link = this.link_at(event.position);
+                    if this.pressed_link.is_some() {
+                        this.focus.focus(window);
+                    } else {
+                        this.select_at(event.position, this.page_bounds.get(), true, window, cx);
+                    }
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, event: &gpui::MouseUpEvent, window, cx| {
+                    if let Some(pressed) = this.pressed_link.take()
+                        && this.link_at(event.position).as_ref() == Some(&pressed)
+                    {
+                        this.follow_link(pressed, window, cx);
+                    }
+                }),
+            )
+            .child(img(image.image.clone()).size_full().rounded(px(2.0)))
+            .child(
+                canvas(
+                    move |bounds, window, _| {
+                        page_bounds.set(bounds);
+                        links
+                            .iter()
+                            .map(|rect| {
+                                window.insert_hitbox(place(bounds, rect), HitboxBehavior::Normal)
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                    move |bounds, hitboxes, window, cx| {
+                        for (rect, color) in rects {
+                            window.paint_quad(gpui::fill(place(bounds, &rect), color));
+                        }
+                        for hitbox in &hitboxes {
+                            window.set_cursor_style(CursorStyle::PointingHand, hitbox);
+                        }
+                        crate::bench::page_painted(cx);
+                    },
+                )
+                .absolute()
+                .inset_0()
+                .size_full(),
+            )
     }
 }
 

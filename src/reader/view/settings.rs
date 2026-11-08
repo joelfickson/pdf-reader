@@ -1,4 +1,7 @@
-use super::super::{Reader, chrome::Overlay};
+use super::super::{
+    Reader,
+    chrome::{Layout, Overlay},
+};
 use super::dialogs::form_row;
 use crate::ui::{
     kit::clickable,
@@ -33,6 +36,32 @@ impl Reader {
                     .on_click(cx.listener(move |this, _, _, cx| this.unavailable(feature, cx))),
             )
             .child(text)
+    }
+
+    fn layout_choices(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.chrome.theme;
+        let options = [
+            ("Single page", Some(Layout::Single)),
+            ("Continuous", Some(Layout::Continuous)),
+            ("Two pages", None),
+        ];
+        div()
+            .flex()
+            .gap(px(2.0))
+            .children(
+                options
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (text, layout))| {
+                        let selected = layout == Some(self.chrome.layout);
+                        pill(("default-layout", index), text, selected, &theme).on_click(
+                            cx.listener(move |this, _, window, cx| match layout {
+                                Some(layout) => this.set_layout(layout, window, cx),
+                                None => this.unavailable("Two-page view", cx),
+                            }),
+                        )
+                    }),
+            )
     }
 
     fn placeholder_choices(
@@ -164,16 +193,7 @@ impl Reader {
                         cx,
                     ),
                 ))
-                .child(form_row(
-                    &theme,
-                    "Layout",
-                    self.placeholder_choices(
-                        "default-layout",
-                        &["Single page", "Continuous", "Two pages"],
-                        "Page layouts",
-                        cx,
-                    ),
-                ))
+                .child(form_row(&theme, "Layout", self.layout_choices(cx)))
                 .child(form_row(
                     &theme,
                     "Night pages",
