@@ -227,4 +227,16 @@ Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 
 Application source: MIT. GPUI: Apache-2.0. pdfium-render: MIT OR Apache-2.0. PDFium and its bundled third-party components have separate license notices supplied in the downloaded archive. Preserve those notices when packaging or redistributing the native library.
 
-The macOS packaging script includes PDFium and its license notices in a local app bundle. Signed installers and Windows distribution packaging are not implemented. No remote repository, release, or hosted service is required to run it.
+The macOS packaging script includes PDFium and its license notices in the app bundle. Local builds are signed ad hoc unless `MACOS_SIGNING_IDENTITY` names a Developer ID identity in your keychain.
+
+Tagged releases are built by `.github/workflows/release.yml`. When the repository has these secrets, the macOS build is signed with a Developer ID certificate, notarized with an App Store Connect API key, and stapled:
+
+| Secret | Value |
+| --- | --- |
+| `MACOS_CERTIFICATE_P12` | Base64 of the Developer ID Application `.p12` |
+| `MACOS_CERTIFICATE_PASSWORD` | Password for that `.p12` |
+| `APPLE_API_KEY_P8` | Base64 of the App Store Connect API key `.p8` |
+| `APPLE_API_KEY_ID` | The API key ID |
+| `APPLE_API_ISSUER_ID` | The API key issuer ID |
+
+Windows builds are not code signed yet.
