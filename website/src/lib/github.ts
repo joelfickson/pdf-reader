@@ -5,6 +5,8 @@ import { REPO_SLUG } from "./site";
 
 const API_ROOT = `https://api.github.com/repos/${REPO_SLUG}`;
 const REQUEST_TIMEOUT_MS = 10_000;
+const RELEASES_PER_PAGE = 100;
+const MAX_RELEASE_PAGES = 10;
 
 const assetSchema = z.object({
   name: z.string(),
@@ -74,9 +76,20 @@ export async function getReleases(): Promise<Release[]> {
   "use cache";
   cacheLife("hours");
   cacheTag("releases");
-  const releases = z
-    .array(releaseSchema)
-    .parse(await requestJson("/releases?per_page=30"));
+  const releases: z.infer<typeof releaseSchema>[] = [];
+  for (let page = 1; page <= MAX_RELEASE_PAGES; page += 1) {
+    const batch = z
+      .array(releaseSchema)
+      .parse(
+        await requestJson(
+          `/releases?per_page=${RELEASES_PER_PAGE}&page=${page}`,
+        ),
+      );
+    releases.push(...batch);
+    if (batch.length < RELEASES_PER_PAGE) {
+      break;
+    }
+  }
   return releases
     .filter((release) => !release.draft)
     .map((release) => ({
