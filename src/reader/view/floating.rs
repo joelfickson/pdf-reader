@@ -1,7 +1,7 @@
 use super::super::{
     Reader,
     actions::*,
-    chrome::{Input, Mode, Overlay, Panel, Tool},
+    chrome::{Input, Layout, Mode, Overlay, Panel, Tool},
     commands::modifier,
 };
 use crate::ui::{
@@ -418,6 +418,15 @@ impl Reader {
                 },
             ))
         };
+        let current = self.chrome.layout;
+        let layout_item = |id: &'static str, text: &'static str, layout: Layout| {
+            menu_item(id, text, current == layout, None, &theme).on_click(cx.listener(
+                move |this, _, window, cx| {
+                    this.chrome.overlay = Overlay::None;
+                    this.set_layout(layout, window, cx);
+                },
+            ))
+        };
         floating(&theme)
             .id("view-menu")
             .occlude()
@@ -426,14 +435,8 @@ impl Reader {
             .flex()
             .flex_col()
             .child(label(&theme, "Layout").px(px(8.0)).pt(px(6.0)).pb(px(4.0)))
-            .child(item("single", "Single page", true, None, ""))
-            .child(item(
-                "continuous",
-                "Continuous",
-                false,
-                None,
-                "Continuous scrolling",
-            ))
+            .child(layout_item("single", "Single page", Layout::Single))
+            .child(layout_item("continuous", "Continuous", Layout::Continuous))
             .child(item("two-pages", "Two pages", false, None, "Two-page view"))
             .child(item(
                 "cover",

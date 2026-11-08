@@ -117,7 +117,7 @@ The PDF content only leaves your computer if the agent you use sends it to its m
 | Clear selection | Escape | Escape |
 | Quit | Command+Q | Ctrl+Q |
 
-Click a sidebar thumbnail to jump to that page. The Outline tab lists the PDF's table of contents as a collapsible tree; it highlights the section you are reading, expands its branch as you move through the document, and jumps to an entry's page and position when clicked. Links inside a PDF go to their target page and position; web and email links open in your browser or mail app, and other link types are not opened. Back and forward retrace jumps from links, go to page, first and last page, the command palette, and thumbnails. Each tab keeps its own history. Use the scroll wheel or trackpad to move within a page. Drop one or several PDFs anywhere in the window to open them in tabs. Reopening the same path focuses its existing tab. Each tab retains its page, zoom, and scroll position. Closing the final tab returns to the empty reader; the close shortcut from an empty reader closes the window.
+Pages scroll as one continuous column by default; choose Single page in the View menu or in Settings to show one page at a time. In the continuous layout the page counter and sidebar follow the page that fills most of the window, pages near the window render first, and each tab keeps its scroll position. Text selection stays within one page. Click a sidebar thumbnail to jump to that page. The Outline tab lists the PDF's table of contents as a collapsible tree; it highlights the section you are reading, expands its branch as you move through the document, and jumps to an entry's page and position when clicked. Links inside a PDF go to their target page and position; web and email links open in your browser or mail app, and other link types are not opened. Back and forward retrace jumps from links, go to page, first and last page, the command palette, and thumbnails. Each tab keeps its own history. Use the scroll wheel or trackpad to move within a page. Drop one or several PDFs anywhere in the window to open them in tabs. Reopening the same path focuses its existing tab. Each tab retains its page, zoom, and scroll position. Closing the final tab returns to the empty reader; the close shortcut from an empty reader closes the window.
 
 Search runs on the background PDF thread and lists every match in the Results panel. It folds case and accents unless Match case is on, matches phrases across line breaks, and supports whole words. Matches on the visible page are highlighted.
 
@@ -142,6 +142,7 @@ src/
     navigation.rs     File picking, tab lifecycle, page and zoom actions
     scheduling.rs     Cached view lookup and worker requests
     selection.rs      Selection ranges and clipboard actions
+    column.rs         Continuous layout: page positions, visible and current pages
     jumps.rs          Link following and per-tab back and forward history
     outline.rs        Outline tree, reading position, and expanded sections
     search.rs         Find bar state, stepping between matches, revealing results
@@ -198,6 +199,8 @@ uv run scripts/bench_first_page.py --runs 5 path/to/extra.pdf
 ```
 
 It generates 500- and 2,000-page PDFs, launches the reader once per run with `PDF_READER_BENCH=first-page` (the app prints stage times and quits after the first painted page), and points `HOME` and `APPDATA` at a temporary folder so your Recent list is not used or changed. Each launch briefly opens a window.
+
+`PDF_READER_BENCH=scroll` scrolls the continuous layout from the first page to the last at 120 px per frame, then prints frame-interval statistics and the number of frames that showed a page before its image was ready, and quits. Wrap it in `/usr/bin/time -l` on macOS to read peak memory.
 
 The sample PDF is original test content, reproducible with `uv run scripts/create_sample.py`. GitHub Actions is configured to build and test on Mac and Windows. Windows runtime behavior still requires testing on a Windows machine.
 

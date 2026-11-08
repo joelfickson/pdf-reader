@@ -39,7 +39,12 @@ pub struct Job {
     pub extract_text: bool,
     pub thumbnails: Vec<usize>,
     pub outline: bool,
+    pub sizes: bool,
+    pub nearby: Vec<ViewKey>,
+    pub nearby_text: Vec<usize>,
 }
+
+pub type PageSizes = std::sync::Arc<Vec<(f32, f32)>>;
 
 pub struct SearchJob {
     pub search: u64,
@@ -71,6 +76,7 @@ pub enum Event {
     Metadata {
         generation: u64,
         count: usize,
+        sizes: Option<PageSizes>,
     },
     Outline {
         session: u64,

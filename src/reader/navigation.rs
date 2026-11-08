@@ -162,6 +162,12 @@ impl Reader {
         if page >= tab.count || page == tab.page {
             return;
         }
+        if let Some(column) = self.column(window) {
+            self.focus_page(page, window);
+            self.scroll_to_page(page, &column);
+            cx.notify();
+            return;
+        }
         self.reset_request(window);
         if let Some(tab) = self.tabs.current_mut() {
             tab.page = page;
