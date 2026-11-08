@@ -170,6 +170,7 @@ jobs:
             echo "::error::No Developer ID Application identity found in the imported certificate"
             exit 1
           fi
+          echo "::add-mask::$identity"
           echo "MACOS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
       - if: runner.os == 'macOS'
         run: uv run scripts/package_macos.py
@@ -181,7 +182,16 @@ jobs:
           printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$key"
           xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --key "$key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --wait --timeout 30m
           rm "$key"
-          xcrun stapler staple "target/release/PDF Reader.app"
+          for attempt in 1 2 3 4 5; do
+            if xcrun stapler staple "target/release/PDF Reader.app"; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "::error::Stapling failed after $attempt attempts"
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
           xcrun stapler validate "target/release/PDF Reader.app"
           spctl --assess --type execute --verbose=2 "target/release/PDF Reader.app"
       - if: runner.os == 'macOS'
