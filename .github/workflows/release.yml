@@ -268,4 +268,5 @@ jobs:
           gh release create "$RELEASE_TAG" "${args[@]}"
       - if: env.WEBSITE_REVALIDATE_SECRET != '' && env.WEBSITE_URL != ''
         name: Refresh the website download page
-        run: curl --fail-with-body --silent --show-error --max-time 30 --retry 3 -X POST -H "Authorization: Bearer $WEBSITE_REVALIDATE_SECRET" "$WEBSITE_URL/api/revalidate"
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 30 --retry 3 -X POST -H "Authorization: Bearer $WEBSITE_REVALIDATE_SECRET" "$WEBSITE_URL/api/revalidate"
