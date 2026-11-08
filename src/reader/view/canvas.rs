@@ -1,14 +1,21 @@
+use super::sidebar::sheet_placeholder;
 use super::{super::Reader, CANVAS_PADDING};
+use crate::pdf::ViewKey;
 use crate::reader::actions::Open;
+use crate::reader::column::Column;
 use crate::ui::{
     icon::Icon,
     kit::clickable,
     kit::{Kind, icon, text_button},
 };
-use gpui::{Context, IntoElement, div, prelude::*, px};
+use gpui::{AnyElement, Context, IntoElement, Window, div, prelude::*, px};
 
 impl Reader {
-    pub(in crate::reader) fn canvas(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(in crate::reader) fn canvas(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let theme = self.chrome.theme;
         let content = if let Some(error) = self.tabs.current().and_then(|tab| tab.error.as_ref()) {
             div()
@@ -32,8 +39,12 @@ impl Reader {
                     ),
                 )
                 .into_any_element()
-        } else if self.image.is_some() {
-            self.page_element(cx).into_any_element()
+        } else if let Some(column) = self.column(window) {
+            self.column_element(&column, window, cx)
+        } else if let Some(image) = &self.image {
+            let page = self.tabs.current().map_or(0, |tab| tab.page);
+            self.page_element(page, image, self.text.as_ref(), cx)
+                .into_any_element()
         } else {
             div()
                 .mt(px(120.0))
@@ -49,6 +60,12 @@ impl Reader {
             .when_some(self.tabs.current(), |canvas, tab| {
                 canvas.track_scroll(&tab.scroll)
             })
+            .on_scroll_wheel(cx.listener(|this, _, _, cx| {
+                if let Some(tab) = this.tabs.current_mut() {
+                    tab.follow_scroll = true;
+                }
+                cx.notify();
+            }))
             .child(
                 div()
                     .min_w_full()
@@ -60,5 +77,59 @@ impl Reader {
                     .items_start()
                     .child(div().mx_auto().flex_shrink_0().child(content)),
             )
+    }
+
+    fn column_element(
+        &mut self,
+        column: &Column,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(tab) = self.tabs.current() else {
+            return div().into_any_element();
+        };
+        let (session, current, zoom) = (tab.session, tab.page, tab.zoom);
+        let scale = (window.scale_factor() * 100.0).round() as u32;
+        let (top, height) = self.viewport(window);
+        let pages: Vec<AnyElement> = column
+            .around(top, height)
+            .map(|page| {
+                let view = ViewKey {
+                    session,
+                    page,
+                    available_width: column.view_width(page),
+                    zoom,
+                    scale,
+                };
+                let (width, height) = (column.widths[page], column.heights[page]);
+                let content = if page == current && self.image_key.as_ref() == Some(&view) {
+                    self.image.as_ref().map(|image| {
+                        self.page_element(page, image, self.text.as_ref(), cx)
+                            .into_any_element()
+                    })
+                } else {
+                    self.pages.peek(&view).map(|image| {
+                        self.page_element(page, image, self.texts.peek(&(session, page)), cx)
+                            .into_any_element()
+                    })
+                };
+                div()
+                    .absolute()
+                    .top(px(column.tops[page]))
+                    .left(px((column.width - width) / 2.0))
+                    .w(px(width))
+                    .h(px(height))
+                    .child(content.unwrap_or_else(|| {
+                        sheet_placeholder(width, height, page).into_any_element()
+                    }))
+                    .into_any_element()
+            })
+            .collect();
+        div()
+            .relative()
+            .w(px(column.width))
+            .h(px(column.height))
+            .children(pages)
+            .into_any_element()
     }
 }

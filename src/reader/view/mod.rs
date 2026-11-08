@@ -42,7 +42,7 @@ impl Reader {
         } else if self.tabs.current().is_none() {
             self.empty(cx).into_any_element()
         } else {
-            self.canvas(cx).into_any_element()
+            self.canvas(window, cx).into_any_element()
         };
         clickable("stage")
             .relative()
@@ -83,6 +83,7 @@ impl Reader {
 
 impl Render for Reader {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.drive_scroll_probe(window, cx);
         self.request(window);
         let theme = self.chrome.theme;
         let sidebar = self

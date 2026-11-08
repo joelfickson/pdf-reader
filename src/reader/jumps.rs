@@ -146,6 +146,7 @@ impl Reader {
     }
 
     pub(super) fn reveal_anchor(&mut self) {
+        let page_top = self.page_top();
         let (Some(tab), Some(Ok(text)), Some(image), Some(key)) = (
             self.tabs.current_mut(),
             self.text.as_ref(),
@@ -161,7 +162,7 @@ impl Reader {
             return;
         };
         if let Some(top) = text.anchor_top(anchor) {
-            let target = (PAGE_TOP + top * image.height - ANCHOR_MARGIN).max(0.0);
+            let target = (PAGE_TOP + page_top + top * image.height - ANCHOR_MARGIN).max(0.0);
             let offset = tab.scroll.offset();
             tab.scroll.set_offset(point(offset.x, px(-target)));
         }

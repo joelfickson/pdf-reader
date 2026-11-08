@@ -1,5 +1,8 @@
+use super::column::Column;
 use super::{jumps::Jumps, outline::OutlineTree};
+use crate::pdf::PageSizes;
 use gpui::{Pixels, Point, ScrollHandle, UniformListScrollHandle};
+use std::rc::Rc;
 use std::{collections::BTreeSet, ops::Range, path::PathBuf};
 
 pub(super) struct DocumentTab {
@@ -14,6 +17,10 @@ pub(super) struct DocumentTab {
     pub sidebar_scroll: UniformListScrollHandle,
     pub failed_thumbnails: BTreeSet<usize>,
     pub error: Option<String>,
+    pub sizes: Option<PageSizes>,
+    pub column: Option<Rc<Column>>,
+    pub follow_scroll: bool,
+    pub pending_scroll: bool,
     pub jumps: Jumps,
     pub pending_anchor: Option<(f32, f32)>,
     pub outline: Option<OutlineTree>,
@@ -34,6 +41,10 @@ impl DocumentTab {
             sidebar_scroll: UniformListScrollHandle::new(),
             failed_thumbnails: BTreeSet::new(),
             error: None,
+            sizes: None,
+            column: None,
+            follow_scroll: false,
+            pending_scroll: false,
             jumps: Jumps::default(),
             pending_anchor: None,
             outline: None,

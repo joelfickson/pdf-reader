@@ -253,6 +253,25 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
     }
 }
 
+fn render_view(document: &PdfDocument<'_>, view: &super::ViewKey) -> Result<super::Raster> {
+    let page = document.pages().get(view.page as i32)?;
+    let base_width = page.width().value * 96.0 / 72.0;
+    let logical_width = view.zoom.map_or(view.available_width as f32, |zoom| {
+        base_width * zoom as f32 / 100.0
+    });
+    render(&page, logical_width, view.scale as f32 / 100.0, 4096)
+}
+
+fn page_sizes(document: &PdfDocument<'_>) -> Result<Vec<(f32, f32)>> {
+    let pages = document.pages();
+    (0..pages.len())
+        .map(|index| {
+            let size = pages.page_size(index)?;
+            Ok((size.width().value, size.height().value))
+        })
+        .collect()
+}
+
 fn render_job<'a>(
     engine: &'a Pdfium,
     documents: &mut Documents<'a>,
@@ -270,18 +289,19 @@ fn render_job<'a>(
     if count == 0 {
         bail!("This PDF has no pages to display.");
     }
-    sender.send_blocking(Event::Metadata { generation, count })?;
+    let sizes = if job.sizes {
+        Some(Arc::new(page_sizes(document)?))
+    } else {
+        None
+    };
+    sender.send_blocking(Event::Metadata {
+        generation,
+        count,
+        sizes,
+    })?;
     if job.render_page && current() {
-        let page = document.pages().get(job.view.page as i32)?;
-        let base_width = page.width().value * 96.0 / 72.0;
-        let logical_width = job
-            .view
-            .zoom
-            .map_or(job.view.available_width as f32, |zoom| {
-                base_width * zoom as f32 / 100.0
-            });
         crate::bench::mark("render_start");
-        let raster = render(&page, logical_width, job.view.scale as f32 / 100.0, 4096)?;
+        let raster = render_view(document, &job.view)?;
         crate::bench::mark("render_done");
         if current() {
             sender.send_blocking(Event::Page {
@@ -312,6 +332,43 @@ fn render_job<'a>(
             session: job.view.session,
             outline: Arc::new(super::tools::outline(document)),
         })?;
+    }
+    for view in &job.nearby {
+        if !current() {
+            break;
+        }
+        if view.page >= count {
+            continue;
+        }
+        if let Ok(raster) = render_view(document, view) {
+            sender.send_blocking(Event::Page {
+                generation,
+                view: view.clone(),
+                raster,
+            })?;
+        }
+    }
+    for &index in &job.nearby_text {
+        if !current() {
+            break;
+        }
+        if index >= count {
+            continue;
+        }
+        let text = document
+            .pages()
+            .get(index as i32)
+            .map_err(anyhow::Error::from)
+            .and_then(|page| super::text::extract(&page, current))
+            .map(Arc::new)
+            .map_err(|_| "Text selection is unavailable on this page.".to_string());
+        if current() {
+            sender.send_blocking(Event::Text {
+                generation,
+                key: (job.view.session, index),
+                text,
+            })?;
+        }
     }
     for index in job.thumbnails {
         if !current() {
@@ -491,6 +548,9 @@ mod tests {
             extract_text: false,
             thumbnails: vec![],
             outline: false,
+            sizes: false,
+            nearby: vec![],
+            nearby_text: vec![],
         });
         let (mut rendered, mut finished) = (false, false);
         while !(rendered && finished) {
@@ -548,6 +608,9 @@ mod tests {
             extract_text: true,
             thumbnails: vec![0, 2],
             outline: false,
+            sizes: false,
+            nearby: vec![],
+            nearby_text: vec![],
         };
         let receive = || {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -571,6 +634,7 @@ mod tests {
             Event::Metadata {
                 generation,
                 count: 3,
+                ..
             } => assert_eq!(generation, recovered),
             Event::Error { message, .. } => panic!("Recovery failed: {message}"),
             _ => panic!("Expected document metadata"),
@@ -635,6 +699,53 @@ mod tests {
         }
         worker.submit(make_job(root.join("missing-file.pdf"), 3));
         assert!(matches!(receive(), Event::Error { .. }));
+        let mut sized = make_job(root.join("tests/fixtures/selection.pdf"), 9);
+        sized.render_page = false;
+        sized.extract_text = false;
+        sized.thumbnails.clear();
+        sized.sizes = true;
+        worker.submit(sized);
+        match receive() {
+            Event::Metadata {
+                count: 3,
+                sizes: Some(sizes),
+                ..
+            } => {
+                assert_eq!(sizes[0], (612.0, 792.0));
+                assert_eq!(sizes[1], (792.0, 612.0));
+            }
+            _ => panic!("Expected page sizes"),
+        }
+        let mut nearby = make_job(root.join("tests/fixtures/selection.pdf"), 9);
+        nearby.render_page = false;
+        nearby.extract_text = false;
+        nearby.thumbnails.clear();
+        nearby.nearby = vec![ViewKey {
+            session: 9,
+            page: 1,
+            available_width: 400,
+            zoom: None,
+            scale: 100,
+        }];
+        nearby.nearby_text = vec![1];
+        worker.submit(nearby);
+        assert!(matches!(receive(), Event::Metadata { sizes: None, .. }));
+        match receive() {
+            Event::Page { view, raster, .. } => {
+                assert_eq!(view.page, 1);
+                assert_eq!(raster.logical_width, 400.0);
+                assert!(raster.width > raster.height);
+            }
+            _ => panic!("Expected the nearby page"),
+        }
+        assert!(matches!(
+            receive(),
+            Event::Text {
+                key: (9, 1),
+                text: Ok(_),
+                ..
+            }
+        ));
         for page in 0..3 {
             let mut job = make_job(root.join("tests/fixtures/selection.pdf"), 9);
             job.view.page = page;
@@ -728,6 +839,9 @@ mod tests {
                 extract_text: true,
                 thumbnails: vec![],
                 outline: false,
+                sizes: false,
+                nearby: vec![],
+                nearby_text: vec![],
             });
         }
         let pending = queue.pending.lock();
