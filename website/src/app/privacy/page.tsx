@@ -6,7 +6,7 @@ import "./privacy.css";
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "How Agentic PDF handles your data: no account, no tracking, no uploads, and a short local list of recent files you can clear.",
+    "How Agentic PDF handles your data: no account, no tracking, no uploads, a short local list of recent files you can clear, and an update check you can turn off.",
 };
 
 const PROMISES = [
@@ -16,11 +16,26 @@ const PROMISES = [
   ],
   [
     "tracking.",
-    "The reader's code contains no telemetry, no analytics and no network requests.",
+    "The reader contains no telemetry and no analytics. Its only request of its own is the update check, which you can turn off.",
   ],
   [
     "uploads.",
     "Documents are opened and rendered on your computer by the PDFium engine. They are never sent anywhere.",
+  ],
+];
+
+const UPDATE_FACTS = [
+  [
+    "Sent",
+    "A request to GitHub for the list of releases, about 10 seconds after launch and every 6 hours. It carries no document data and no identifier of its own.",
+  ],
+  [
+    "Saved",
+    "Your update choices, and a downloaded update until it is installed",
+  ],
+  [
+    "Checked",
+    "Every download must match the release's published checksums. On macOS it must also be signed by the same developer as the app you have.",
   ],
 ];
 
@@ -51,7 +66,7 @@ export default function PrivacyPage() {
             explains, in plain language, what the app does with your data, what
             it keeps, and how to remove it.
           </p>
-          <div className="updated">Last updated 7 November 2026</div>
+          <div className="updated">Last updated 10 November 2026</div>
           <div className="promises">
             {PROMISES.map(([word, body]) => (
               <div key={word}>
@@ -81,7 +96,11 @@ export default function PrivacyPage() {
               When you copy text, the selected text is placed on your system
               clipboard, as with any app. Nothing else leaves the reader.
             </p>
-            <p>Version 0.1.2 writes no files of its own to your computer.</p>
+            <p>
+              Beyond your documents, the app keeps two things on your computer:
+              a list of recent files and its update settings, both described
+              below.
+            </p>
           </div>
         </section>
 
@@ -91,13 +110,11 @@ export default function PrivacyPage() {
             <h2>
               A short list of <em>recent files</em>
             </h2>
-            <StatusLabel status="next" />
           </div>
           <div className="body">
             <p>
-              Starting with the next release, the app remembers the PDFs you
-              opened so it can list them under Recent and reopen them where you
-              left off. It keeps only this:
+              The app remembers the PDFs you opened so it can list them under
+              Recent and reopen them where you left off. It keeps only this:
             </p>
             <ul>
               {RECENT_FACTS.map(([label, fact]) => (
@@ -123,6 +140,48 @@ export default function PrivacyPage() {
 
         <section className="topic">
           <div>
+            <div className="eyebrow">Updates</div>
+            <h2>
+              Checking for a <em>new version</em>
+            </h2>
+          </div>
+          <div className="body">
+            <p>
+              Release builds check GitHub for a newer version and download it in
+              the background. It is installed only when you restart or quit the
+              app.
+            </p>
+            <ul>
+              {UPDATE_FACTS.map(([label, fact]) => (
+                <li key={label}>
+                  <span>{label}</span>
+                  {fact}
+                </li>
+              ))}
+              <li>
+                <span>macOS</span>
+                <code>
+                  ~/Library/Application
+                  Support/org.pdfreader.desktop/updates.conf
+                </code>
+              </li>
+              <li>
+                <span>Windows</span>
+                <code>%APPDATA%\PDF Reader\updates.conf</code>
+              </li>
+            </ul>
+            <p>
+              Like any web request, the check reveals your IP address to GitHub,
+              so GitHub&apos;s privacy statement applies. To stop it, open
+              Settings, then Updates, and clear Download new versions
+              automatically. The app then contacts GitHub only when you choose
+              Check now.
+            </p>
+          </div>
+        </section>
+
+        <section className="topic">
+          <div>
             <div className="eyebrow">Your control</div>
             <h2>
               How to <em>delete it</em>
@@ -134,10 +193,10 @@ export default function PrivacyPage() {
               Menu.
             </p>
             <p>
-              <b>Remove everything:</b> quit the app and delete the{" "}
-              <code>recent.tsv</code> file shown above. Deleting the app removes
-              the program itself; the recent list is a separate file, so delete
-              it too if you want no trace.
+              <b>Remove everything:</b> quit the app and delete its folder, the
+              one holding <code>recent.tsv</code> and <code>updates.conf</code>{" "}
+              shown above. Deleting the app removes the program itself; that
+              folder is separate, so delete it too if you want no trace.
             </p>
             <p>
               If a file in the list was moved or deleted, choosing it removes it
@@ -152,25 +211,26 @@ export default function PrivacyPage() {
             <h2>
               You choose who <em>reads along</em>
             </h2>
-            <StatusLabel status="soon" />
+            <StatusLabel status="now" />
           </div>
           <div className="body">
             <p>
-              The agent panel is being built in the open, tracked in{" "}
-              <a href={AGENT_ISSUE_URL}>issue #18</a>. It is not in any release
-              yet. This is how it is designed to work:
+              The agent panel is built in the open, tracked in{" "}
+              <a href={AGENT_ISSUE_URL}>issue #18</a>. This is how it works:
             </p>
             <p>
               <b>Only the agent you pick.</b> The panel connects to an agent
               already installed on your computer, such as Claude Code, Codex or
               Gemini CLI. Parts of your document are shared only with that
-              agent, through that agent's own connection, under its provider's
-              terms.
+              agent, through that agent&apos;s own connection, under its
+              provider&apos;s terms. The agent keeps its own tools and
+              permissions, and any permission it asks for is shown in the panel
+              for you to answer.
             </p>
             <p>
-              <b>Reading is not writing.</b> The agent can read the outline,
-              search and read text through the reader's tools. Adding highlights
-              or notes to your document always waits for your approval.
+              <b>Reading is not writing.</b> The reader gives the agent tools to
+              read the outline, search and read text. None of them can change
+              your document.
             </p>
             <p>
               <b>Nothing by default.</b> If you never open the panel, no agent
