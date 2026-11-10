@@ -1101,3 +1101,108 @@ fn continuous_layout_tracks_scrolling_navigation_and_tabs(cx: &mut TestAppContex
     let (restored_page, restored, _) = state(cx);
     assert_eq!((restored_page, restored), (page, offset));
 }
+
+#[gpui::test]
+fn update_ready_control_popover_and_settings_states(cx: &mut TestAppContext) {
+    use super::updates::Phase;
+    use crate::update::{Asset, Release, Version};
+    use std::time::Instant;
+
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let asset = |name: &str| Asset {
+        name: name.into(),
+        size: 1,
+        url: String::new(),
+    };
+    let release = || Release {
+        version: Version::parse_tag("v9.9.9").unwrap(),
+        tag: "v9.9.9".into(),
+        page_url: String::new(),
+        notes: vec![
+            "Pages scroll as one continuous column, even when the note is long enough to wrap"
+                .into(),
+            "Agent panel for installed agents".into(),
+        ],
+        archive: asset("archive.zip"),
+        sums: asset("SHA256SUMS.txt"),
+    };
+    assert!(cx.debug_bounds("update-ready").is_none());
+    cx.update(|_, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.updates.phase = Phase::Ready {
+                release: Box::new(release()),
+                staged: PathBuf::from("/nonexistent"),
+            };
+            cx.notify();
+        })
+    });
+    cx.run_until_parked();
+    let control = cx
+        .debug_bounds("update-ready")
+        .expect("Update ready is visible");
+    cx.simulate_click(control.center(), Default::default());
+    cx.run_until_parked();
+    let popover = cx.debug_bounds("update-popover").expect("popover is open");
+    let restart = cx.debug_bounds("update-restart").unwrap();
+    let later = cx.debug_bounds("update-later").unwrap();
+    assert!(cx.debug_bounds("update-notes").is_some());
+    assert_eq!(later.left() - restart.right(), px(8.0));
+    assert_eq!(popover.size.width, px(340.0));
+    assert!(popover.top() >= control.bottom());
+
+    cx.simulate_click(later.center(), Default::default());
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.updates.dismissed);
+        assert!(!reader.updates.shows_control());
+        assert_eq!(reader.chrome.overlay, chrome::Overlay::None);
+    });
+
+    let now = Instant::now();
+    let phases = [
+        Phase::Unavailable("Updates are available in release builds only"),
+        Phase::Idle,
+        Phase::Checking,
+        Phase::Current { checked: now },
+        Phase::Downloading {
+            version: "9.9.9".into(),
+            received: 14_200_000,
+            total: 31_000_000,
+        },
+        Phase::Ready {
+            release: Box::new(release()),
+            staged: PathBuf::from("/nonexistent"),
+        },
+        Phase::Installing {
+            version: "9.9.9".into(),
+        },
+        Phase::Failed {
+            message: "The 9.9.9 download did not match its checksum and was removed".into(),
+            checked: now,
+        },
+    ];
+    for phase in phases {
+        cx.update(|_, cx| {
+            reader.update(cx, |reader, cx| {
+                reader.updates.phase = phase;
+                reader.chrome.settings_section = super::updates::UPDATES_SECTION;
+                reader.chrome.overlay = chrome::Overlay::Settings;
+                cx.notify();
+            })
+        });
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("update-automatic").is_some());
+    }
+    let installing = cx.update(|_, cx| {
+        reader.update(cx, |reader, _| {
+            reader.updates.phase = Phase::Installing {
+                version: "9.9.9".into(),
+            };
+            reader.updates.shows_control()
+        })
+    });
+    assert!(installing);
+}

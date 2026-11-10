@@ -53,6 +53,7 @@ pub(super) enum Command {
     Save,
     DocumentInfo,
     Settings,
+    CheckForUpdates,
     Shortcuts,
     CloseTab,
 }
@@ -74,7 +75,7 @@ pub(super) fn back_forward() -> String {
 }
 
 impl Command {
-    pub const ALL: [Command; 28] = [
+    pub const ALL: [Command; 29] = [
         Self::GoToPage,
         Self::Find,
         Self::Bookmark,
@@ -101,6 +102,7 @@ impl Command {
         Self::Save,
         Self::DocumentInfo,
         Self::Settings,
+        Self::CheckForUpdates,
         Self::Shortcuts,
         Self::CloseTab,
     ];
@@ -133,6 +135,7 @@ impl Command {
             Self::Save => "Save",
             Self::DocumentInfo => "Document info",
             Self::Settings => "Settings",
+            Self::CheckForUpdates => "Check for updates",
             Self::Shortcuts => "Keyboard shortcuts",
             Self::CloseTab => "Close tab",
         }
@@ -165,6 +168,7 @@ impl Command {
             Self::Print => Icon::Print,
             Self::Save => Icon::Save,
             Self::Settings => Icon::Settings,
+            Self::CheckForUpdates => Icon::Redo,
             Self::Shortcuts => Icon::Keyboard,
             Self::CloseTab => Icon::Close,
         }
@@ -222,7 +226,12 @@ impl Command {
     fn needs_document(self) -> bool {
         !matches!(
             self,
-            Self::Open | Self::Settings | Self::Shortcuts | Self::Combine | Self::ToggleSidebar
+            Self::Open
+                | Self::Settings
+                | Self::CheckForUpdates
+                | Self::Shortcuts
+                | Self::Combine
+                | Self::ToggleSidebar
         )
     }
 }
@@ -321,6 +330,7 @@ impl Reader {
             Command::Combine => self.set_overlay(Overlay::Combine, cx),
             Command::Print => self.set_overlay(Overlay::Print, cx),
             Command::Settings => self.set_overlay(Overlay::Settings, cx),
+            Command::CheckForUpdates => window.dispatch_action(Box::new(CheckForUpdates), cx),
             Command::Shortcuts => self.set_overlay(Overlay::Shortcuts, cx),
             Command::Bookmark => self.unavailable("Bookmarking pages", cx),
             Command::Highlight => self.unavailable("Highlighting", cx),

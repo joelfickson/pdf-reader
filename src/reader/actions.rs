@@ -26,6 +26,7 @@ actions!(
         ShowExport,
         ShowPrint,
         ShowSettings,
+        CheckForUpdates,
         ShowShortcuts,
         GoToPage,
         Dismiss,

@@ -20,7 +20,7 @@ pub(crate) struct RecentFiles {
     store: Option<PathBuf>,
 }
 
-fn data_dir() -> Option<PathBuf> {
+pub(crate) fn data_dir() -> Option<PathBuf> {
     let name = if cfg!(debug_assertions) {
         "PDF Reader Debug"
     } else {
