@@ -124,13 +124,9 @@ impl Reader {
         if SELECTED.swap(true, Ordering::SeqCst) {
             return;
         }
-        if let Some(Ok(text)) = &self.text {
+        if let (Some(Ok(text)), Some(tab)) = (&self.text, self.tabs.current()) {
             let end = text.glyphs.len().min(60);
-            self.selection = Some(Selection {
-                anchor: 0,
-                head: end,
-                dragging: false,
-            });
+            self.selection = Some(Selection::within(tab.page, 0..end));
             cx.notify();
         }
     }

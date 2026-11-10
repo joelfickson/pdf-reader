@@ -98,7 +98,7 @@ impl Reader {
         if page == tab.page || page >= tab.count {
             return;
         }
-        self.reset_request(window);
+        self.cancel_request(window);
         if let Some(tab) = self.tabs.current_mut() {
             tab.page = page;
             tab.error = None;
@@ -240,11 +240,20 @@ impl Reader {
             .map(|page| view_for(*page))
             .filter(|view| !self.pages.contains_key(view))
             .collect();
-        let nearby_text: Vec<usize> = nearby
+        let mut nearby_text: Vec<usize> = nearby
             .iter()
             .copied()
             .filter(|page| !self.texts.contains_key(&(session, *page)))
             .collect();
+        for page in std::mem::take(&mut self.wanted_text) {
+            if page != tab.page
+                && page < tab.count
+                && !nearby_text.contains(&page)
+                && !self.texts.contains_key(&(session, page))
+            {
+                nearby_text.push(page);
+            }
+        }
         let text_key = (view.session, view.page);
         if self.text.is_none() {
             self.text = self.texts.get(&text_key).cloned();

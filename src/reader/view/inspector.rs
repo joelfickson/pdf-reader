@@ -132,13 +132,11 @@ impl Reader {
 
     fn inspector_selection(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.chrome.theme;
-        let selected = match (&self.text, &self.selection) {
-            (Some(Ok(text)), Some(selection)) if !selection.range().is_empty() => {
-                Some(text.content(selection.range()))
-            }
-            _ => None,
-        };
-        let Some(content) = selected else {
+        let selected = self
+            .selected_text()
+            .and_then(Result::ok)
+            .zip(self.selection.as_ref().map(|selection| selection.pages()));
+        let Some((content, pages)) = selected else {
             return empty_state(
                 &theme,
                 Icon::Cursor,
@@ -158,7 +156,11 @@ impl Reader {
                     .child(row(
                         &theme,
                         "Page",
-                        mono((self.tabs.current().map_or(0, |tab| tab.page) + 1).to_string()),
+                        mono(if pages.start() == pages.end() {
+                            (pages.start() + 1).to_string()
+                        } else {
+                            format!("{}-{}", pages.start() + 1, pages.end() + 1)
+                        }),
                     ))
                     .child(row(&theme, "Words", mono(words.to_string())))
                     .child(row(

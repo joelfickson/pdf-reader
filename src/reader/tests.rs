@@ -1,6 +1,6 @@
 use super::*;
 use crate::pdf::{
-    Raster,
+    Raster, ViewKey,
     text::{Geometry, Glyph, Link, LinkTarget, PageText, TextRect},
 };
 use gpui::{ExternalPaths, FileDropEvent, MouseButton, TestAppContext, point, px};
@@ -565,11 +565,7 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
     let screens: Vec<(&str, Setup)> = vec![
         ("reading", |_, _, _| {}),
         ("selection", |r, _, cx| {
-            r.selection = Some(selection::Selection {
-                anchor: 0,
-                head: 8,
-                dragging: false,
-            });
+            r.selection = Some(selection::Selection::within(0, 0..8));
             cx.notify();
         }),
         ("palette", |r, _, cx| r.set_overlay(Overlay::Palette, cx)),
@@ -655,11 +651,7 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
             r.set_inspector(InspectorTab::Selection, w, cx)
         }),
         ("inspector selection", |r, w, cx| {
-            r.selection = Some(selection::Selection {
-                anchor: 0,
-                head: 8,
-                dragging: false,
-            });
+            r.selection = Some(selection::Selection::within(0, 0..8));
             r.set_inspector(InspectorTab::Selection, w, cx);
         }),
         ("inspector signatures", |r, w, cx| {
@@ -1100,6 +1092,180 @@ fn continuous_layout_tracks_scrolling_navigation_and_tabs(cx: &mut TestAppContex
     cx.run_until_parked();
     let (restored_page, restored, _) = state(cx);
     assert_eq!((restored_page, restored), (page, offset));
+}
+
+fn line_text(content: &str, top: f32) -> TextResult {
+    Ok(Arc::new(PageText {
+        links: Vec::new(),
+        geometry: Geometry::UNIT,
+        glyphs: content
+            .chars()
+            .enumerate()
+            .map(|(index, value)| Glyph {
+                value,
+                bounds: Some(TextRect {
+                    left: 0.1 + index as f32 * 0.02,
+                    right: 0.12 + index as f32 * 0.02,
+                    top,
+                    bottom: top + 0.03,
+                }),
+                direction: [1.0, 0.0],
+            })
+            .collect(),
+    }))
+}
+
+#[gpui::test]
+fn continuous_selection_spans_pages_copies_and_survives_scrolling(cx: &mut TestAppContext) {
+    use gpui::{ClipboardItem, ScrollDelta, ScrollWheelEvent};
+
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.open_paths(vec![root.join("tests/fixtures/reading.pdf")], window, cx);
+            let generation = reader.generation;
+            reader.receive(
+                Event::Metadata {
+                    generation,
+                    count: 4,
+                    sizes: Some(Arc::new(vec![(612.0, 792.0); 4])),
+                },
+                window,
+                cx,
+            );
+            reader.request(window);
+            assert!(reader.continuous());
+            let view = reader.last_request.as_ref().unwrap().0.clone();
+            let session = view.session;
+            let width = view.available_width as f32;
+            for page in 0..3 {
+                reader.receive(
+                    Event::Page {
+                        generation: reader.generation,
+                        view: ViewKey {
+                            page,
+                            ..view.clone()
+                        },
+                        raster: Raster {
+                            bytes: vec![255; 40 * 52 * 4],
+                            width: 40,
+                            height: 52,
+                            logical_width: width,
+                            logical_height: width * 792.0 / 612.0,
+                            zoom_percent: 100.0,
+                        },
+                    },
+                    window,
+                    cx,
+                );
+            }
+            for (page, content, top) in [
+                (0, "First page ends here", 0.9),
+                (1, "Second page starts", 0.05),
+                (2, "Third", 0.05),
+            ] {
+                reader.receive(
+                    Event::Text {
+                        generation: reader.generation,
+                        key: (session, page),
+                        text: line_text(content, top),
+                    },
+                    window,
+                    cx,
+                );
+            }
+            let column = reader.tabs.current().unwrap().column.clone().unwrap();
+            let (_, viewport) = reader.viewport(window);
+            let tab = reader.tabs.current_mut().unwrap();
+            tab.scroll.set_offset(point(
+                px(0.0),
+                px(-(column::COLUMN_TOP + column.tops[1] - viewport / 2.0)),
+            ));
+            cx.notify();
+        })
+    });
+    cx.run_until_parked();
+    let frames = cx.read(|cx| reader.read(cx).page_frames.borrow().clone());
+    let (first, second) = (frames[&0], frames[&1]);
+    let at = |bounds: gpui::Bounds<gpui::Pixels>, x: f32, y: f32| {
+        bounds.origin + point(bounds.size.width * x, bounds.size.height * y)
+    };
+    let start = at(first, 0.1 + 6.0 * 0.02 + 0.002, 0.915);
+    let end = at(second, 0.1 + 5.0 * 0.02 + 0.018, 0.065);
+    cx.simulate_mouse_down(start, MouseButton::Left, Default::default());
+    cx.simulate_mouse_move(end, MouseButton::Left, Default::default());
+    cx.simulate_mouse_up(end, MouseButton::Left, Default::default());
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        let selection = reader.selection.as_ref().expect("a selection was made");
+        assert_eq!(reader.tabs.current().unwrap().page, 0);
+        assert_eq!(selection.pages(), 0..=1);
+        assert_eq!(selection.on_page(0, 20), 6..20);
+        assert_eq!(selection.on_page(1, 18), 0..6);
+    });
+    cx.dispatch_action(CopyText);
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|item| item.text()),
+        Some("page ends here\nSecond".into())
+    );
+
+    let column = cx.read(|cx| {
+        reader
+            .read(cx)
+            .tabs
+            .current()
+            .unwrap()
+            .column
+            .clone()
+            .unwrap()
+    });
+    let canvas = cx
+        .debug_bounds("document-canvas")
+        .expect("the document canvas is on screen");
+    cx.simulate_event(ScrollWheelEvent {
+        position: canvas.center(),
+        delta: ScrollDelta::Pixels(point(px(0.0), px(-column.heights[0]))),
+        ..Default::default()
+    });
+    cx.run_until_parked();
+    cx.write_to_clipboard(ClipboardItem::new_string(String::new()));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_ne!(reader.tabs.current().unwrap().page, 0);
+        assert!(reader.has_selection());
+    });
+    cx.dispatch_action(CopyText);
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|item| item.text()),
+        Some("page ends here\nSecond".into())
+    );
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            let session = reader.tabs.current().unwrap().session;
+            reader.selection = Some(selection::Selection {
+                anchor: selection::Caret { page: 0, glyph: 6 },
+                head: selection::Caret { page: 2, glyph: 5 },
+                dragging: false,
+            });
+            reader.texts.take(&(session, 1));
+            if reader.tabs.current().unwrap().page == 1 {
+                reader.text = None;
+            }
+            reader.copy(&CopyText, window, cx);
+            let toast = reader.chrome.toast.as_ref().expect("copy explains the gap");
+            assert_eq!(toast.title.to_string(), "Selection is still loading");
+            assert!(toast.message.contains("page 2"));
+            assert!(reader.has_selection());
+        })
+    });
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|item| item.text()),
+        Some("page ends here\nSecond".into())
+    );
 }
 
 #[gpui::test]

@@ -18,6 +18,7 @@ impl Reader {
     ) -> impl IntoElement {
         let theme = self.chrome.theme;
         let content = if let Some(error) = self.tabs.current().and_then(|tab| tab.error.as_ref()) {
+            self.page_frames.borrow_mut().clear();
             div()
                 .mt(px(120.0))
                 .w(px(420.0))
@@ -43,9 +44,13 @@ impl Reader {
             self.column_element(&column, window, cx)
         } else if let Some(image) = &self.image {
             let page = self.tabs.current().map_or(0, |tab| tab.page);
+            self.page_frames
+                .borrow_mut()
+                .retain(|framed, _| *framed == page);
             self.page_element(page, image, self.text.as_ref(), cx)
                 .into_any_element()
         } else {
+            self.page_frames.borrow_mut().clear();
             div()
                 .mt(px(120.0))
                 .text_color(theme.muted)
@@ -86,13 +91,17 @@ impl Reader {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let Some(tab) = self.tabs.current() else {
+            self.page_frames.borrow_mut().clear();
             return div().into_any_element();
         };
         let (session, current, zoom) = (tab.session, tab.page, tab.zoom);
         let scale = (window.scale_factor() * 100.0).round() as u32;
         let (top, height) = self.viewport(window);
-        let pages: Vec<AnyElement> = column
-            .around(top, height)
+        let around = column.around(top, height);
+        self.page_frames
+            .borrow_mut()
+            .retain(|page, _| around.contains(page));
+        let pages: Vec<AnyElement> = around
             .map(|page| {
                 let view = ViewKey {
                     session,
