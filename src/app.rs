@@ -69,6 +69,8 @@ pub(crate) fn menus(recent: &[RecentFile]) -> Vec<Menu> {
         Menu {
             name: "PDF Reader".into(),
             items: vec![
+                MenuItem::action("Check for Updates…", CheckForUpdates),
+                MenuItem::separator(),
                 MenuItem::action("Settings…", ShowSettings),
                 MenuItem::separator(),
                 MenuItem::action("Quit PDF Reader", Quit),

@@ -20,6 +20,7 @@ pub(super) enum Overlay {
     Print,
     Settings,
     Shortcuts,
+    Update,
 }
 
 impl Overlay {

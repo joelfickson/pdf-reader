@@ -18,6 +18,7 @@ mod selection;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod updates;
 mod view;
 
 use crate::pdf::{
@@ -62,6 +63,7 @@ pub(crate) struct Reader {
     recent: RecentFiles,
     pressed_link: Option<Link>,
     agent: agent::AgentPanel,
+    updates: updates::Updates,
     scroll_probe: Option<crate::bench::ScrollProbe>,
 }
 
@@ -98,6 +100,7 @@ impl Reader {
         .detach();
         cx.on_app_quit(|this, cx| {
             this.persist_recent(cx);
+            this.updates.install_on_quit();
             async {}
         })
         .detach();
@@ -108,6 +111,7 @@ impl Reader {
                 Some(format!("Recent files could not be loaded. {error:#}")),
             ),
         };
+        let (updates, updates_error) = updates::Updates::load();
         let theme = Theme::resolve(Default::default(), window.appearance());
         let focus = cx.focus_handle();
         focus.focus(window);
@@ -139,9 +143,19 @@ impl Reader {
             recent,
             pressed_link: None,
             agent: agent::AgentPanel::default(),
+            updates,
             scroll_probe: crate::bench::scrolling().then(Default::default),
         };
         reader.notice = recent_error;
+        if let Some(error) = updates_error {
+            reader.show_toast(
+                crate::ui::kit::Status::Warn,
+                "Update settings could not be loaded",
+                &error,
+                cx,
+            );
+        }
+        reader.start_update_schedule(cx);
         cx.set_menus(crate::app::menus(reader.recent.entries()));
         #[cfg(debug_assertions)]
         reader.preview_theme(window, cx);

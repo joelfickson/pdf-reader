@@ -9,6 +9,7 @@ mod pdf;
 mod reader;
 mod recent;
 mod ui;
+mod update;
 
 use cli::Command;
 
