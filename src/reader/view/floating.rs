@@ -746,11 +746,11 @@ impl Reader {
             return None;
         };
         let selection = self.selection.as_ref()?;
+        let page = self.tabs.current()?.page;
         let first = text
             .glyphs
+            .get(selection.on_page(page, text.glyphs.len()))?
             .iter()
-            .skip(selection.range().start)
-            .take(selection.range().len())
             .find_map(|glyph| glyph.bounds)?;
         let bounds = self.page_bounds.get();
         if bounds.size.width <= px(0.0) {

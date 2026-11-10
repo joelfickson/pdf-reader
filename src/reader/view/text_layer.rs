@@ -42,8 +42,9 @@ impl Reader {
                     );
                 }
             }
-            if current && let Some(selection) = &self.selection {
-                rects.extend(glyphs(selection.range()).map(|rect| (rect, theme.select)));
+            if let Some(selection) = &self.selection {
+                let range = selection.on_page(page, text.glyphs.len());
+                rects.extend(glyphs(range).map(|rect| (rect, theme.select)));
             }
         }
         let page_bounds = if current {
@@ -52,6 +53,7 @@ impl Reader {
             Rc::new(Cell::new(Bounds::default()))
         };
         let pressed_bounds = page_bounds.clone();
+        let frames = self.page_frames.clone();
         clickable(("rendered-page", page))
             .relative()
             .flex_shrink_0()
@@ -72,7 +74,14 @@ impl Reader {
                     if this.pressed_link.is_some() {
                         this.focus.focus(window);
                     } else {
-                        this.select_at(event.position, this.page_bounds.get(), true, window, cx);
+                        this.select_at(
+                            page,
+                            event.position,
+                            this.page_bounds.get(),
+                            true,
+                            window,
+                            cx,
+                        );
                     }
                     cx.stop_propagation();
                 }),
@@ -92,6 +101,7 @@ impl Reader {
                 canvas(
                     move |bounds, window, _| {
                         page_bounds.set(bounds);
+                        frames.borrow_mut().insert(page, bounds);
                         links
                             .iter()
                             .map(|rect| {

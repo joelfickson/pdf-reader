@@ -169,7 +169,7 @@ impl Render for Reader {
                             .as_ref()
                             .is_some_and(|selection| selection.dragging)
                     {
-                        this.select_at(event.position, this.page_bounds.get(), false, window, cx);
+                        this.drag_selection(event.position, window, cx);
                     }
                 }),
             )

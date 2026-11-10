@@ -33,10 +33,20 @@ use chrome::Chrome;
 use gpui::{Context, FocusHandle, Window};
 use images::PageImage;
 use selection::Selection;
-use std::{cell::Cell, ops::Range, path::PathBuf, rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+    ops::Range,
+    path::PathBuf,
+    rc::Rc,
+    sync::Arc,
+};
 use tabs::Tabs;
 
 type TextResult = Result<Arc<PageText>, String>;
+type PageFrames = Rc<RefCell<BTreeMap<usize, gpui::Bounds<gpui::Pixels>>>>;
+
+const TEXT_PAGES: usize = 32;
 
 pub(crate) struct Reader {
     focus: FocusHandle,
@@ -51,12 +61,14 @@ pub(crate) struct Reader {
     texts: PageCache<TextResult, (u64, usize)>,
     text: Option<TextResult>,
     selection: Option<Selection>,
+    wanted_text: Vec<usize>,
     last_request: Option<(ViewKey, Range<usize>, Vec<usize>)>,
     busy: bool,
     picker_open: bool,
     notice: Option<String>,
     copied: bool,
     page_bounds: Rc<Cell<gpui::Bounds<gpui::Pixels>>>,
+    page_frames: PageFrames,
     chrome: Chrome,
     search: Option<search::SearchState>,
     reveal: bool,
@@ -125,18 +137,20 @@ impl Reader {
             image_key: None,
             pages: PageCache::new(8, 64 * 1024 * 1024, PageImage::byte_len),
             thumbnails: PageCache::new(64, 16 * 1024 * 1024, PageImage::byte_len),
-            texts: PageCache::new(32, 16 * 1024 * 1024, |text| match text {
+            texts: PageCache::new(TEXT_PAGES, 16 * 1024 * 1024, |text| match text {
                 Ok(text) => text.byte_len(),
                 Err(message) => message.len(),
             }),
             text: None,
             selection: None,
+            wanted_text: Vec::new(),
             last_request: None,
             busy: false,
             picker_open: false,
             notice: None,
             copied: false,
             page_bounds: Rc::new(Cell::new(gpui::Bounds::default())),
+            page_frames: PageFrames::default(),
             chrome: Chrome::new(theme),
             search: None,
             reveal: false,
@@ -307,13 +321,18 @@ impl Reader {
     }
 
     fn reset_request(&mut self, window: &mut Window) {
+        self.cancel_request(window);
+        self.selection = None;
+        self.wanted_text.clear();
+        self.copied = false;
+    }
+
+    fn cancel_request(&mut self, window: &mut Window) {
         self.cache_current_page(window);
         self.generation = self.worker.cancel();
         self.last_request = None;
         self.page_bounds.set(gpui::Bounds::default());
         self.text = None;
-        self.selection = None;
-        self.copied = false;
         self.busy = false;
     }
 }
