@@ -41,12 +41,14 @@ fn checked(program: &str, args: &[&std::ffi::OsStr], failure: &str) -> Result<Ou
     Ok(output)
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Signature {
     pub identifier: String,
     pub team: Option<String>,
 }
 
+#[cfg(any(target_os = "macos", test))]
 pub(crate) fn parse_signature(details: &str) -> Option<Signature> {
     let field = |name: &str| {
         details
