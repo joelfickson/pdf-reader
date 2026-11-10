@@ -11,6 +11,7 @@ mod settings;
 mod sidebar;
 mod text_layer;
 mod titlebar;
+mod updates;
 
 use super::{
     Reader,
@@ -119,6 +120,7 @@ impl Render for Reader {
             .track_focus(&self.focus)
             .key_context(key_context)
             .on_action(cx.listener(Self::open))
+            .on_action(cx.listener(Self::check_for_updates))
             .on_action(cx.listener(Self::open_recent))
             .on_action(cx.listener(Self::clear_recent))
             .on_action(cx.listener(Self::previous))

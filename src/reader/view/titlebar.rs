@@ -179,6 +179,7 @@ impl Reader {
                             this.set_inspector(tab, window, cx)
                         })),
                     )
+                    .children(self.update_control(cx))
                     .child({
                         let open = self.agent.open;
                         let soft = theme.accent_soft;

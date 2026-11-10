@@ -230,17 +230,9 @@ impl Reader {
                         .text_color(theme.faint)
                         .child("Saved signatures are not available yet"),
                 )),
-            _ => div().child(heading("Updates")).child(form_row(
-                &theme,
-                "Check",
-                self.placeholder_toggle(
-                    "updates",
-                    "Tell me when a new version is out",
-                    false,
-                    "Update checks",
-                    cx,
-                ),
-            )),
+            _ => div()
+                .child(heading("Updates"))
+                .child(self.update_settings(cx)),
         };
         div()
             .flex()
