@@ -12,12 +12,12 @@ static APPLIED: AtomicBool = AtomicBool::new(false);
 static SELECTED: AtomicBool = AtomicBool::new(false);
 
 fn requested() -> Option<String> {
-    std::env::var("PDF_READER_PREVIEW").ok()
+    std::env::var("AGENTICPDF_PREVIEW").ok()
 }
 
 impl Reader {
     pub(super) fn preview_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match std::env::var("PDF_READER_THEME").as_deref() {
+        match std::env::var("AGENTICPDF_THEME").as_deref() {
             Ok("light") => self.set_theme_choice(ThemeChoice::Light, window, cx),
             Ok("dark") => self.set_theme_choice(ThemeChoice::Dark, window, cx),
             _ => {}

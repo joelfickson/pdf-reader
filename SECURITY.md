@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report security problems privately through GitHub: open the [Security tab](https://github.com/joelfickson/pdf-reader/security/advisories/new) and choose "Report a vulnerability". Do not open a public issue, because issues are visible to everyone.
+Report security problems privately through GitHub: open the [Security tab](https://github.com/joelfickson/agenticpdf/security/advisories/new) and choose "Report a vulnerability". Do not open a public issue, because issues are visible to everyone.
 
 Include what you found, how to reproduce it, the version or commit, and the platform. If a specific PDF triggers the problem, attach it to the private report, not to a public issue.
 

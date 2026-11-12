@@ -1,12 +1,12 @@
 # Agentic PDF
 
-[![Check](https://github.com/joelfickson/pdf-reader/actions/workflows/check.yml/badge.svg)](https://github.com/joelfickson/pdf-reader/actions/workflows/check.yml) [![Website](https://github.com/joelfickson/pdf-reader/actions/workflows/website.yml/badge.svg)](https://github.com/joelfickson/pdf-reader/actions/workflows/website.yml)
+[![Check](https://github.com/joelfickson/agenticpdf/actions/workflows/check.yml/badge.svg)](https://github.com/joelfickson/agenticpdf/actions/workflows/check.yml) [![Website](https://github.com/joelfickson/agenticpdf/actions/workflows/website.yml/badge.svg)](https://github.com/joelfickson/agenticpdf/actions/workflows/website.yml)
 
-A fast, native PDF reader for macOS and Windows, built with Rust, GPUI, and PDFium. Next, the AI agents you already use will read alongside you through the Agent Client Protocol ([issue #18](https://github.com/joelfickson/pdf-reader/issues/18)).
+A fast, native PDF reader for macOS and Windows, built with Rust, GPUI, and PDFium. Next, the AI agents you already use will read alongside you through the Agent Client Protocol ([issue #18](https://github.com/joelfickson/agenticpdf/issues/18)).
 
 Website and downloads: <https://agentic-pdf-eta.vercel.app>
 
-This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, highlighting, underlining, and striking through selected text, adding a drawn signature, and saving those into the PDF, searching the whole document, opening PDFs from Finder, and reopening recent files at the page and zoom you left them. OCR, notes, drawing, stamps, typed, image, and certificate signatures, password entry, editing, and the agent panel are not implemented yet. The app is still named PDF Reader in its bundle and menus.
+This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, highlighting, underlining, and striking through selected text, adding a drawn signature, and saving those into the PDF, searching the whole document, opening PDFs from Finder, and reopening recent files at the page and zoom you left them. OCR, notes, drawing, stamps, typed, image, and certificate signatures, password entry, editing, and the agent panel are not implemented yet.
 
 ## Run
 
@@ -15,8 +15,8 @@ Install Rust stable and uv. On macOS, install Xcode and select its command-line 
 Clone the repository:
 
 ```sh
-git clone https://github.com/joelfickson/pdf-reader.git
-cd pdf-reader
+git clone https://github.com/joelfickson/agenticpdf.git
+cd agenticpdf
 ```
 
 From this directory:
@@ -30,12 +30,12 @@ For a local macOS app with PDFium included:
 
 ```sh
 uv run scripts/package_macos.py
-open "target/release/PDF Reader.app"
+open "target/release/Agentic PDF.app"
 ```
 
 Tagged commits matching `v*` are packaged by GitHub Actions for macOS arm64, macOS x64, and Windows x64. The workflow publishes release assets containing the application, PDFium, and dependency license notices.
 
-Use this release app for normal reading and performance checks. `--debug` creates a separate `PDF Reader Debug.app` for development. The bundles are unsigned local builds.
+Use this release app for normal reading and performance checks. `--debug` creates a separate `Agentic PDF Debug.app` for development. The bundles are unsigned local builds.
 
 The setup script selects the Mac or Windows archive for the current architecture, verifies its pinned SHA-256 digest, and extracts PDFium with its upstream license notices to `vendor/pdfium`. It requires Python 3.12 or newer; uv can provision Python if needed. PDFium is a native C++ dependency. The first Cargo build downloads and compiles GPUI and its dependencies.
 
@@ -45,10 +45,10 @@ The app looks for the PDFium library using `PDFIUM_LIBRARY_PATH`, next to its ex
 
 | Command | What it does |
 | --- | --- |
-| `pdf-reader a.pdf b.pdf` | Opens each file in its own tab |
-| `pdf-reader --check <file.pdf>` | Opens and renders the first page without a window, prints one line of timings, and exits |
-| `pdf-reader --version` | Prints the name and version, such as `pdf-reader 0.1.2`, and exits |
-| `pdf-reader mcp` | Runs the MCP server for AI agents (see below) |
+| `agenticpdf a.pdf b.pdf` | Opens each file in its own tab |
+| `agenticpdf --check <file.pdf>` | Opens and renders the first page without a window, prints one line of timings, and exits |
+| `agenticpdf --version` | Prints the name and version, such as `agenticpdf 0.1.2`, and exits |
+| `agenticpdf mcp` | Runs the MCP server for AI agents (see below) |
 
 From a source checkout:
 
@@ -83,7 +83,7 @@ The panel finds agents on your login shell's PATH and starts the first available
 
 ## Use with AI agents (MCP)
 
-`pdf-reader mcp` runs a read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so coding agents such as Claude Code and Codex can read your PDFs. It needs no window and no account.
+`agenticpdf mcp` runs a read-only [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so coding agents such as Claude Code and Codex can read your PDFs. It needs no window and no account.
 
 | Tool | What it returns |
 | --- | --- |
@@ -97,11 +97,11 @@ Page numbers are 1-based. The server only opens `.pdf` files, never writes to th
 Add it to Claude Code or Codex. With the macOS app installed in Applications:
 
 ```sh
-claude mcp add agentic-pdf -- "/Applications/PDF Reader.app/Contents/MacOS/pdf-reader" mcp
-codex mcp add agentic-pdf -- "/Applications/PDF Reader.app/Contents/MacOS/pdf-reader" mcp
+claude mcp add agenticpdf -- "/Applications/Agentic PDF.app/Contents/MacOS/agenticpdf" mcp
+codex mcp add agenticpdf -- "/Applications/Agentic PDF.app/Contents/MacOS/agenticpdf" mcp
 ```
 
-From a source build, use `target/release/pdf-reader mcp`. On Windows, use the path to `pdf-reader.exe` with `pdfium.dll` beside it. The Windows server has not been tested yet.
+From a source build, use `target/release/agenticpdf mcp`. On Windows, use the path to `agenticpdf.exe` with `pdfium.dll` beside it. The Windows server has not been tested yet.
 
 The PDF content only leaves your computer if the agent you use sends it to its model provider.
 
@@ -148,7 +148,7 @@ Source is organized by responsibility:
 src/
   main.rs             Entry point that dispatches the parsed command
   cli.rs              Command-line parsing (paths, --check, --version, and mcp)
-  bench.rs            Launch-to-first-page timing, enabled by PDF_READER_BENCH
+  bench.rs            Launch-to-first-page timing, enabled by AGENTICPDF_BENCH
   agent/              Agent detection, ACP sessions, and the conversation model
   app.rs              Window startup, native menus, key bindings
   reader/
@@ -217,9 +217,9 @@ cargo build --release
 uv run scripts/bench_first_page.py --runs 5 path/to/extra.pdf
 ```
 
-It generates 500- and 2,000-page PDFs, launches the reader once per run with `PDF_READER_BENCH=first-page` (the app prints stage times and quits after the first painted page), and points `HOME` and `APPDATA` at a temporary folder so your Recent list is not used or changed. Each launch briefly opens a window.
+It generates 500- and 2,000-page PDFs, launches the reader once per run with `AGENTICPDF_BENCH=first-page` (the app prints stage times and quits after the first painted page), and points `HOME` and `APPDATA` at a temporary folder so your Recent list is not used or changed. Each launch briefly opens a window.
 
-`PDF_READER_BENCH=scroll` scrolls the continuous layout from the first page to the last at 120 px per frame, then prints frame-interval statistics and the number of frames that showed a page before its image was ready, and quits. Wrap it in `/usr/bin/time -l` on macOS to read peak memory.
+`AGENTICPDF_BENCH=scroll` scrolls the continuous layout from the first page to the last at 120 px per frame, then prints frame-interval statistics and the number of frames that showed a page before its image was ready, and quits. Wrap it in `/usr/bin/time -l` on macOS to read peak memory.
 
 The sample PDF is original test content, reproducible with `uv run scripts/create_sample.py`. GitHub Actions is configured to build and test on Mac and Windows. Windows runtime behavior still requires testing on a Windows machine.
 

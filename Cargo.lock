@@ -77,6 +77,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "agenticpdf"
+version = "0.1.4"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "async-channel 2.5.0",
+ "gpui",
+ "image",
+ "parking_lot 0.13.0",
+ "pdfium-render",
+ "rmcp",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "smallvec",
+ "tokio",
+ "ureq",
+ "winresource",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4171,28 +4193,6 @@ checksum = "f8ed6a7761f76e3b9f92dfb0a60a6a6477c61024b775147ff0973a02653abaf2"
 dependencies = [
  "digest 0.10.7",
  "hmac",
-]
-
-[[package]]
-name = "pdf-reader"
-version = "0.1.4"
-dependencies = [
- "agent-client-protocol",
- "anyhow",
- "async-channel 2.5.0",
- "gpui",
- "image",
- "parking_lot 0.13.0",
- "pdfium-render",
- "rmcp",
- "schemars 1.2.3",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "smallvec",
- "tokio",
- "ureq",
- "winresource",
 ]
 
 [[package]]

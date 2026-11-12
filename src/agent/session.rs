@@ -180,7 +180,7 @@ async fn run(
     let counter = Arc::new(AtomicU64::new(0));
     agent_client_protocol::Client
         .v1()
-        .name("pdf-reader")
+        .name("agenticpdf")
         .on_receive_notification(
             async move |notification: SessionNotification, _cx| {
                 if let Some(update) = translate(notification.update) {
@@ -229,7 +229,7 @@ async fn run(
                 .map(|info| info.title.unwrap_or(info.name))
                 .unwrap_or_else(|| "Agent".into());
             let server = McpServer::Stdio(
-                McpServerStdio::new("pdf-reader", launch.mcp.clone()).args(vec!["mcp".into()]),
+                McpServerStdio::new("agenticpdf", launch.mcp.clone()).args(vec!["mcp".into()]),
             );
             let session = connection
                 .send_request(NewSessionRequest::new(launch.cwd.clone()).mcp_servers(vec![server]))
@@ -309,7 +309,7 @@ mod tests {
             ],
             path,
             cwd: std::env::temp_dir(),
-            mcp: PathBuf::from("/opt/reader/pdf-reader"),
+            mcp: PathBuf::from("/opt/reader/agenticpdf"),
         })
         .unwrap();
         assert!(matches!(next(&events), Event::Connected(name) if name == "Fake Agent"));
@@ -356,7 +356,7 @@ mod tests {
         };
         assert_eq!(
             text,
-            "Chose yes for file:///tmp/a.pdf via pdf-reader /opt/reader/pdf-reader mcp (p. 1)."
+            "Chose yes for file:///tmp/a.pdf via agenticpdf /opt/reader/agenticpdf mcp (p. 1)."
         );
         assert_eq!(stop, "EndTurn");
     }
@@ -383,7 +383,7 @@ mod live {
             args: agent.launch_args().unwrap(),
             path,
             cwd: root.join("tests/fixtures"),
-            mcp: root.join("target/debug/pdf-reader"),
+            mcp: root.join("target/debug/agenticpdf"),
         })
         .unwrap();
         let mut conversation = Conversation::default();

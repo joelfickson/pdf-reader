@@ -56,9 +56,9 @@ describe("parseReleaseNotes", () => {
       "## Install",
       "macOS: download the zip.",
       "## What's Changed",
-      "* feat: add open-book application icon by @jelome265 in https://github.com/joelfickson/pdf-reader/pull/1",
-      "* Feat/UI overhaul by @joelfickson in https://github.com/joelfickson/pdf-reader/pull/13",
-      "* @jelome265 made their first contribution in https://github.com/joelfickson/pdf-reader/pull/1",
+      "* feat: add open-book application icon by @jelome265 in https://github.com/joelfickson/agenticpdf/pull/1",
+      "* Feat/UI overhaul by @joelfickson in https://github.com/joelfickson/agenticpdf/pull/13",
+      "* @jelome265 made their first contribution in https://github.com/joelfickson/agenticpdf/pull/1",
     ].join("\n");
     expect(parseReleaseNotes(body)).toEqual([
       { kind: "new", text: "Add open-book application icon", pullRequest: 1 },
@@ -69,7 +69,7 @@ describe("parseReleaseNotes", () => {
   it("tolerates extra spaces around the bullet, prefix and author", () => {
     expect(
       parseReleaseNotes(
-        "  *   fix:   keep scroll position   by   @joelfickson   in   https://github.com/joelfickson/pdf-reader/pull/9   ",
+        "  *   fix:   keep scroll position   by   @joelfickson   in   https://github.com/joelfickson/agenticpdf/pull/9   ",
       ),
     ).toEqual([
       { kind: "fixed", text: "Keep scroll position", pullRequest: 9 },

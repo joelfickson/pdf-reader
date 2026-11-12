@@ -621,7 +621,7 @@ mod tests {
         };
 
         let directory =
-            std::env::temp_dir().join(format!("pdf-reader-worker-save-{}", std::process::id()));
+            std::env::temp_dir().join(format!("agenticpdf-worker-save-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join("saved.pdf");
         std::fs::copy(

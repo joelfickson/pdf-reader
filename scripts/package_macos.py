@@ -39,7 +39,7 @@ def main():
     library = root / "vendor/pdfium/lib/libpdfium.dylib"
     if not library.is_file():
         raise SystemExit("Install the PDF engine first: uv run scripts/setup_pdfium.py")
-    icon = root / "assets/brand/pdf-reader.icns"
+    icon = root / "assets/brand/agenticpdf.icns"
     if not icon.is_file():
         raise SystemExit(f"Missing application icon: {icon}")
     command = ["cargo", "build", "--locked"]
@@ -48,8 +48,8 @@ def main():
     subprocess.run(command, cwd=root, check=True)
     version = crate_version(root)
     profile = "debug" if args.debug else "release"
-    name = "PDF Reader Debug" if args.debug else "PDF Reader"
-    executable_name = "pdf-reader-debug" if args.debug else "pdf-reader"
+    name = "Agentic PDF Debug" if args.debug else "Agentic PDF"
+    executable_name = "agenticpdf-debug" if args.debug else "agenticpdf"
     bundle = root / "target" / profile / f"{name}.app"
     contents = bundle / "Contents"
     executable_dir = contents / "MacOS"
@@ -57,7 +57,7 @@ def main():
     resources = contents / "Resources"
     for directory in [executable_dir, frameworks, resources]:
         directory.mkdir(parents=True, exist_ok=True)
-    copy_file(root / "target" / profile / "pdf-reader", executable_dir / executable_name)
+    copy_file(root / "target" / profile / "agenticpdf", executable_dir / executable_name)
     copy_file(library, frameworks / library.name)
     copy_file(icon, resources / icon.name)
     shutil.copytree(root / "vendor/pdfium/licenses", resources / "licenses/pdfium", dirs_exist_ok=True)
@@ -67,7 +67,7 @@ def main():
         "CFBundleName": name,
         "CFBundleDisplayName": name,
         "CFBundleExecutable": executable_name,
-        "CFBundleIdentifier": "org.pdfreader.desktop.debug" if args.debug else "org.pdfreader.desktop",
+        "CFBundleIdentifier": "app.agenticpdf.desktop.debug" if args.debug else "app.agenticpdf.desktop",
         "CFBundleIconFile": icon.name,
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": version,

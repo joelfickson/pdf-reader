@@ -4,6 +4,7 @@ import { formatDate, formatMegabytes } from "@/lib/format";
 import { getLatestRelease, getReleases, type Release } from "@/lib/github";
 import {
   CHECKSUMS_ASSET,
+  isPlatformAsset,
   latestDownloadUrl,
   PLATFORM_ASSETS,
   type Platform,
@@ -31,17 +32,20 @@ const BYTES_PER_MEGABYTE = 1_000_000;
 
 function buildRows(release: Release): BuildRow[] {
   return PLATFORM_ORDER.map((platform) => {
-    const file = PLATFORM_ASSETS[platform];
-    const asset = release.assets.find((candidate) => candidate.name === file);
+    const asset = release.assets.find((candidate) =>
+      isPlatformAsset(platform, candidate.name),
+    );
     if (!asset) {
-      throw new Error(`Release ${release.tag} is missing ${file}`);
+      throw new Error(
+        `Release ${release.tag} is missing ${PLATFORM_ASSETS[platform]}`,
+      );
     }
     return {
       platform,
       ...PLATFORM_LABELS[platform],
-      file,
+      file: asset.name,
       size: formatMegabytes(asset.sizeBytes),
-      url: latestDownloadUrl(file),
+      url: latestDownloadUrl(asset.name),
     };
   });
 }
@@ -49,7 +53,7 @@ function buildRows(release: Release): BuildRow[] {
 function typicalMegabytes(release: Release): number {
   const sizes = PLATFORM_ORDER.flatMap((platform) =>
     release.assets
-      .filter((asset) => asset.name === PLATFORM_ASSETS[platform])
+      .filter((asset) => isPlatformAsset(platform, asset.name))
       .map((asset) => asset.sizeBytes),
   );
   const average =
@@ -98,7 +102,7 @@ function SourceCommands() {
       <h3>Clone</h3>
       <pre>
         {
-          "git clone https://github.com/joelfickson/pdf-reader.git\ncd pdf-reader"
+          "git clone https://github.com/joelfickson/agenticpdf.git\ncd agenticpdf"
         }
       </pre>
       <h3>Run</h3>
@@ -106,7 +110,7 @@ function SourceCommands() {
       <h3>Package a macOS app</h3>
       <pre>
         {
-          'uv run scripts/package_macos.py\nopen "target/release/PDF Reader.app"'
+          'uv run scripts/package_macos.py\nopen "target/release/Agentic PDF.app"'
         }
       </pre>
     </div>
@@ -174,7 +178,7 @@ export default async function DownloadPage() {
                   </li>
                   <li>
                     <span>
-                      Move <b>PDF Reader</b> to your{" "}
+                      Move <b>Agentic PDF</b> to your{" "}
                       <span className="path">Applications</span> folder.
                     </span>
                   </li>
@@ -188,7 +192,7 @@ export default async function DownloadPage() {
                     <span>
                       Open <b>System Settings</b>, go to{" "}
                       <b>Privacy and Security</b>, and click <b>Open Anyway</b>{" "}
-                      next to the PDF Reader message.
+                      next to the Agentic PDF message.
                     </span>
                   </li>
                 </ol>
@@ -204,12 +208,12 @@ export default async function DownloadPage() {
                   <li>
                     <span>
                       Keep <span className="path">pdfium.dll</span> in the same
-                      folder as <span className="path">pdf-reader.exe</span>.
+                      folder as <span className="path">agenticpdf.exe</span>.
                     </span>
                   </li>
                   <li>
                     <span>
-                      Run <span className="path">pdf-reader.exe</span>. This
+                      Run <span className="path">agenticpdf.exe</span>. This
                       build is not code signed, so SmartScreen may warn on first
                       launch.
                     </span>

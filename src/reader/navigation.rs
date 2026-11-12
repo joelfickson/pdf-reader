@@ -90,7 +90,7 @@ impl Reader {
         self.clear_search();
         self.restart_search(cx);
         window.set_window_title(&format!(
-            "{} - PDF Reader",
+            "{} - Agentic PDF",
             self.tabs.entries[index].title()
         ));
         self.focus.focus(window);
@@ -139,7 +139,7 @@ impl Reader {
             if self.tabs.current().is_some() {
                 self.activate_tab(self.tabs.active, window, cx);
             } else {
-                window.set_window_title("PDF Reader");
+                window.set_window_title("Agentic PDF");
                 self.notice = None;
             }
         }

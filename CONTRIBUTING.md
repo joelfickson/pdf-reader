@@ -2,7 +2,7 @@
 
 Issues and pull requests are welcome. Please read the [code of conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md), never in a public issue.
 
-Good places to start are issues labelled [good first issue](https://github.com/joelfickson/pdf-reader/labels/good%20first%20issue) and [help wanted](https://github.com/joelfickson/pdf-reader/labels/help%20wanted). Comment on an issue before starting larger work so it is not done twice.
+Good places to start are issues labelled [good first issue](https://github.com/joelfickson/agenticpdf/labels/good%20first%20issue) and [help wanted](https://github.com/joelfickson/agenticpdf/labels/help%20wanted). Comment on an issue before starting larger work so it is not done twice.
 
 The history was rewritten on 7 November 2026 to remove a folder of design files. If you cloned or forked before that date, make a fresh clone instead of pulling. This is an early development build; see README.md for supported features and current limitations, and SPEC.md for the project scope.
 

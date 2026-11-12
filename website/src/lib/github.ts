@@ -54,7 +54,7 @@ async function requestJson(path: string): Promise<unknown> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "agentic-pdf-website",
+    "User-Agent": "agenticpdf-website",
   };
   const token = process.env.GITHUB_TOKEN;
   if (token) {

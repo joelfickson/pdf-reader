@@ -24,7 +24,7 @@ impl Client {
     fn build(https_only: bool) -> Self {
         let agent = ureq::Agent::config_builder()
             .https_only(https_only)
-            .user_agent(concat!("pdf-reader/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("agenticpdf/", env!("CARGO_PKG_VERSION")))
             .timeout_connect(Some(Duration::from_secs(15)))
             .timeout_recv_response(Some(Duration::from_secs(30)))
             .timeout_global(Some(Duration::from_secs(20 * 60)))
@@ -166,7 +166,7 @@ mod tests {
     }
 
     fn scratch(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("pdf-reader-fetch-{name}-{}", std::process::id()))
+        std::env::temp_dir().join(format!("agenticpdf-fetch-{name}-{}", std::process::id()))
     }
 
     #[test]

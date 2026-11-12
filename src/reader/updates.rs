@@ -97,7 +97,7 @@ impl Updates {
             return;
         };
         if let Err(error) = update::install(build, staged, None) {
-            eprintln!("PDF Reader could not install the downloaded update. {error:#}");
+            eprintln!("Agentic PDF could not install the downloaded update. {error:#}");
         }
     }
 }
@@ -112,7 +112,7 @@ impl Reader {
             cx.background_spawn(async {
                 if let Err(error) = update::clean_leftovers() {
                     eprintln!(
-                        "PDF Reader could not remove files left by an earlier update. {error:#}"
+                        "Agentic PDF could not remove files left by an earlier update. {error:#}"
                     );
                 }
             })
@@ -282,7 +282,7 @@ impl Reader {
                 Ok(()) => cx.quit(),
                 Err(error) => {
                     this.updates.phase = Phase::Failed {
-                        message: format!("PDF Reader {version} could not be installed. {error:#}"),
+                        message: format!("Agentic PDF {version} could not be installed. {error:#}"),
                         checked: Instant::now(),
                     };
                     this.chrome.settings_section = UPDATES_SECTION;

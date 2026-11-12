@@ -7,11 +7,11 @@ use std::{
 
 pub(crate) fn archive_name() -> Option<&'static str> {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        Some("pdf-reader-macos-arm64.zip")
+        Some("agenticpdf-macos-arm64.zip")
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        Some("pdf-reader-macos-x64.zip")
+        Some("agenticpdf-macos-x64.zip")
     } else if cfg!(all(windows, target_arch = "x86_64")) {
-        Some("pdf-reader-windows-x64.zip")
+        Some("agenticpdf-windows-x64.zip")
     } else {
         None
     }
@@ -72,7 +72,7 @@ mod native {
     use super::*;
 
     const CODESIGN: &str = "/usr/bin/codesign";
-    const STAGED_APP: &str = "PDF Reader.app";
+    const STAGED_APP: &str = "Agentic PDF.app";
 
     fn signature(bundle: &Path) -> Result<Signature> {
         checked(
@@ -104,13 +104,13 @@ mod native {
                     .extension()
                     .is_some_and(|extension| extension == "app")
             })
-            .context("PDF Reader is not running from an app bundle")?
+            .context("Agentic PDF is not running from an app bundle")?
             .to_path_buf();
         if bundle
             .components()
             .any(|part| part.as_os_str() == "AppTranslocation")
         {
-            bail!("Move PDF Reader to Applications to install updates");
+            bail!("Move Agentic PDF to Applications to install updates");
         }
         files::writable(bundle.parent().context("The app bundle has no folder")?)?;
         Ok(Installation { target: bundle })
@@ -137,7 +137,7 @@ mod native {
     pub fn verify(installation: &Installation, staged: &Path) -> Result<()> {
         let current = signature(&installation.target)?;
         let Some(team) = current.team.as_deref() else {
-            bail!("This copy of PDF Reader is not signed, so updates cannot be verified");
+            bail!("This copy of Agentic PDF is not signed, so updates cannot be verified");
         };
         let incoming = signature(staged)?;
         if incoming.identifier != current.identifier || incoming.team.as_deref() != Some(team) {
@@ -163,7 +163,7 @@ mod native {
         if !documents.is_empty() {
             command.arg("--args").args(documents);
         }
-        command.spawn().context("Could not reopen PDF Reader")?;
+        command.spawn().context("Could not reopen Agentic PDF")?;
         Ok(())
     }
 
@@ -176,14 +176,14 @@ mod native {
 mod native {
     use super::*;
 
-    const EXECUTABLE: &str = "pdf-reader.exe";
+    const EXECUTABLE: &str = "agenticpdf.exe";
     const REQUIRED: [&str; 2] = [EXECUTABLE, "pdfium.dll"];
 
     pub fn locate() -> Result<Installation> {
         let executable = std::env::current_exe()?;
         let folder = executable
             .parent()
-            .context("PDF Reader has no install folder")?
+            .context("Agentic PDF has no install folder")?
             .to_path_buf();
         files::writable(&folder)?;
         Ok(Installation { target: folder })
@@ -227,7 +227,7 @@ mod native {
         Command::new(installation.target.join(EXECUTABLE))
             .args(documents)
             .spawn()
-            .context("Could not reopen PDF Reader")?;
+            .context("Could not reopen Agentic PDF")?;
         Ok(())
     }
 
@@ -285,15 +285,15 @@ mod tests {
 
     #[test]
     fn signature_details_yield_identifier_and_team() {
-        let signed = "Executable=/Applications/PDF Reader.app/Contents/MacOS/pdf-reader\nIdentifier=org.pdfreader.desktop\nFormat=app bundle with Mach-O thin (arm64)\nTeamIdentifier=ABCDE12345\nSealed Resources version=2 rules=13 files=4\n";
+        let signed = "Executable=/Applications/Agentic PDF.app/Contents/MacOS/agenticpdf\nIdentifier=app.agenticpdf.desktop\nFormat=app bundle with Mach-O thin (arm64)\nTeamIdentifier=ABCDE12345\nSealed Resources version=2 rules=13 files=4\n";
         assert_eq!(
             parse_signature(signed),
             Some(Signature {
-                identifier: "org.pdfreader.desktop".into(),
+                identifier: "app.agenticpdf.desktop".into(),
                 team: Some("ABCDE12345".into()),
             })
         );
-        let ad_hoc = "Identifier=org.pdfreader.desktop\nSignature=adhoc\nTeamIdentifier=not set\n";
+        let ad_hoc = "Identifier=app.agenticpdf.desktop\nSignature=adhoc\nTeamIdentifier=not set\n";
         assert_eq!(parse_signature(ad_hoc).unwrap().team, None);
         assert_eq!(parse_signature("Format=app bundle\n"), None);
     }

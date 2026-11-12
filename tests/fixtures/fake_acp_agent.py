@@ -25,9 +25,9 @@ for line in sys.stdin:
         prompt = message["params"]["prompt"]
         link = next(block["uri"] for block in prompt if block["type"] == "resource_link")
         update("s1", {"sessionUpdate": "plan", "entries": [{"content": "Read the outline", "priority": "medium", "status": "in_progress"}]})
-        update("s1", {"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "mcp__pdf-reader__get_text", "kind": "read", "status": "pending", "rawInput": {"from_page": 1}})
+        update("s1", {"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "mcp__agenticpdf__get_text", "kind": "read", "status": "pending", "rawInput": {"from_page": 1}})
         update("s1", {"sessionUpdate": "tool_call_update", "toolCallId": "t1", "status": "completed"})
-        send({"jsonrpc": "2.0", "id": 900, "method": "session/request_permission", "params": {"sessionId": "s1", "toolCall": {"toolCallId": "t2", "title": "mcp__pdf-reader__highlight"}, "options": [{"optionId": "yes", "name": "Allow once", "kind": "allow_once"}, {"optionId": "no", "name": "Reject", "kind": "reject_once"}]}})
+        send({"jsonrpc": "2.0", "id": 900, "method": "session/request_permission", "params": {"sessionId": "s1", "toolCall": {"toolCallId": "t2", "title": "mcp__agenticpdf__highlight"}, "options": [{"optionId": "yes", "name": "Allow once", "kind": "allow_once"}, {"optionId": "no", "name": "Reject", "kind": "reject_once"}]}})
         while True:
             reply = json.loads(sys.stdin.readline())
             if reply.get("id") == 900:

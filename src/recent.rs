@@ -20,31 +20,87 @@ pub(crate) struct RecentFiles {
     store: Option<PathBuf>,
 }
 
-pub(crate) fn data_dir() -> Option<PathBuf> {
-    let name = if cfg!(debug_assertions) {
-        "PDF Reader Debug"
-    } else {
-        "PDF Reader"
-    };
+struct Home {
+    name: &'static str,
+    identifier: &'static str,
+    folder: &'static str,
+}
+
+const HOME: Home = if cfg!(debug_assertions) {
+    Home {
+        name: "Agentic PDF Debug",
+        identifier: "app.agenticpdf.desktop.debug",
+        folder: "agenticpdf-debug",
+    }
+} else {
+    Home {
+        name: "Agentic PDF",
+        identifier: "app.agenticpdf.desktop",
+        folder: "agenticpdf",
+    }
+};
+
+const FORMER_HOME: Home = if cfg!(debug_assertions) {
+    Home {
+        name: "PDF Reader Debug",
+        identifier: "org.pdfreader.desktop.debug",
+        folder: "pdf-reader-debug",
+    }
+} else {
+    Home {
+        name: "PDF Reader",
+        identifier: "org.pdfreader.desktop",
+        folder: "pdf-reader",
+    }
+};
+
+const CARRIED_FILES: [&str; 2] = ["recent.tsv", "updates.conf"];
+
+fn location(home: &Home) -> Option<PathBuf> {
     if cfg!(target_os = "macos") {
-        let identifier = if cfg!(debug_assertions) {
-            "org.pdfreader.desktop.debug"
-        } else {
-            "org.pdfreader.desktop"
-        };
-        std::env::var_os("HOME").map(|home| {
-            PathBuf::from(home)
+        std::env::var_os("HOME").map(|user| {
+            PathBuf::from(user)
                 .join("Library/Application Support")
-                .join(identifier)
+                .join(home.identifier)
         })
     } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|data| PathBuf::from(data).join(name))
+        std::env::var_os("APPDATA").map(|data| PathBuf::from(data).join(home.name))
     } else {
         std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-            .map(|config| config.join(name.to_lowercase().replace(' ', "-")))
+            .or_else(|| std::env::var_os("HOME").map(|user| PathBuf::from(user).join(".config")))
+            .map(|config| config.join(home.folder))
     }
+}
+
+pub(crate) fn data_dir() -> Option<PathBuf> {
+    location(&HOME)
+}
+
+pub(crate) fn carry_over_former_data() -> Result<()> {
+    if cfg!(test) {
+        return Ok(());
+    }
+    match (location(&FORMER_HOME), data_dir()) {
+        (Some(former), Some(current)) => carry_over(&former, &current),
+        _ => Ok(()),
+    }
+}
+
+fn carry_over(former: &Path, current: &Path) -> Result<()> {
+    if current.exists() || !former.is_dir() {
+        return Ok(());
+    }
+    fs::create_dir_all(current)
+        .with_context(|| format!("Could not create {}", current.display()))?;
+    for name in CARRIED_FILES {
+        let source = former.join(name);
+        if source.is_file() {
+            fs::copy(&source, current.join(name))
+                .with_context(|| format!("Could not copy {}", source.display()))?;
+        }
+    }
+    Ok(())
 }
 
 fn parse(text: &str) -> Vec<RecentFile> {
@@ -174,9 +230,41 @@ mod tests {
 
     fn temp_store(name: &str) -> PathBuf {
         let directory =
-            std::env::temp_dir().join(format!("pdf-reader-recent-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("agenticpdf-recent-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         directory.join("nested").join(FILE_NAME)
+    }
+
+    #[test]
+    fn former_settings_are_copied_once_and_never_overwrite_new_ones() {
+        let root = std::env::temp_dir().join(format!("agenticpdf-carry-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (former, current) = (root.join("former"), root.join("current"));
+        carry_over(&former, &current).unwrap();
+        assert!(!current.exists());
+        fs::create_dir_all(&former).unwrap();
+        fs::write(former.join("recent.tsv"), "old recent").unwrap();
+        fs::write(former.join("updates.conf"), "old updates").unwrap();
+        fs::write(former.join("unrelated.txt"), "left behind").unwrap();
+        carry_over(&former, &current).unwrap();
+        assert_eq!(
+            fs::read_to_string(current.join("recent.tsv")).unwrap(),
+            "old recent"
+        );
+        assert_eq!(
+            fs::read_to_string(current.join("updates.conf")).unwrap(),
+            "old updates"
+        );
+        assert!(!current.join("unrelated.txt").exists());
+        assert!(former.join("recent.tsv").exists());
+        fs::write(current.join("recent.tsv"), "new recent").unwrap();
+        fs::write(former.join("recent.tsv"), "changed later").unwrap();
+        carry_over(&former, &current).unwrap();
+        assert_eq!(
+            fs::read_to_string(current.join("recent.tsv")).unwrap(),
+            "new recent"
+        );
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
