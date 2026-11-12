@@ -112,7 +112,7 @@ impl Worker {
             .saves
             .lock()
             .iter()
-            .map(|job| job.markups.len())
+            .map(|job| job.edits.len())
             .collect()
     }
 
@@ -243,8 +243,8 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
         };
         for save in saves {
             documents.retain(|(session, _)| *session != save.session);
-            let result = markup::save(engine, &save.path, &save.markups)
-                .map_err(|error| format!("{error:#}"));
+            let result =
+                markup::save(engine, &save.path, &save.edits).map_err(|error| format!("{error:#}"));
             if sender
                 .send_blocking(Event::Saved {
                     session: save.session,
@@ -617,7 +617,7 @@ mod tests {
     fn save_writes_marks_and_the_next_render_shows_them() {
         use crate::pdf::{
             SaveJob,
-            markup::{Markup, MarkupKind, PageMarks, lines},
+            markup::{Edit, Markup, MarkupKind, PageMarks, lines},
         };
 
         let directory =
@@ -692,7 +692,7 @@ mod tests {
         worker.save(SaveJob {
             session: 4,
             path: path.clone(),
-            markups: vec![Markup {
+            edits: vec![Edit::Markup(Markup {
                 kind: MarkupKind::Highlight,
                 color: 0xf2c230,
                 quote: text.content(0..20),
@@ -700,7 +700,7 @@ mod tests {
                     page: 0,
                     rects: rects.clone(),
                 }],
-            }],
+            })],
         });
         loop {
             match next_event(&events) {
@@ -718,7 +718,7 @@ mod tests {
         worker.save(SaveJob {
             session: 4,
             path: directory.join("missing.pdf"),
-            markups: vec![],
+            edits: vec![],
         });
         loop {
             if let Event::Saved { result, .. } = next_event(&events) {

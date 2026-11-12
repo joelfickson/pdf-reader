@@ -57,7 +57,7 @@ pub struct SearchJob {
 pub struct SaveJob {
     pub session: u64,
     pub path: PathBuf,
-    pub markups: Vec<markup::Markup>,
+    pub edits: Vec<markup::Edit>,
 }
 
 pub enum Event {

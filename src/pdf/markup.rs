@@ -4,7 +4,11 @@ use pdfium_render::prelude::*;
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::Arc,
 };
+
+pub(crate) const STROKE_WEIGHT: f32 = 0.009;
+const MIN_STROKE_POINTS: f32 = 0.4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MarkupKind {
@@ -47,6 +51,52 @@ impl Markup {
             .iter()
             .filter(move |marks| marks.page == page)
             .flat_map(|marks| marks.rects.iter())
+    }
+}
+
+pub(crate) type Strokes = Arc<Vec<Vec<[f32; 2]>>>;
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Signature {
+    pub page: usize,
+    pub bounds: TextRect,
+    pub color: u32,
+    pub strokes: Strokes,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Edit {
+    Markup(Markup),
+    Signature(Signature),
+}
+
+impl Edit {
+    pub fn first_page(&self) -> usize {
+        match self {
+            Self::Markup(markup) => markup.first_page(),
+            Self::Signature(signature) => signature.page,
+        }
+    }
+
+    pub fn color(&self) -> u32 {
+        match self {
+            Self::Markup(markup) => markup.color,
+            Self::Signature(signature) => signature.color,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Markup(markup) => markup.kind.label(),
+            Self::Signature(_) => "Signature",
+        }
+    }
+
+    pub fn summary(&self) -> &str {
+        match self {
+            Self::Markup(markup) => &markup.quote,
+            Self::Signature(_) => "Drawn signature, image only",
+        }
     }
 }
 
@@ -150,8 +200,89 @@ fn attach(points: &mut PdfPageAnnotationAttachmentPoints<'_>, quads: &[Quad]) ->
     Ok(())
 }
 
-pub(super) fn apply(document: &PdfDocument<'_>, markups: &[Markup]) -> Result<()> {
-    for markup in markups {
+fn sign(document: &PdfDocument<'_>, signature: &Signature) -> Result<()> {
+    let mut page = document
+        .pages()
+        .get(signature.page as i32)
+        .with_context(|| format!("Page {} is no longer in this PDF.", signature.page + 1))?;
+    let geometry = Geometry::of(&page)?;
+    let bounds = signature.bounds;
+    let (width, height) = (bounds.right - bounds.left, bounds.bottom - bounds.top);
+    let frame = quad(&geometry, &bounds).with_context(|| {
+        format!(
+            "The signature on page {} has no usable position.",
+            signature.page + 1
+        )
+    })?;
+    let weight = (page.width().value * width * STROKE_WEIGHT).max(MIN_STROKE_POINTS);
+    let color = PdfColor::new(
+        (signature.color >> 16) as u8,
+        (signature.color >> 8) as u8,
+        signature.color as u8,
+        255,
+    );
+    let place = |point: &[f32; 2]| {
+        geometry.page_point(
+            bounds.left + point[0] * width,
+            bounds.top + point[1] * height,
+        )
+    };
+    let mut annotation = page.annotations_mut().create_stamp_annotation()?;
+    annotation.set_bounds(PdfRect::new_from_values(
+        frame.bottom - weight,
+        frame.left - weight,
+        frame.top + weight,
+        frame.right + weight,
+    ))?;
+    annotation.set_is_printed(true)?;
+    let mut drawn = 0;
+    for stroke in signature.strokes.iter() {
+        let mut points = stroke.iter().filter_map(place);
+        let Some(start) = points.next() else {
+            continue;
+        };
+        let mut path = PdfPagePathObject::new(
+            document,
+            PdfPoints::new(start.0),
+            PdfPoints::new(start.1),
+            Some(color),
+            Some(PdfPoints::new(weight)),
+            None,
+        )?;
+        let mut segments = 0;
+        for point in points {
+            path.line_to(PdfPoints::new(point.0), PdfPoints::new(point.1))?;
+            segments += 1;
+        }
+        if segments == 0 {
+            path.line_to(
+                PdfPoints::new(start.0 + weight / 4.0),
+                PdfPoints::new(start.1),
+            )?;
+        }
+        path.set_line_cap(PdfPageObjectLineCap::Round)?;
+        path.set_line_join(PdfPageObjectLineJoin::Round)?;
+        annotation.objects_mut().add_path_object(path)?;
+        drawn += 1;
+    }
+    if drawn == 0 {
+        bail!(
+            "The signature on page {} has no strokes.",
+            signature.page + 1
+        );
+    }
+    Ok(())
+}
+
+pub(super) fn apply(document: &PdfDocument<'_>, edits: &[Edit]) -> Result<()> {
+    for edit in edits {
+        let markup = match edit {
+            Edit::Markup(markup) => markup,
+            Edit::Signature(signature) => {
+                sign(document, signature)?;
+                continue;
+            }
+        };
         for marks in &markup.pages {
             let mut page = document
                 .pages()
@@ -200,7 +331,7 @@ fn sibling(path: &Path) -> Result<PathBuf> {
     Ok(path.with_file_name(format!(".{name}.{}.saving", std::process::id())))
 }
 
-pub(super) fn save(engine: &Pdfium, path: &Path, markups: &[Markup]) -> Result<()> {
+pub(super) fn save(engine: &Pdfium, path: &Path, edits: &[Edit]) -> Result<()> {
     let metadata = fs::metadata(path).context("This PDF is no longer where it was opened from.")?;
     if metadata.permissions().readonly() {
         bail!("This PDF is read-only, so changes cannot be saved to it.");
@@ -215,7 +346,7 @@ pub(super) fn save(engine: &Pdfium, path: &Path, markups: &[Markup]) -> Result<(
                 "This PDF is digitally signed. Saving marks would invalidate the signature, so it is left unchanged."
             );
         }
-        apply(&document, markups)?;
+        apply(&document, edits)?;
         document
             .save_to_file(&temporary)
             .context("The changes could not be written next to the PDF.")?;
@@ -341,7 +472,7 @@ mod tests {
                         .map(|rect| tint(&raster, rect))
                         .collect::<Vec<_>>(),
                 );
-                markups.push(Markup {
+                markups.push(Edit::Markup(Markup {
                     kind,
                     color,
                     quote: text.content(0..end),
@@ -349,7 +480,7 @@ mod tests {
                         page: index as usize,
                         rects,
                     }],
-                });
+                }));
             }
         }
         save(&engine, &path, &markups).unwrap();
@@ -374,7 +505,9 @@ mod tests {
                     .collect();
                 assert_eq!(kinds, expected);
                 let raster = crate::pdf::render(&page, 800.0, 1.0, 4096).unwrap();
-                let highlight = &markups[index as usize];
+                let Edit::Markup(highlight) = &markups[index as usize] else {
+                    panic!("expected a text mark");
+                };
                 for (rect, baseline) in highlight
                     .on_page(index as usize)
                     .zip(&baselines[index as usize])
@@ -401,6 +534,102 @@ mod tests {
         assert!(save(&engine, &path, &markups).is_err());
         assert_eq!(fs::read(&path).unwrap(), before);
         assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn saved_signatures_draw_their_strokes_inside_their_bounds() {
+        let engine = crate::pdf::bind().unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("pdf-reader-signature-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("signed.pdf");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/selection.pdf"),
+            &path,
+        )
+        .unwrap();
+        let bounds = TextRect {
+            left: 0.35,
+            top: 0.78,
+            right: 0.65,
+            bottom: 0.88,
+        };
+        let around = [
+            TextRect {
+                left: 0.05,
+                top: 0.78,
+                right: 0.3,
+                bottom: 0.88,
+            },
+            TextRect {
+                left: 0.7,
+                top: 0.78,
+                right: 0.95,
+                bottom: 0.88,
+            },
+            TextRect {
+                left: 0.35,
+                top: 0.6,
+                right: 0.65,
+                bottom: 0.74,
+            },
+            TextRect {
+                left: 0.35,
+                top: 0.9,
+                right: 0.65,
+                bottom: 0.98,
+            },
+        ];
+        let strokes: Strokes = Arc::new(vec![
+            vec![[0.0, 0.0], [0.5, 1.0], [1.0, 0.0]],
+            vec![[0.0, 1.0], [1.0, 1.0]],
+            vec![[0.5, 0.5]],
+        ]);
+        let edits: Vec<Edit> = (0..2)
+            .map(|page| {
+                Edit::Signature(Signature {
+                    page,
+                    bounds,
+                    color: 0x1c3d8f,
+                    strokes: strokes.clone(),
+                })
+            })
+            .collect();
+        let mut before = Vec::new();
+        {
+            let document = engine.load_pdf_from_file(&path, None).unwrap();
+            for index in 0..2 {
+                let page = document.pages().get(index).unwrap();
+                let raster = crate::pdf::render(&page, 800.0, 1.0, 4096).unwrap();
+                assert_eq!(tint(&raster, &bounds), 0.0);
+                before.push(around.map(|rect| tint(&raster, &rect)));
+            }
+        }
+        save(&engine, &path, &edits).unwrap();
+        let document = engine.load_pdf_from_file(&path, None).unwrap();
+        for index in 0..2 {
+            let page = document.pages().get(index).unwrap();
+            let kinds: Vec<_> = page
+                .annotations()
+                .iter()
+                .map(|annotation| annotation.annotation_type())
+                .collect();
+            assert_eq!(kinds, [PdfPageAnnotationType::Stamp]);
+            let raster = crate::pdf::render(&page, 800.0, 1.0, 4096).unwrap();
+            let inked = tint(&raster, &bounds);
+            assert!(
+                (0.01..0.5).contains(&inked),
+                "signature strokes must show inside their bounds on page {index}: {inked}"
+            );
+            assert_eq!(
+                around.map(|rect| tint(&raster, &rect)),
+                before[index as usize],
+                "nothing may be drawn outside the signature on page {index}"
+            );
+        }
+        drop(document);
         fs::remove_dir_all(&directory).unwrap();
     }
 

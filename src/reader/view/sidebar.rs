@@ -160,7 +160,7 @@ impl Reader {
             .when_some(
                 self.tabs
                     .current()
-                    .map(|tab| tab.markups.len())
+                    .map(|tab| tab.edits.len())
                     .filter(|count| panel == Panel::Notes && *count > 0),
                 |header, count| {
                     header.child(
@@ -196,10 +196,7 @@ impl Reader {
         } else if panel == Panel::Outline {
             self.outline_panel(cx)
         } else if panel == Panel::Notes
-            && self
-                .tabs
-                .current()
-                .is_some_and(|tab| !tab.markups.is_empty())
+            && self.tabs.current().is_some_and(|tab| !tab.edits.is_empty())
         {
             self.notes(cx)
         } else {
@@ -227,8 +224,8 @@ impl Reader {
             return div().into_any_element();
         };
         let hover = theme.hover;
-        let rows = tab.markups.iter().enumerate().map(|(index, markup)| {
-            let page = markup.first_page();
+        let rows = tab.edits.iter().enumerate().map(|(index, edit)| {
+            let page = edit.first_page();
             clickable(("note", index))
                 .p(px(10.0))
                 .flex()
@@ -245,8 +242,8 @@ impl Reader {
                         .gap(px(6.0))
                         .text_size(px(11.0))
                         .text_color(theme.muted)
-                        .child(dot(gpui::rgb(markup.color).into(), 8.0))
-                        .child(markup.kind.label())
+                        .child(dot(gpui::rgb(edit.color()).into(), 8.0))
+                        .child(edit.label())
                         .child(
                             div()
                                 .ml_auto()
@@ -259,7 +256,7 @@ impl Reader {
                         .text_size(px(12.0))
                         .text_color(theme.ink)
                         .line_clamp(2)
-                        .child(markup.quote.clone()),
+                        .child(edit.summary().to_string()),
                 )
         });
         div()

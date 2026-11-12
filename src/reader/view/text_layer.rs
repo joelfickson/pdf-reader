@@ -1,6 +1,10 @@
-use super::super::{Reader, TextResult, images::PageImage};
-use crate::pdf::{markup::MarkupKind, text::TextRect};
-use crate::ui::kit::clickable;
+use super::super::{Reader, TextResult, images::PageImage, signing::OUTLINE_OFFSET};
+use super::ink::paint_strokes;
+use crate::pdf::{
+    markup::{Edit, MarkupKind, STROKE_WEIGHT},
+    text::TextRect,
+};
+use crate::ui::{kit::clickable, theme::Paper};
 use gpui::{
     Bounds, Context, CursorStyle, HitboxBehavior, IntoElement, MouseButton, Pixels, canvas, img,
     point, prelude::*, px, size,
@@ -19,7 +23,25 @@ impl Reader {
         let current = self.tabs.current().is_some_and(|tab| tab.page == page);
         let mut rects = Vec::new();
         let mut links = Vec::new();
-        for markup in self.tabs.current().map_or(&[][..], |tab| tab.unsaved()) {
+        let placing = self
+            .placing_signature()
+            .filter(|signature| signature.page == page)
+            .map(|signature| signature.bounds);
+        let mut signatures = Vec::new();
+        for edit in self.tabs.current().map_or(&[][..], |tab| tab.unsaved()) {
+            let markup = match edit {
+                Edit::Markup(markup) => markup,
+                Edit::Signature(signature) => {
+                    if signature.page == page {
+                        signatures.push((
+                            signature.bounds,
+                            gpui::Hsla::from(gpui::rgb(signature.color)),
+                            signature.strokes.clone(),
+                        ));
+                    }
+                    continue;
+                }
+            };
             let color: gpui::Hsla = gpui::rgb(markup.color).into();
             for rect in markup.on_page(page) {
                 rects.push(match markup.kind {
@@ -76,6 +98,11 @@ impl Reader {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
+                    if this.placement_press(page, event.position, pressed_bounds.get(), cx) {
+                        this.focus.focus(window);
+                        cx.stop_propagation();
+                        return;
+                    }
                     if !current {
                         this.focus_page(page, window);
                         this.page_bounds.set(pressed_bounds.get());
@@ -122,6 +149,48 @@ impl Reader {
                     move |bounds, hitboxes, window, cx| {
                         for (rect, color) in rects {
                             window.paint_quad(gpui::fill(place(bounds, &rect), color));
+                        }
+                        for (rect, color, strokes) in &signatures {
+                            let frame = place(bounds, rect);
+                            let weight = (frame.size.width * STROKE_WEIGHT).max(px(0.75));
+                            paint_strokes(
+                                window,
+                                strokes,
+                                |unit| {
+                                    point(
+                                        frame.origin.x + frame.size.width * unit[0],
+                                        frame.origin.y + frame.size.height * unit[1],
+                                    )
+                                },
+                                weight,
+                                *color,
+                            );
+                        }
+                        if let Some(rect) = &placing {
+                            let outline = place(bounds, rect).dilate(px(OUTLINE_OFFSET));
+                            window.paint_quad(gpui::quad(
+                                outline,
+                                px(2.0),
+                                gpui::transparent_black(),
+                                px(1.5),
+                                theme.accent,
+                                gpui::BorderStyle::Dashed,
+                            ));
+                            for corner in [
+                                outline.origin,
+                                outline.top_right(),
+                                outline.bottom_left(),
+                                outline.bottom_right(),
+                            ] {
+                                window.paint_quad(gpui::quad(
+                                    Bounds::centered_at(corner, size(px(8.0), px(8.0))),
+                                    px(2.0),
+                                    Paper::base(),
+                                    px(1.5),
+                                    theme.accent,
+                                    gpui::BorderStyle::Solid,
+                                ));
+                            }
                         }
                         for hitbox in &hitboxes {
                             window.set_cursor_style(CursorStyle::PointingHand, hitbox);

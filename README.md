@@ -6,7 +6,7 @@ A fast, native PDF reader for macOS and Windows, built with Rust, GPUI, and PDFi
 
 Website and downloads: <https://agentic-pdf-eta.vercel.app>
 
-This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, highlighting, underlining, and striking through selected text and saving those marks into the PDF, searching the whole document, opening PDFs from Finder, and reopening recent files at the page and zoom you left them. OCR, notes, drawing, stamps, signatures, password entry, editing, and the agent panel are not implemented yet. The app is still named PDF Reader in its bundle and menus.
+This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, highlighting, underlining, and striking through selected text, adding a drawn signature, and saving those into the PDF, searching the whole document, opening PDFs from Finder, and reopening recent files at the page and zoom you left them. OCR, notes, drawing, stamps, typed, image, and certificate signatures, password entry, editing, and the agent panel are not implemented yet. The app is still named PDF Reader in its bundle and menus.
 
 ## Run
 
@@ -136,7 +136,9 @@ Search runs on the background PDF thread and lists every match in the Results pa
 
 Drag across text to select it, then use the Copy text button or keyboard shortcut. Selection is limited to the current page and follows the PDF's text order. Scanned pages without a text layer require OCR, which is not included.
 
-With text selected, pick a colour in the selection bar to highlight it or use the underline button. In Annotate mode (Cmd Shift A, Ctrl Shift A on Windows) dragging across text with the highlight, underline, or strikethrough tool marks it on release. Undo and redo work until you save. Save (Cmd S, Ctrl S on Windows) writes the marks into the PDF as standard annotations that other readers show; a tab with unsaved marks shows a dot and asks before closing. Read-only and digitally signed PDFs are not modified. The title bar uses the platform's standard window controls.
+With text selected, pick a colour in the selection bar to highlight it or use the underline button. In Annotate mode (Cmd Shift A, Ctrl Shift A on Windows) dragging across text with the highlight, underline, or strikethrough tool marks it on release. Undo and redo work until you save. Save (Cmd S, Ctrl S on Windows) writes the marks into the PDF as standard annotations that other readers show; a tab with unsaved marks shows a dot and asks before closing. Read-only and digitally signed PDFs are not modified.
+
+To sign, choose Sign in the Annotate tool bar or Add signature in the command palette, draw in the pad, pick an ink, and choose Place on page. Drag the signature into position, drag a corner to resize it, then press Enter. Escape removes it. The signature is a drawing, not a certificate: it does not prove who signed. The title bar uses the platform's standard window controls.
 
 ## Architecture and limits
 
