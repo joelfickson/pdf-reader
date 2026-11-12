@@ -20,14 +20,14 @@ struct Session {
 impl Session {
     fn start() -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let mut child = Command::new(env!("CARGO_BIN_EXE_pdf-reader"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_agenticpdf"))
             .arg("mcp")
             .env("PDFIUM_LIBRARY_PATH", root.join("vendor/pdfium/lib"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
-            .expect("start pdf-reader mcp");
+            .expect("start agenticpdf mcp");
         let stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
         let (sender, lines) = mpsc::channel();
@@ -116,10 +116,10 @@ fn mcp_server_serves_read_only_pdf_tools_over_stdio() {
         json!({
             "protocolVersion": "2025-06-18",
             "capabilities": {},
-            "clientInfo": {"name": "pdf-reader-test", "version": "1"}
+            "clientInfo": {"name": "agenticpdf-test", "version": "1"}
         }),
     );
-    assert_eq!(initialized["result"]["serverInfo"]["name"], "agentic-pdf");
+    assert_eq!(initialized["result"]["serverInfo"]["name"], "agenticpdf");
     assert!(initialized["result"]["capabilities"]["tools"].is_object());
     session.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
 

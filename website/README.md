@@ -20,7 +20,7 @@ pnpm build
 
 ## Data
 
-Release information comes from the GitHub REST API for `joelfickson/pdf-reader` and is cached for an hour (`cacheLife("hours")`, tag `releases`). Responses are validated with zod, and a failed or malformed response fails the build instead of rendering stale or invented data.
+Release information comes from the GitHub REST API for `joelfickson/agenticpdf` and is cached for an hour (`cacheLife("hours")`, tag `releases`). Responses are validated with zod, and a failed or malformed response fails the build instead of rendering stale or invented data.
 
 Unauthenticated requests are limited by GitHub. Set `GITHUB_TOKEN` (a token with public read access) in the deployment environment to raise the limit. The site works without it.
 

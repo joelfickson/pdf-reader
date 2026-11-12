@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn saved_settings_round_trip_and_unknown_lines_are_ignored() {
-        let store = std::env::temp_dir().join(format!("pdf-reader-updates-{}", std::process::id()));
+        let store = std::env::temp_dir().join(format!("agenticpdf-updates-{}", std::process::id()));
         let _ = fs::remove_dir_all(&store);
         let defaults = Settings::defaults(false);
         assert_eq!(

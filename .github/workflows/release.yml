@@ -141,7 +141,7 @@ jobs:
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
       APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-      PDF_READER_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      AGENTICPDF_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -178,13 +178,13 @@ jobs:
       - if: runner.os == 'macOS' && env.MACOS_SIGNING_IDENTITY != ''
         name: Notarize and staple
         run: |
-          ditto -c -k --keepParent "target/release/PDF Reader.app" "$RUNNER_TEMP/notarize.zip"
+          ditto -c -k --keepParent "target/release/Agentic PDF.app" "$RUNNER_TEMP/notarize.zip"
           key="$RUNNER_TEMP/notary.p8"
           printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$key"
           xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --key "$key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --wait --timeout 30m
           rm "$key"
           for attempt in 1 2 3 4 5; do
-            if xcrun stapler staple "target/release/PDF Reader.app"; then
+            if xcrun stapler staple "target/release/Agentic PDF.app"; then
               break
             fi
             if [ "$attempt" = 5 ]; then
@@ -193,35 +193,35 @@ jobs:
             fi
             sleep $((attempt * 15))
           done
-          xcrun stapler validate "target/release/PDF Reader.app"
-          spctl --assess --type execute --verbose=2 "target/release/PDF Reader.app"
+          xcrun stapler validate "target/release/Agentic PDF.app"
+          spctl --assess --type execute --verbose=2 "target/release/Agentic PDF.app"
       - if: runner.os == 'macOS'
-        run: ditto -c -k --keepParent "target/release/PDF Reader.app" "pdf-reader-${{ matrix.platform }}.zip"
+        run: ditto -c -k --keepParent "target/release/Agentic PDF.app" "agenticpdf-${{ matrix.platform }}.zip"
       - if: runner.os == 'macOS'
         name: Verify packaged bundle
         run: |
           mkdir "$RUNNER_TEMP/verify"
-          ditto -x -k "pdf-reader-${{ matrix.platform }}.zip" "$RUNNER_TEMP/verify"
-          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/verify/PDF Reader.app"
-          "$RUNNER_TEMP/verify/PDF Reader.app/Contents/MacOS/pdf-reader" --check tests/fixtures/reading.pdf
+          ditto -x -k "agenticpdf-${{ matrix.platform }}.zip" "$RUNNER_TEMP/verify"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/verify/Agentic PDF.app"
+          "$RUNNER_TEMP/verify/Agentic PDF.app/Contents/MacOS/agenticpdf" --check tests/fixtures/reading.pdf
       - if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cargo build --locked --release
           $stage = "release-stage"
           New-Item -ItemType Directory -Force -Path $stage, "$stage\licenses\pdfium" | Out-Null
-          Copy-Item "target\release\pdf-reader.exe" "$stage\pdf-reader.exe"
+          Copy-Item "target\release\agenticpdf.exe" "$stage\agenticpdf.exe"
           Copy-Item "vendor\pdfium\bin\pdfium.dll" "$stage\pdfium.dll"
           Copy-Item "LICENSE" "$stage\licenses\Application-LICENSE"
           Copy-Item "vendor\pdfium\LICENSE" "$stage\licenses\PDFium-LICENSE"
           Copy-Item "vendor\pdfium\licenses\*" "$stage\licenses\pdfium" -Recurse
-          $check = Start-Process -FilePath "$stage\pdf-reader.exe" -ArgumentList "--check", "tests\fixtures\reading.pdf" -Wait -PassThru -NoNewWindow
+          $check = Start-Process -FilePath "$stage\agenticpdf.exe" -ArgumentList "--check", "tests\fixtures\reading.pdf" -Wait -PassThru -NoNewWindow
           if ($check.ExitCode -ne 0) { exit $check.ExitCode }
-          Compress-Archive -Path "$stage\*" -DestinationPath "pdf-reader-${{ matrix.platform }}.zip"
+          Compress-Archive -Path "$stage\*" -DestinationPath "agenticpdf-${{ matrix.platform }}.zip"
       - uses: actions/upload-artifact@v7
         with:
-          name: pdf-reader-${{ matrix.platform }}
-          path: pdf-reader-${{ matrix.platform }}.zip
+          name: agenticpdf-${{ matrix.platform }}
+          path: agenticpdf-${{ matrix.platform }}.zip
           if-no-files-found: error
 
   publish:
@@ -234,7 +234,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: pdf-reader-*
+          pattern: agenticpdf-*
           path: release-assets
           merge-multiple: true
       - run: cd release-assets && sha256sum -- *.zip > SHA256SUMS.txt
@@ -246,13 +246,13 @@ jobs:
             echo "## Install"
             echo
             if [ "$RELEASE_PLATFORM" != "windows" ]; then
-              echo "macOS: download the zip for your Mac (arm64 for Apple silicon, x64 for Intel), unzip it, and move PDF Reader to Applications."
+              echo "macOS: download the zip for your Mac (arm64 for Apple silicon, x64 for Intel), unzip it, and move Agentic PDF to Applications."
               if [ "$MACOS_NOTARIZED" != "true" ]; then
-                echo "This build is not notarized. The first time you open it, macOS blocks it. Open System Settings, go to Privacy & Security, and click Open Anyway next to the PDF Reader message."
+                echo "This build is not notarized. The first time you open it, macOS blocks it. Open System Settings, go to Privacy & Security, and click Open Anyway next to the Agentic PDF message."
               fi
             fi
             if [ "$RELEASE_PLATFORM" != "macos" ]; then
-              echo "Windows: unzip the archive and run pdf-reader.exe. Keep pdfium.dll in the same folder. This build is not code signed, so Windows SmartScreen may warn on first launch. Click More info, then Run anyway."
+              echo "Windows: unzip the archive and run agenticpdf.exe. Keep pdfium.dll in the same folder. This build is not code signed, so Windows SmartScreen may warn on first launch. Click More info, then Run anyway."
             fi
             echo
             echo "Verify downloads against SHA256SUMS.txt."

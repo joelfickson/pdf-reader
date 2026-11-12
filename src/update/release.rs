@@ -115,7 +115,7 @@ pub(crate) fn checksum<'a>(sums: &'a str, name: &str) -> Option<&'a str> {
 mod tests {
     use super::*;
 
-    const ARCHIVE: &str = "pdf-reader-macos-arm64.zip";
+    const ARCHIVE: &str = "agenticpdf-macos-arm64.zip";
 
     fn release(tag: &str, prerelease: bool, assets: &[&str]) -> serde_json::Value {
         serde_json::json!({
@@ -195,7 +195,7 @@ mod tests {
         );
         let releases = vec![
             release("v0.1.4", false, &[ARCHIVE]),
-            release("v0.1.5", false, &[SUMS_NAME, "pdf-reader-windows-x64.zip"]),
+            release("v0.1.5", false, &[SUMS_NAME, "agenticpdf-windows-x64.zip"]),
             release("not-a-version", false, &both()),
         ];
         assert_eq!(pick(releases, "v0.1.2", Channel::Stable), None);
@@ -211,7 +211,7 @@ mod tests {
     fn assets_hosted_elsewhere_are_rejected() {
         let mut moved = release("v0.1.3", false, &both());
         moved["assets"][0]["browser_download_url"] =
-            "https://example.com/pdf-reader-macos-arm64.zip".into();
+            "https://example.com/agenticpdf-macos-arm64.zip".into();
         assert_eq!(pick(vec![moved], "v0.1.2", Channel::Stable), None);
     }
 
@@ -240,11 +240,11 @@ mod tests {
         let hash = "a".repeat(64);
         let other = "b".repeat(64);
         let sums = format!(
-            "{other}  pdf-reader-macos-x64.zip\n{hash}  {ARCHIVE}\n{other} *pdf-reader-windows-x64.zip\nshort  bad.zip\n"
+            "{other}  agenticpdf-macos-x64.zip\n{hash}  {ARCHIVE}\n{other} *agenticpdf-windows-x64.zip\nshort  bad.zip\n"
         );
         assert_eq!(checksum(&sums, ARCHIVE), Some(hash.as_str()));
         assert_eq!(
-            checksum(&sums, "pdf-reader-windows-x64.zip"),
+            checksum(&sums, "agenticpdf-windows-x64.zip"),
             Some(other.as_str())
         );
         assert_eq!(checksum(&sums, "bad.zip"), None);

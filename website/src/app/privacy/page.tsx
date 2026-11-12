@@ -126,12 +126,13 @@ export default function PrivacyPage() {
               <li>
                 <span>macOS</span>
                 <code>
-                  ~/Library/Application Support/org.pdfreader.desktop/recent.tsv
+                  ~/Library/Application
+                  Support/app.agenticpdf.desktop/recent.tsv
                 </code>
               </li>
               <li>
                 <span>Windows</span>
-                <code>%APPDATA%\PDF Reader\recent.tsv</code>
+                <code>%APPDATA%\Agentic PDF\recent.tsv</code>
               </li>
             </ul>
             <p>The list never leaves your computer.</p>
@@ -162,12 +163,12 @@ export default function PrivacyPage() {
                 <span>macOS</span>
                 <code>
                   ~/Library/Application
-                  Support/org.pdfreader.desktop/updates.conf
+                  Support/app.agenticpdf.desktop/updates.conf
                 </code>
               </li>
               <li>
                 <span>Windows</span>
-                <code>%APPDATA%\PDF Reader\updates.conf</code>
+                <code>%APPDATA%\Agentic PDF\updates.conf</code>
               </li>
             </ul>
             <p>

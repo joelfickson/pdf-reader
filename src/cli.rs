@@ -22,7 +22,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command> {
         Some("--version") => Ok(Command::Version),
         Some("--check") => match (args.next(), args.next()) {
             (Some(path), None) => Ok(Command::Check(PathBuf::from(path))),
-            _ => bail!("Usage: pdf-reader --check <file.pdf>"),
+            _ => bail!("Usage: agenticpdf --check <file.pdf>"),
         },
         _ => Ok(Command::Open(
             std::iter::once(first)
@@ -74,7 +74,7 @@ mod tests {
     fn version_line_names_the_package() {
         assert_eq!(
             VERSION_LINE,
-            format!("pdf-reader {}", env!("CARGO_PKG_VERSION"))
+            format!("agenticpdf {}", env!("CARGO_PKG_VERSION"))
         );
     }
 }

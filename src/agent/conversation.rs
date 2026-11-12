@@ -3,7 +3,7 @@ use std::path::Path;
 
 pub const SUMMARY_REQUEST: &str = "Summarize this document.";
 const SUMMARY_INSTRUCTIONS: &str = "Summarize this document. Start with document_info and get_outline, then read the text with get_text in ranges until you reach the last page. Cite the page for every claim as (p. N). Say which pages you could not read.";
-const TOOL_PREFIX: &str = "mcp__pdf-reader__";
+const TOOL_PREFIX: &str = "mcp__agenticpdf__";
 const MAX_TOOL_ROWS: usize = 200;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -241,14 +241,14 @@ pub fn file_uri(path: &Path) -> String {
 
 pub fn summary_prompt(path: &Path) -> String {
     format!(
-        "{SUMMARY_INSTRUCTIONS}\n\nThe document is the PDF at {}. Read it with the pdf-reader tools.",
+        "{SUMMARY_INSTRUCTIONS}\n\nThe document is the PDF at {}. Read it with the agenticpdf tools.",
         path.display()
     )
 }
 
 pub fn question_prompt(question: &str, path: &Path, page: usize) -> String {
     format!(
-        "{question}\n\nThis question is about the PDF at {}, which is open on page {page}. Read it with the pdf-reader tools and cite pages as (p. N).",
+        "{question}\n\nThis question is about the PDF at {}, which is open on page {page}. Read it with the agenticpdf tools and cite pages as (p. N).",
         path.display()
     )
 }
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn labels_tools_and_builds_prompts() {
-        assert_eq!(tool_label("mcp__pdf-reader__get_outline"), "Read outline");
+        assert_eq!(tool_label("mcp__agenticpdf__get_outline"), "Read outline");
         assert_eq!(tool_label("ToolSearch"), "ToolSearch");
         assert_eq!(
             tool_detail(&serde_json::json!({"path": "a.pdf", "from_page": 6})),

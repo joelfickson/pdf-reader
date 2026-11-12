@@ -82,7 +82,7 @@ def create_pdf(destination, pages, rotations=(), blank_pages=(), outline=(), lin
         stream = ["0.16 0.18 0.17 rg", "BT /F2 9 Tf 64 724 Td (NOTES ON EVERYDAY THINGS) Tj ET", "0.82 0.83 0.80 RG 64 708 m 548 708 l S", f"BT /F1 30 Tf 64 632 Td ({escape(title)}) Tj ET", f"BT /F1 19 Tf 64 573 Td ({escape(subtitle)}) Tj ET", "BT /F1 13 Tf 21 TL 64 525 Td"]
         for line in lines:
             stream.append(f"({escape(line)}) Tj T*")
-        stream.extend(["ET", "0.16 0.34 0.64 rg 64 248 80 5 re f", f"BT /F2 10 Tf 64 52 Td (PDF Reader sample) Tj 460 0 Td ({index + 1}) Tj ET"])
+        stream.extend(["ET", "0.16 0.34 0.64 rg 64 248 80 5 re f", f"BT /F2 10 Tf 64 52 Td (Agentic PDF sample) Tj 460 0 Td ({index + 1}) Tj ET"])
         if index in blank_pages:
             stream = ["0.9 0.9 0.85 rg 60 400 490 300 re f", "0.4 0.5 0.6 rg 90 450 300 180 re f"]
         data = "\n".join(stream).encode("latin-1")

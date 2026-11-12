@@ -133,8 +133,14 @@ impl Reader {
             async {}
         })
         .detach();
+        let carried = crate::recent::carry_over_former_data();
         let (recent, recent_error) = match RecentFiles::load() {
-            Ok(recent) => (recent, None),
+            Ok(recent) => (
+                recent,
+                carried.err().map(|error| {
+                    format!("Settings from PDF Reader could not be carried over. {error:#}")
+                }),
+            ),
             Err(error) => (
                 RecentFiles::default(),
                 Some(format!("Recent files could not be loaded. {error:#}")),

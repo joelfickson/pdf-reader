@@ -230,7 +230,7 @@ mod tests {
                 .contains("could not be opened")
         );
         let directory =
-            std::env::temp_dir().join(format!("pdf-reader-dir-{}.pdf", std::process::id()));
+            std::env::temp_dir().join(format!("agenticpdf-dir-{}.pdf", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         assert!(
             resolve(directory.to_str().unwrap())

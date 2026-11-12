@@ -21,7 +21,7 @@ TIMEOUT_SECONDS = 60
 
 
 def binary():
-    name = "pdf-reader.exe" if os.name == "nt" else "pdf-reader"
+    name = "agenticpdf.exe" if os.name == "nt" else "agenticpdf"
     return ROOT / "target" / "release" / name
 
 
@@ -53,7 +53,7 @@ def page_count(path):
 
 
 def launch(path, home):
-    environment = dict(os.environ, PDF_READER_BENCH="first-page", HOME=str(home), APPDATA=str(home))
+    environment = dict(os.environ, AGENTICPDF_BENCH="first-page", HOME=str(home), APPDATA=str(home))
     started = time.perf_counter()
     process = subprocess.Popen([binary(), path], stdout=subprocess.PIPE, text=True, env=environment)
     reported = None
@@ -91,7 +91,7 @@ def summary(values, unit, scale=1.0):
 def main():
     parser = argparse.ArgumentParser(description="Measure launch to first painted page and peak memory.")
     parser.add_argument("--runs", type=int, default=5)
-    parser.add_argument("--work-dir", type=Path, default=Path(tempfile.gettempdir()) / "pdf-reader-bench")
+    parser.add_argument("--work-dir", type=Path, default=Path(tempfile.gettempdir()) / "agenticpdf-bench")
     parser.add_argument("pdf", nargs="*", type=Path, help="Extra PDFs to measure")
     args = parser.parse_args()
     if not binary().is_file():

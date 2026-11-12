@@ -67,13 +67,13 @@ pub(crate) fn menus(recent: &[RecentFile]) -> Vec<Menu> {
     recent_items.push(MenuItem::action("Clear Menu", ClearRecent));
     vec![
         Menu {
-            name: "PDF Reader".into(),
+            name: "Agentic PDF".into(),
             items: vec![
                 MenuItem::action("Check for Updates…", CheckForUpdates),
                 MenuItem::separator(),
                 MenuItem::action("Settings…", ShowSettings),
                 MenuItem::separator(),
-                MenuItem::action("Quit PDF Reader", Quit),
+                MenuItem::action("Quit Agentic PDF", Quit),
             ],
         },
         Menu {
@@ -209,7 +209,7 @@ pub(crate) fn run(paths: Vec<PathBuf>) -> anyhow::Result<()> {
         })
         .detach();
         let mut bounds = Bounds::centered(None, size(px(1180.0), px(860.0)), cx);
-        if cfg!(debug_assertions) && std::env::var_os("PDF_READER_PREVIEW").is_some() {
+        if cfg!(debug_assertions) && std::env::var_os("AGENTICPDF_PREVIEW").is_some() {
             bounds.origin = point(px(24.0), px(48.0));
         }
         let opened = cx.open_window(
@@ -217,7 +217,7 @@ pub(crate) fn run(paths: Vec<PathBuf>) -> anyhow::Result<()> {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(size(px(820.0), px(520.0))),
                 titlebar: Some(TitlebarOptions {
-                    title: Some("PDF Reader".into()),
+                    title: Some("Agentic PDF".into()),
                     appears_transparent: cfg!(target_os = "macos"),
                     traffic_light_position: cfg!(target_os = "macos")
                         .then(|| point(px(14.0), px(14.0))),

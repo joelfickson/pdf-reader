@@ -20,3 +20,5 @@
 - Restore saved tab scroll offsets after an evicted bitmap renders; a temporary loading view can otherwise clamp them to zero. Cover cached and uncached restoration in interaction tests.
 - Verify PDF text geometry against rendered ink, including rotated pages. Preserve Unicode and line breaks when copying.
 - When a newly built feature appears missing, compare the running process start time with the bundle modification time before changing code. Restart the outdated reader and preserve the current document and reading position where possible; rebuilding alone does not update an existing process.
+- The product is Agentic PDF. Use "Agentic PDF" wherever people read the name and `agenticpdf` for the crate, executable, release files, environment variable prefix (`AGENTICPDF_`), and MCP server name. The bundle identifier is `app.agenticpdf.desktop` and must not change again, because the updater rejects a different identifier. The former name, PDF Reader, appears only where old settings and old release files are still recognised.
+- The site's domain will be agenticpdf.app. Do not link to it until it is registered and attached; use the Vercel address until then.

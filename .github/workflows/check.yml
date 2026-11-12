@@ -43,11 +43,11 @@ jobs:
         run: |
           uv run scripts/package_macos.py
           uv run scripts/package_macos.py --debug
-          for bundle in "target/release/PDF Reader.app" "target/debug/PDF Reader Debug.app"; do
+          for bundle in "target/release/Agentic PDF.app" "target/debug/Agentic PDF Debug.app"; do
             plutil -lint "$bundle/Contents/Info.plist"
-            test "$(plutil -extract CFBundleIconFile raw -o - "$bundle/Contents/Info.plist")" = "pdf-reader.icns"
-            test -f "$bundle/Contents/Resources/pdf-reader.icns"
-            iconutil -c iconset "$bundle/Contents/Resources/pdf-reader.icns" -o "$RUNNER_TEMP/$(basename "$bundle" .app).iconset"
+            test "$(plutil -extract CFBundleIconFile raw -o - "$bundle/Contents/Info.plist")" = "agenticpdf.icns"
+            test -f "$bundle/Contents/Resources/agenticpdf.icns"
+            iconutil -c iconset "$bundle/Contents/Resources/agenticpdf.icns" -o "$RUNNER_TEMP/$(basename "$bundle" .app).iconset"
           done
       - if: runner.os == 'Windows'
         name: Build release executable with embedded icon

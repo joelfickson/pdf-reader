@@ -1,11 +1,11 @@
 [package]
-name = "pdf-reader"
-version = "0.1.4"
+name = "agenticpdf"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/joelfickson/pdf-reader"
+repository = "https://github.com/joelfickson/agenticpdf"
 description = "A lightweight desktop PDF reader for macOS and Windows"
-default-run = "pdf-reader"
+default-run = "agenticpdf"
 
 [dependencies]
 anyhow = "1"

@@ -443,7 +443,7 @@ mod tests {
     fn saved_marks_cover_the_marked_text_and_replace_the_file() {
         let engine = crate::pdf::bind().unwrap();
         let directory =
-            std::env::temp_dir().join(format!("pdf-reader-markup-{}", std::process::id()));
+            std::env::temp_dir().join(format!("agenticpdf-markup-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let path = directory.join("marked.pdf");
         fs::copy(
@@ -542,7 +542,7 @@ mod tests {
     fn saved_signatures_draw_their_strokes_inside_their_bounds() {
         let engine = crate::pdf::bind().unwrap();
         let directory =
-            std::env::temp_dir().join(format!("pdf-reader-signature-{}", std::process::id()));
+            std::env::temp_dir().join(format!("agenticpdf-signature-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let path = directory.join("signed.pdf");
         fs::copy(
