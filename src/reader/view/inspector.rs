@@ -194,9 +194,13 @@ impl Reader {
                     .child(
                         text_button("inspector-highlight", "Highlight", &theme, Kind::Quiet)
                             .h(px(28.0))
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.unavailable("Highlighting", cx)),
-                            ),
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.mark_selection(
+                                    crate::pdf::markup::MarkupKind::Highlight,
+                                    this.chrome.marker,
+                                    cx,
+                                )
+                            })),
                     ),
             )
             .into_any_element()

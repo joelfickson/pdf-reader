@@ -537,6 +537,189 @@ fn load_document(
     );
 }
 
+#[gpui::test]
+fn marks_selection_undoes_saves_and_guards_closing(cx: &mut TestAppContext) {
+    use crate::pdf::markup::MarkupKind;
+    use crate::ui::theme::Marker;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+        })
+    });
+    cx.run_until_parked();
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let drag = |cx: &mut gpui::VisualTestContext, from: f32, to: f32| {
+        let bounds = cx.read(|cx| reader.read(cx).page_bounds.get());
+        assert!(bounds.size.width > px(0.0));
+        let at = |x: f32| bounds.origin + point(bounds.size.width * x, bounds.size.height * 0.215);
+        cx.simulate_mouse_down(at(from), MouseButton::Left, Default::default());
+        cx.simulate_mouse_move(at(to), MouseButton::Left, Default::default());
+        cx.simulate_mouse_up(at(to), MouseButton::Left, Default::default());
+    };
+
+    drag(cx, 0.101, 0.259);
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.has_selection());
+        assert!(reader.tabs.current().unwrap().markups.is_empty());
+    });
+    cx.update(|_, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.mark_selection(MarkupKind::Highlight, 1, cx)
+        })
+    });
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        let tab = reader.tabs.current().unwrap();
+        assert!(reader.selection.is_none());
+        assert!(tab.modified());
+        let markup = &tab.markups[0];
+        assert_eq!(markup.kind, MarkupKind::Highlight);
+        assert_eq!(markup.color, Marker::ALL[1]);
+        assert_eq!(markup.quote, "Selected");
+        assert_eq!(markup.pages.len(), 1);
+        assert_eq!(markup.pages[0].page, 0);
+        let rect = markup.pages[0].rects[0];
+        assert_eq!(markup.pages[0].rects.len(), 1);
+        assert!((rect.left - 0.1).abs() < 1e-5 && (rect.right - 0.26).abs() < 1e-5);
+    });
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-a"));
+    cx.update(|_, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.choose_tool(chrome::Tool::Underline, cx)
+        })
+    });
+    cx.run_until_parked();
+    drag(cx, 0.281, 0.379);
+    let marks = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| {
+            let tab = &reader.read(cx).tabs.entries[0];
+            (tab.markups.len(), tab.undone.len(), tab.modified())
+        })
+    };
+    assert_eq!(marks(cx), (2, 0, true));
+    cx.read(|cx| {
+        let markup = &reader.read(cx).tabs.entries[0].markups[1];
+        assert_eq!(markup.kind, MarkupKind::Underline);
+        assert_eq!(markup.quote, "words");
+    });
+
+    cx.simulate_keystrokes(&format!("{modifier}-z"));
+    assert_eq!(marks(cx), (1, 1, true));
+    cx.simulate_keystrokes(&format!("{modifier}-shift-z"));
+    assert_eq!(marks(cx), (2, 0, true));
+
+    cx.dispatch_action(Save);
+    let session = cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.tabs.entries[0].saving);
+        assert_eq!(reader.worker.queued_saves(), [2]);
+        reader.tabs.entries[0].session
+    });
+    cx.simulate_keystrokes(&format!("{modifier}-z"));
+    assert_eq!(marks(cx), (2, 0, true));
+    let offset = point(px(0.0), px(-40.0));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.tabs.entries[0].scroll.set_offset(offset);
+            reader.receive(
+                Event::Saved {
+                    session,
+                    result: Ok(()),
+                },
+                window,
+                cx,
+            );
+            assert!(reader.image.is_none());
+            assert!(reader.last_request.is_some());
+            assert_eq!(reader.tabs.entries[0].restore_scroll, Some(offset));
+        })
+    });
+    assert_eq!(marks(cx), (2, 0, false));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(
+            reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+            "Saved"
+        );
+        assert!(!reader.tabs.entries[0].saving);
+    });
+    cx.simulate_keystrokes(&format!("{modifier}-z"));
+    assert_eq!(marks(cx), (2, 0, false));
+    cx.dispatch_action(Close);
+    cx.run_until_parked();
+    assert!(!cx.has_pending_prompt());
+    cx.read(|cx| assert!(reader.read(cx).tabs.entries.is_empty()));
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.selection = Some(selection::Selection::within(0, 0..8));
+            reader.mark_selection(MarkupKind::Strikeout, 0, cx);
+            reader.save_document(cx);
+            let session = reader.tabs.entries[0].session;
+            reader.receive(
+                Event::Saved {
+                    session,
+                    result: Err("The disk is full.".into()),
+                },
+                window,
+                cx,
+            );
+            assert!(reader.tabs.entries[0].modified());
+            assert_eq!(
+                reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+                "Changes could not be saved"
+            );
+        })
+    });
+    cx.dispatch_action(Close);
+    assert!(cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Cancel");
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.entries.len(), 1));
+    cx.dispatch_action(Close);
+    cx.simulate_prompt_answer("Save");
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.tabs.entries[0].saving);
+        assert!(reader.tabs.entries[0].close_after_save);
+    });
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            let session = reader.tabs.entries[0].session;
+            reader.receive(
+                Event::Saved {
+                    session,
+                    result: Ok(()),
+                },
+                window,
+                cx,
+            );
+            assert!(reader.tabs.entries.is_empty());
+            load_document(reader, window, cx, 3);
+            reader.selection = Some(selection::Selection::within(0, 0..8));
+            reader.mark_selection(MarkupKind::Highlight, 0, cx);
+        })
+    });
+    cx.dispatch_action(Close);
+    cx.simulate_prompt_answer("Discard");
+    cx.run_until_parked();
+    cx.read(|cx| assert!(reader.read(cx).tabs.entries.is_empty()));
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);
@@ -585,6 +768,19 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
         ("zoom menu", |r, _, cx| r.set_overlay(Overlay::ZoomMenu, cx)),
         ("view menu", |r, _, cx| r.set_overlay(Overlay::ViewMenu, cx)),
         ("annotate", |r, w, cx| r.set_mode(Mode::Annotate, w, cx)),
+        ("marked notes", |r, w, cx| {
+            use crate::pdf::markup::MarkupKind;
+            r.set_mode(Mode::Annotate, w, cx);
+            for (range, kind, color) in [
+                (0..8, MarkupKind::Highlight, 0),
+                (9..14, MarkupKind::Underline, 2),
+                (15..17, MarkupKind::Strikeout, 3),
+            ] {
+                r.selection = Some(selection::Selection::within(0, range));
+                r.mark_selection(kind, color, cx);
+            }
+            assert_eq!(r.tabs.current().unwrap().markups.len(), 3);
+        }),
         ("stamps", |r, w, cx| {
             r.set_mode(Mode::Annotate, w, cx);
             r.chrome.tool = Tool::Stamp;
@@ -714,7 +910,7 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
             cx.update(|window, cx| {
                 reader.update(cx, |r, cx| {
                     while !r.tabs.entries.is_empty() {
-                        r.close_tab(0, window, cx);
+                        r.close_tab_now(0, window, cx);
                     }
                     r.chrome = chrome::Chrome::new(r.chrome.theme);
                     r.chrome.theme_choice = choice;

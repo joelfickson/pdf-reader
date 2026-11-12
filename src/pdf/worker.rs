@@ -1,7 +1,7 @@
 use super::{
-    Event, Job, SearchJob,
+    Event, Job, SaveJob, SearchJob,
     library::bind,
-    render,
+    markup, render,
     search::{self, MAX_HITS},
 };
 use anyhow::{Context, Result, bail};
@@ -24,6 +24,7 @@ const OPEN_DOCUMENTS: usize = 4;
 struct Queue {
     pending: Mutex<Option<Job>>,
     search: Mutex<Option<SearchJob>>,
+    saves: Mutex<VecDeque<SaveJob>>,
     closed: Mutex<Vec<u64>>,
     ready: Condvar,
     generation: AtomicU64,
@@ -36,6 +37,7 @@ impl Queue {
         Self {
             pending: Mutex::new(None),
             search: Mutex::new(None),
+            saves: Mutex::new(VecDeque::new()),
             closed: Mutex::new(Vec::new()),
             ready: Condvar::new(),
             generation: AtomicU64::new(0),
@@ -98,6 +100,22 @@ impl Worker {
         search
     }
 
+    pub fn save(&self, job: SaveJob) {
+        let _pending = self.0.pending.lock();
+        self.0.saves.lock().push_back(job);
+        self.0.ready.notify_one();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn queued_saves(&self) -> Vec<usize> {
+        self.0
+            .saves
+            .lock()
+            .iter()
+            .map(|job| job.markups.len())
+            .collect()
+    }
+
     pub fn cancel_search(&self) -> u64 {
         let _pending = self.0.pending.lock();
         *self.0.search.lock() = None;
@@ -152,11 +170,12 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
     let mut documents = VecDeque::new();
     let mut active: Option<ActiveSearch> = None;
     loop {
-        let (job, closed, search) = {
+        let (job, closed, search, saves) = {
             let mut pending = queue.pending.lock();
             while pending.is_none()
                 && active.is_none()
                 && queue.search.lock().is_none()
+                && queue.saves.lock().is_empty()
                 && queue.closed.lock().is_empty()
                 && queue.running()
             {
@@ -166,7 +185,8 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
                 return;
             }
             let closed = std::mem::take(&mut *queue.closed.lock());
-            (pending.take(), closed, queue.search.lock().take())
+            let saves = std::mem::take(&mut *queue.saves.lock());
+            (pending.take(), closed, queue.search.lock().take(), saves)
         };
         documents.retain(|(session, _)| !closed.contains(session));
         if let Some(job) = search {
@@ -187,6 +207,17 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
             Ok(engine) => engine,
             Err(error) => {
                 let message = format!("{error:#}");
+                for save in saves {
+                    if sender
+                        .send_blocking(Event::Saved {
+                            session: save.session,
+                            result: Err(message.clone()),
+                        })
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
                 if let Some(job) = job
                     && sender
                         .send_blocking(Event::Error {
@@ -210,6 +241,20 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
                 continue;
             }
         };
+        for save in saves {
+            documents.retain(|(session, _)| *session != save.session);
+            let result = markup::save(engine, &save.path, &save.markups)
+                .map_err(|error| format!("{error:#}"));
+            if sender
+                .send_blocking(Event::Saved {
+                    session: save.session,
+                    result,
+                })
+                .is_err()
+            {
+                return;
+            }
+        }
         if let Some(job) = job {
             let generation = job.generation;
             let current =
@@ -565,6 +610,123 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn save_writes_marks_and_the_next_render_shows_them() {
+        use crate::pdf::{
+            SaveJob,
+            markup::{Markup, MarkupKind, PageMarks, lines},
+        };
+
+        let directory =
+            std::env::temp_dir().join(format!("pdf-reader-worker-save-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("saved.pdf");
+        std::fs::copy(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reading.pdf"),
+            &path,
+        )
+        .unwrap();
+        let (worker, events) = Worker::start().unwrap();
+        let job = || Job {
+            generation: 0,
+            path: path.clone(),
+            view: ViewKey {
+                session: 4,
+                page: 0,
+                available_width: 600,
+                zoom: None,
+                scale: 100,
+            },
+            render_page: true,
+            extract_text: true,
+            thumbnails: vec![],
+            outline: false,
+            sizes: false,
+            nearby: vec![],
+            nearby_text: vec![],
+        };
+        let load = |generation: u64| loop {
+            match next_event(&events) {
+                Event::Page {
+                    generation: page,
+                    raster,
+                    ..
+                } if page == generation => loop {
+                    match next_event(&events) {
+                        Event::Text {
+                            generation: page,
+                            text: Ok(text),
+                            ..
+                        } if page == generation => return (raster, text),
+                        Event::Error { message, .. } => panic!("{message}"),
+                        _ => {}
+                    }
+                },
+                Event::Error { message, .. } => panic!("{message}"),
+                _ => {}
+            }
+        };
+        let chromatic = |raster: &crate::pdf::Raster, rect: &crate::pdf::text::TextRect| {
+            let columns = (rect.left * raster.width as f32).ceil() as u32
+                ..(rect.right * raster.width as f32).floor() as u32;
+            let rows = (rect.top * raster.height as f32).ceil() as u32
+                ..(rect.bottom * raster.height as f32).floor() as u32;
+            let total = (columns.len() * rows.len()).max(1);
+            let tinted = rows
+                .flat_map(|y| columns.clone().map(move |x| (x, y)))
+                .filter(|(x, y)| {
+                    let offset = ((y * raster.width + x) * 4) as usize;
+                    let pixel = &raster.bytes[offset..offset + 3];
+                    pixel.iter().max().unwrap() - pixel.iter().min().unwrap() > 60
+                })
+                .count();
+            tinted as f32 / total as f32
+        };
+        let (before, text) = load(worker.submit(job()));
+        let rects = lines(&text.glyphs[..text.glyphs.len().min(20)]);
+        assert!(!rects.is_empty());
+        assert!(chromatic(&before, &rects[0]) < 0.1);
+        worker.save(SaveJob {
+            session: 4,
+            path: path.clone(),
+            markups: vec![Markup {
+                kind: MarkupKind::Highlight,
+                color: 0xf2c230,
+                quote: text.content(0..20),
+                pages: vec![PageMarks {
+                    page: 0,
+                    rects: rects.clone(),
+                }],
+            }],
+        });
+        loop {
+            match next_event(&events) {
+                Event::Saved { session, result } => {
+                    assert_eq!(session, 4);
+                    result.unwrap();
+                    break;
+                }
+                Event::Error { message, .. } => panic!("{message}"),
+                _ => {}
+            }
+        }
+        let (after, _) = load(worker.submit(job()));
+        assert!(chromatic(&after, &rects[0]) > 0.5);
+        worker.save(SaveJob {
+            session: 4,
+            path: directory.join("missing.pdf"),
+            markups: vec![],
+        });
+        loop {
+            if let Event::Saved { result, .. } = next_event(&events) {
+                assert!(result.is_err());
+                break;
+            }
+        }
+        std::fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]

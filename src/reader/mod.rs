@@ -8,6 +8,7 @@ mod handlers;
 mod history;
 mod images;
 mod jumps;
+mod markup;
 mod navigation;
 mod outline;
 #[cfg(debug_assertions)]
@@ -110,6 +111,20 @@ impl Reader {
             cx.notify();
         })
         .detach();
+        let handle = cx.weak_entity();
+        window.on_window_should_close(cx, move |window, cx| {
+            handle
+                .update(cx, |this, cx| {
+                    if this.unsaved_tabs() == 0 {
+                        return true;
+                    }
+                    this.confirm_discard("Close the window", window, cx, |_, window, _| {
+                        window.remove_window()
+                    });
+                    false
+                })
+                .unwrap_or(true)
+        });
         cx.on_app_quit(|this, cx| {
             this.persist_recent(cx);
             this.updates.install_on_quit();
@@ -190,6 +205,8 @@ impl Reader {
                         tab.outline = Some(outline::OutlineTree::new(outline));
                         cx.notify();
                     }
+                } else if let Event::Saved { session, result } = event {
+                    self.finish_save(session, result, window, cx);
                 } else {
                     self.receive_search(event, window, cx);
                 }
@@ -267,7 +284,8 @@ impl Reader {
                 tab.error = Some(message);
                 self.busy = false;
             }
-            Event::SearchBatch { .. }
+            Event::Saved { .. }
+            | Event::SearchBatch { .. }
             | Event::SearchDone { .. }
             | Event::SearchFailed { .. }
             | Event::Outline { .. } => {}

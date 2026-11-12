@@ -39,7 +39,7 @@ impl Geometry {
         height: 1.0,
     };
 
-    fn of(page: &PdfPage<'_>) -> Result<Self> {
+    pub(super) fn of(page: &PdfPage<'_>) -> Result<Self> {
         let width = page.width().value;
         let height = page.height().value;
         if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
@@ -69,6 +69,18 @@ impl Geometry {
             self.origin[0] + self.x_axis[0] * u + self.y_axis[0] * v,
             self.origin[1] + self.x_axis[1] * u + self.y_axis[1] * v,
         )
+    }
+
+    pub(super) fn page_point(&self, x: f32, y: f32) -> Option<(f32, f32)> {
+        let determinant = self.x_axis[0] * self.y_axis[1] - self.y_axis[0] * self.x_axis[1];
+        if !determinant.is_finite() || determinant.abs() < f32::EPSILON {
+            return None;
+        }
+        let (dx, dy) = (x - self.origin[0], y - self.origin[1]);
+        let u = (dx * self.y_axis[1] - dy * self.y_axis[0]) / determinant;
+        let v = (dy * self.x_axis[0] - dx * self.x_axis[1]) / determinant;
+        let point = (u * self.width, v * self.height);
+        (point.0.is_finite() && point.1.is_finite()).then_some(point)
     }
 
     fn rect(&self, left: f32, top: f32, right: f32, bottom: f32) -> Option<TextRect> {

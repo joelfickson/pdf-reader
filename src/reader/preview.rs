@@ -3,6 +3,7 @@ use super::{
     chrome::{InspectorTab, Mode, Overlay, Panel},
     selection::Selection,
 };
+use crate::pdf::markup::MarkupKind;
 use crate::ui::theme::ThemeChoice;
 use gpui::{Context, Window};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -115,6 +116,27 @@ impl Reader {
                 && !SELECTED.swap(true, Ordering::SeqCst)
             {
                 self.follow_link(link, window, cx);
+            }
+            return;
+        }
+        if matches!(state.as_str(), "marked" | "marked-saved") {
+            if SELECTED.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            let (Some(Ok(text)), Some(tab)) = (&self.text, self.tabs.current()) else {
+                return;
+            };
+            let (page, len) = (tab.page, text.glyphs.len());
+            self.set_mode(Mode::Annotate, window, cx);
+            for (range, kind, color) in [
+                (0..len.min(60), MarkupKind::Highlight, 0),
+                (len.min(60)..len.min(120), MarkupKind::Underline, 2),
+            ] {
+                self.selection = Some(Selection::within(page, range));
+                self.mark_selection(kind, color, cx);
+            }
+            if state == "marked-saved" {
+                self.save_document(cx);
             }
             return;
         }

@@ -99,6 +99,24 @@ impl Reader {
     }
 
     pub(super) fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .tabs
+            .entries
+            .get(index)
+            .is_some_and(|tab| tab.modified())
+        {
+            self.confirm_close(index, window, cx);
+        } else {
+            self.close_tab_now(index, window, cx);
+        }
+    }
+
+    pub(super) fn close_tab_now(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if index >= self.tabs.entries.len() {
             return;
         }

@@ -152,6 +152,9 @@ impl Render for Reader {
             .on_action(cx.listener(Self::show_shortcuts))
             .on_action(cx.listener(Self::go_to_page))
             .on_action(cx.listener(Self::save))
+            .on_action(cx.listener(Self::undo))
+            .on_action(cx.listener(Self::redo))
+            .on_action(cx.listener(Self::quit))
             .on_action(cx.listener(Self::bookmark))
             .on_action(cx.listener(Self::toggle_split))
             .on_action(cx.listener(Self::toggle_present))
@@ -175,21 +178,11 @@ impl Render for Reader {
             )
             .on_mouse_up(
                 gpui::MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    if let Some(selection) = &mut this.selection {
-                        selection.dragging = false;
-                        cx.notify();
-                    }
-                }),
+                cx.listener(|this, _, _, cx| this.finish_drag(cx)),
             )
             .on_mouse_up_out(
                 gpui::MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
-                    if let Some(selection) = &mut this.selection {
-                        selection.dragging = false;
-                        cx.notify();
-                    }
-                }),
+                cx.listener(|this, _, _, cx| this.finish_drag(cx)),
             )
             .child(titlebar)
             .child(

@@ -3,7 +3,7 @@ use crate::reader::chrome::Panel;
 use crate::ui::{
     icon::Icon,
     kit::clickable,
-    kit::{RADIUS, empty_state, icon, label, mono},
+    kit::{RADIUS, dot, empty_state, icon, label, mono},
     theme::Paper,
 };
 use gpui::{AnyElement, Context, IntoElement, div, img, prelude::*, px, uniform_list};
@@ -56,8 +56,8 @@ impl Panel {
                 "Pages you bookmark will be listed here.",
             ),
             Self::Notes => (
-                "Notes are not available yet",
-                "Highlights, notes, drawings and stamps will be listed here.",
+                "No notes yet",
+                "Highlights, underlines and strikethroughs you add are listed here.",
             ),
             Self::Results => ("", ""),
             Self::Attachments => (
@@ -157,6 +157,19 @@ impl Reader {
                     )
                 },
             )
+            .when_some(
+                self.tabs
+                    .current()
+                    .map(|tab| tab.markups.len())
+                    .filter(|count| panel == Panel::Notes && *count > 0),
+                |header, count| {
+                    header.child(
+                        mono(count.to_string())
+                            .text_size(px(11.0))
+                            .text_color(theme.faint),
+                    )
+                },
+            )
             .when(panel == Panel::Pages, |header| {
                 header.child(
                     mono(count.to_string())
@@ -182,6 +195,13 @@ impl Reader {
             self.results(cx)
         } else if panel == Panel::Outline {
             self.outline_panel(cx)
+        } else if panel == Panel::Notes
+            && self
+                .tabs
+                .current()
+                .is_some_and(|tab| !tab.markups.is_empty())
+        {
+            self.notes(cx)
         } else {
             let (title, body) = panel.placeholder();
             div()
@@ -199,6 +219,61 @@ impl Reader {
             .child(rail)
             .child(header)
             .child(body)
+    }
+
+    fn notes(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.chrome.theme;
+        let Some(tab) = self.tabs.current() else {
+            return div().into_any_element();
+        };
+        let hover = theme.hover;
+        let rows = tab.markups.iter().enumerate().map(|(index, markup)| {
+            let page = markup.first_page();
+            clickable(("note", index))
+                .p(px(10.0))
+                .flex()
+                .flex_col()
+                .gap(px(4.0))
+                .rounded(px(RADIUS))
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover))
+                .on_click(cx.listener(move |this, _, window, cx| this.jump(page, None, window, cx)))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .text_size(px(11.0))
+                        .text_color(theme.muted)
+                        .child(dot(gpui::rgb(markup.color).into(), 8.0))
+                        .child(markup.kind.label())
+                        .child(
+                            div()
+                                .ml_auto()
+                                .text_color(theme.faint)
+                                .child(format!("p. {}", page + 1)),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme.ink)
+                        .line_clamp(2)
+                        .child(markup.quote.clone()),
+                )
+        });
+        div()
+            .id("notes")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .track_scroll(&tab.notes_scroll)
+            .px(px(6.0))
+            .pb(px(16.0))
+            .flex()
+            .flex_col()
+            .children(rows)
+            .into_any_element()
     }
 
     fn thumbnails(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

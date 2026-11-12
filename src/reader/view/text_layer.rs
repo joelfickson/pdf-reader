@@ -1,5 +1,5 @@
 use super::super::{Reader, TextResult, images::PageImage};
-use crate::pdf::text::TextRect;
+use crate::pdf::{markup::MarkupKind, text::TextRect};
 use crate::ui::kit::clickable;
 use gpui::{
     Bounds, Context, CursorStyle, HitboxBehavior, IntoElement, MouseButton, Pixels, canvas, img,
@@ -19,6 +19,16 @@ impl Reader {
         let current = self.tabs.current().is_some_and(|tab| tab.page == page);
         let mut rects = Vec::new();
         let mut links = Vec::new();
+        for markup in self.tabs.current().map_or(&[][..], |tab| tab.unsaved()) {
+            let color: gpui::Hsla = gpui::rgb(markup.color).into();
+            for rect in markup.on_page(page) {
+                rects.push(match markup.kind {
+                    MarkupKind::Highlight => (*rect, color.opacity(0.4)),
+                    MarkupKind::Underline => (rule(rect, 0.94), color),
+                    MarkupKind::Strikeout => (rule(rect, 0.55), color),
+                });
+            }
+        }
         if let Some(Ok(text)) = text {
             links.extend(text.links.iter().map(|link| link.bounds));
             let glyphs = |range: Range<usize>| {
@@ -123,6 +133,18 @@ impl Reader {
                 .inset_0()
                 .size_full(),
             )
+    }
+}
+
+fn rule(rect: &TextRect, position: f32) -> TextRect {
+    let height = rect.bottom - rect.top;
+    let center = rect.top + height * position;
+    let half = height * 0.04;
+    TextRect {
+        left: rect.left,
+        top: center - half,
+        right: rect.right,
+        bottom: center + half,
     }
 }
 

@@ -39,7 +39,9 @@ actions!(
         ClearRecent,
         GoBack,
         GoForward,
-        ToggleAgent
+        ToggleAgent,
+        Undo,
+        Redo
     ]
 );
 
