@@ -6,7 +6,7 @@ use super::{
 };
 use crate::pdf::{
     SaveJob,
-    markup::{self, Markup, MarkupKind, PageMarks},
+    markup::{self, Edit, Markup, MarkupKind, PageMarks},
 };
 use crate::ui::{kit::Status, theme::Marker};
 use gpui::{Context, PromptLevel, Window};
@@ -107,6 +107,31 @@ impl Reader {
         Ok((marks, quote(&parts)))
     }
 
+    pub(super) fn can_edit(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(tab) = self.tabs.current() else {
+            return false;
+        };
+        if tab.saving {
+            self.show_toast(
+                Status::Info,
+                "Still saving",
+                "Wait for the save to finish, then try again.",
+                cx,
+            );
+            return false;
+        }
+        if tab.unsaved().len() >= MAX_UNSAVED_MARKUPS {
+            self.show_toast(
+                Status::Warn,
+                "Save before adding more",
+                &format!("A document holds at most {MAX_UNSAVED_MARKUPS} unsaved changes."),
+                cx,
+            );
+            return false;
+        }
+        true
+    }
+
     pub(super) fn mark_selection(
         &mut self,
         kind: MarkupKind,
@@ -126,36 +151,18 @@ impl Reader {
             );
             return;
         };
-        let Some(tab) = self.tabs.current() else {
-            return;
-        };
-        if tab.saving {
-            self.show_toast(
-                Status::Info,
-                "Still saving",
-                "Wait for the save to finish, then mark the text again.",
-                cx,
-            );
-            return;
-        }
-        if tab.unsaved().len() >= MAX_UNSAVED_MARKUPS {
-            self.show_toast(
-                Status::Warn,
-                "Save before adding more",
-                &format!("A document holds at most {MAX_UNSAVED_MARKUPS} unsaved marks."),
-                cx,
-            );
+        if !self.can_edit(cx) {
             return;
         }
         match self.collect_marks(&selection) {
             Ok((pages, quote)) => {
                 if let Some(tab) = self.tabs.current_mut() {
-                    tab.markups.push(Markup {
+                    tab.edits.push(Edit::Markup(Markup {
                         kind,
                         color: Marker::ALL[color % Marker::ALL.len()],
                         quote,
                         pages,
-                    });
+                    }));
                     tab.undone.clear();
                 }
                 self.selection = None;
@@ -167,6 +174,7 @@ impl Reader {
     }
 
     pub(super) fn finish_drag(&mut self, cx: &mut Context<Self>) {
+        self.release_pointer(cx);
         let Some(selection) = self.selection.as_mut() else {
             return;
         };
@@ -198,8 +206,9 @@ impl Reader {
         if tab.saving || tab.unsaved().is_empty() {
             return;
         }
-        if let Some(markup) = tab.markups.pop() {
-            tab.undone.push(markup);
+        if let Some(edit) = tab.edits.pop() {
+            tab.undone.push(edit);
+            self.signing.placing = None;
             cx.notify();
         }
     }
@@ -211,8 +220,8 @@ impl Reader {
         if tab.saving {
             return;
         }
-        if let Some(markup) = tab.undone.pop() {
-            tab.markups.push(markup);
+        if let Some(edit) = tab.undone.pop() {
+            tab.edits.push(edit);
             cx.notify();
         }
     }
@@ -238,10 +247,11 @@ impl Reader {
             return;
         }
         tab.saving = true;
+        self.signing.placing = None;
         self.worker.save(SaveJob {
             session: tab.session,
             path: tab.path.clone(),
-            markups: tab.unsaved().to_vec(),
+            edits: tab.unsaved().to_vec(),
         });
         cx.notify();
     }
@@ -267,7 +277,7 @@ impl Reader {
         let title = tab.title();
         match result {
             Ok(()) => {
-                tab.saved = tab.markups.len();
+                tab.saved = tab.edits.len();
                 tab.undone.clear();
                 if close {
                     self.close_tab_now(index, window, cx);

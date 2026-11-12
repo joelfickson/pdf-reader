@@ -539,7 +539,7 @@ fn load_document(
 
 #[gpui::test]
 fn marks_selection_undoes_saves_and_guards_closing(cx: &mut TestAppContext) {
-    use crate::pdf::markup::MarkupKind;
+    use crate::pdf::markup::{Edit, MarkupKind};
     use crate::ui::theme::Marker;
 
     cx.update(|cx| cx.bind_keys(crate::app::bindings()));
@@ -571,7 +571,7 @@ fn marks_selection_undoes_saves_and_guards_closing(cx: &mut TestAppContext) {
     cx.read(|cx| {
         let reader = reader.read(cx);
         assert!(reader.has_selection());
-        assert!(reader.tabs.current().unwrap().markups.is_empty());
+        assert!(reader.tabs.current().unwrap().edits.is_empty());
     });
     cx.update(|_, cx| {
         reader.update(cx, |reader, cx| {
@@ -583,7 +583,9 @@ fn marks_selection_undoes_saves_and_guards_closing(cx: &mut TestAppContext) {
         let tab = reader.tabs.current().unwrap();
         assert!(reader.selection.is_none());
         assert!(tab.modified());
-        let markup = &tab.markups[0];
+        let Edit::Markup(markup) = &tab.edits[0] else {
+            panic!("expected a text mark");
+        };
         assert_eq!(markup.kind, MarkupKind::Highlight);
         assert_eq!(markup.color, Marker::ALL[1]);
         assert_eq!(markup.quote, "Selected");
@@ -605,12 +607,14 @@ fn marks_selection_undoes_saves_and_guards_closing(cx: &mut TestAppContext) {
     let marks = |cx: &mut gpui::VisualTestContext| {
         cx.read(|cx| {
             let tab = &reader.read(cx).tabs.entries[0];
-            (tab.markups.len(), tab.undone.len(), tab.modified())
+            (tab.edits.len(), tab.undone.len(), tab.modified())
         })
     };
     assert_eq!(marks(cx), (2, 0, true));
     cx.read(|cx| {
-        let markup = &reader.read(cx).tabs.entries[0].markups[1];
+        let Edit::Markup(markup) = &reader.read(cx).tabs.entries[0].edits[1] else {
+            panic!("expected a text mark");
+        };
         assert_eq!(markup.kind, MarkupKind::Underline);
         assert_eq!(markup.quote, "words");
     });
@@ -720,6 +724,178 @@ fn marks_selection_undoes_saves_and_guards_closing(cx: &mut TestAppContext) {
     cx.read(|cx| assert!(reader.read(cx).tabs.entries.is_empty()));
 }
 
+#[gpui::test]
+fn draws_places_adjusts_and_saves_a_signature(cx: &mut TestAppContext) {
+    use crate::pdf::markup::Edit;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+            reader.set_overlay(chrome::Overlay::Sign, cx);
+        })
+    });
+    cx.run_until_parked();
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.place_signature(cx)));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.chrome.overlay, chrome::Overlay::Sign);
+        assert_eq!(
+            reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+            "Draw your signature first"
+        );
+        assert!(reader.tabs.entries[0].edits.is_empty());
+    });
+
+    let pad = cx.read(|cx| reader.read(cx).signing.pad.get());
+    assert!(pad.size.width > px(300.0));
+    let stroke = |cx: &mut gpui::VisualTestContext, points: &[(f32, f32)]| {
+        let at = |index: usize| pad.origin + point(px(points[index].0), px(points[index].1));
+        cx.simulate_mouse_down(at(0), MouseButton::Left, Default::default());
+        for index in 1..points.len() {
+            cx.simulate_mouse_move(at(index), MouseButton::Left, Default::default());
+        }
+        cx.simulate_mouse_up(at(points.len() - 1), MouseButton::Left, Default::default());
+    };
+    stroke(cx, &[(60.0, 100.0), (160.0, 60.0), (260.0, 100.0)]);
+    cx.read(|cx| {
+        let signing = &reader.read(cx).signing;
+        assert!(!signing.drawing);
+        assert_eq!(
+            signing.strokes,
+            [vec![[60.0, 100.0], [160.0, 60.0], [260.0, 100.0]]]
+        );
+    });
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.clear_pad(cx)));
+    cx.read(|cx| assert!(reader.read(cx).signing.strokes.is_empty()));
+    stroke(cx, &[(60.0, 100.0), (160.0, 60.0), (260.0, 100.0)]);
+    stroke(cx, &[(60.0, 120.0), (260.0, 120.0)]);
+    cx.simulate_mouse_move(
+        pad.origin + point(px(200.0), px(20.0)),
+        None,
+        Default::default(),
+    );
+    cx.read(|cx| assert_eq!(reader.read(cx).signing.strokes.len(), 2));
+
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.place_signature(cx)));
+    cx.run_until_parked();
+    let bounds = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| match reader.read(cx).tabs.entries[0].edits.last() {
+            Some(Edit::Signature(signature)) => signature.bounds,
+            _ => panic!("expected a signature"),
+        })
+    };
+    let placed = bounds(cx);
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        let tab = &reader.tabs.entries[0];
+        assert_eq!(reader.chrome.overlay, chrome::Overlay::None);
+        assert!(tab.modified());
+        assert_eq!(tab.edits.len(), 1);
+        let Edit::Signature(signature) = &tab.edits[0] else {
+            panic!("expected a signature");
+        };
+        assert_eq!(signature.page, 0);
+        assert_eq!(signature.color, signing::INKS[0]);
+        assert_eq!(signature.strokes.len(), 2);
+        assert_eq!(signature.strokes[1], [[0.0, 1.0], [1.0, 1.0]]);
+        assert!(reader.placing_signature().is_some());
+        assert_eq!(tab.edits[0].label(), "Signature");
+    });
+    assert!((placed.right - placed.left - 0.32).abs() < 1e-5);
+    assert!((placed.left - 0.34).abs() < 1e-5);
+    let shape = (placed.bottom - placed.top) / (placed.right - placed.left);
+
+    let frame = cx.read(|cx| reader.read(cx).page_bounds.get());
+    assert!(frame.size.width > px(0.0));
+    let on_page =
+        |x: f32, y: f32| frame.origin + point(frame.size.width * x, frame.size.height * y);
+    let drag = |cx: &mut gpui::VisualTestContext, from: (f32, f32), to: (f32, f32)| {
+        cx.simulate_mouse_down(
+            on_page(from.0, from.1),
+            MouseButton::Left,
+            Default::default(),
+        );
+        cx.simulate_mouse_move(on_page(to.0, to.1), MouseButton::Left, Default::default());
+        cx.simulate_mouse_up(on_page(to.0, to.1), MouseButton::Left, Default::default());
+    };
+    let center = (
+        (placed.left + placed.right) / 2.0,
+        (placed.top + placed.bottom) / 2.0,
+    );
+    drag(cx, center, (center.0 + 0.1, center.1 + 0.15));
+    let moved = bounds(cx);
+    assert!((moved.left - placed.left - 0.1).abs() < 0.01);
+    assert!((moved.top - placed.top - 0.15).abs() < 0.01);
+    assert!((moved.right - moved.left - 0.32).abs() < 1e-4);
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.selection.is_none());
+        assert!(reader.signing.placing.unwrap().drag.is_none());
+    });
+
+    drag(
+        cx,
+        (moved.right, moved.bottom),
+        (moved.right + 0.1, moved.bottom + 0.3),
+    );
+    let grown = bounds(cx);
+    assert!((grown.left - moved.left).abs() < 1e-4 && (grown.top - moved.top).abs() < 1e-4);
+    assert!((grown.right - moved.right - 0.1).abs() < 0.01);
+    assert!(((grown.bottom - grown.top) / (grown.right - grown.left) - shape).abs() < 1e-3);
+
+    cx.simulate_keystrokes("enter");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.signing.placing.is_none());
+        assert_eq!(reader.tabs.entries[0].edits.len(), 1);
+    });
+    assert_eq!(bounds(cx), grown);
+
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    cx.simulate_keystrokes(&format!("{modifier}-z"));
+    cx.read(|cx| assert!(!reader.read(cx).tabs.entries[0].modified()));
+    cx.simulate_keystrokes(&format!("{modifier}-shift-z"));
+    assert_eq!(bounds(cx), grown);
+
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.place_signature(cx)));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.tabs.entries[0].edits.len(), 2);
+        assert!(reader.placing_signature().is_some());
+    });
+    cx.simulate_keystrokes("escape");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.tabs.entries[0].edits.len(), 1);
+        assert!(reader.signing.placing.is_none());
+        assert!(reader.tabs.entries[0].undone.is_empty());
+    });
+
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.place_signature(cx)));
+    cx.run_until_parked();
+    drag(cx, (0.05, 0.95), (0.06, 0.96));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.signing.placing.is_none());
+        assert_eq!(reader.tabs.entries[0].edits.len(), 2);
+    });
+    cx.dispatch_action(Save);
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.tabs.entries[0].saving);
+        assert_eq!(reader.worker.queued_saves(), [2]);
+    });
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);
@@ -779,7 +955,16 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
                 r.selection = Some(selection::Selection::within(0, range));
                 r.mark_selection(kind, color, cx);
             }
-            assert_eq!(r.tabs.current().unwrap().markups.len(), 3);
+            assert_eq!(r.tabs.current().unwrap().edits.len(), 3);
+        }),
+        ("sign drawn", |r, _, cx| {
+            r.signing.strokes = vec![vec![[40.0, 90.0], [120.0, 50.0], [220.0, 96.0]]];
+            r.set_overlay(Overlay::Sign, cx);
+        }),
+        ("placing signature", |r, _, cx| {
+            r.signing.strokes = vec![vec![[40.0, 90.0], [120.0, 50.0], [220.0, 96.0]]];
+            r.place_signature(cx);
+            assert!(r.placing_signature().is_some());
         }),
         ("stamps", |r, w, cx| {
             r.set_mode(Mode::Annotate, w, cx);

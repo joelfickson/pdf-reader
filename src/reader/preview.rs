@@ -67,6 +67,30 @@ impl Reader {
                 self.chrome.organize_selection.extend([1, 2]);
             }
             "sign" => self.set_overlay(Overlay::Sign, cx),
+            "sign-drawn" | "signed" | "signed-saved" => {
+                self.signing.strokes = vec![
+                    vec![
+                        [60.0, 96.0],
+                        [84.0, 52.0],
+                        [102.0, 104.0],
+                        [128.0, 60.0],
+                        [150.0, 100.0],
+                        [176.0, 72.0],
+                        [204.0, 98.0],
+                        [240.0, 66.0],
+                        [286.0, 92.0],
+                    ],
+                    vec![[70.0, 118.0], [300.0, 112.0]],
+                ];
+                match state.as_str() {
+                    "sign-drawn" => self.set_overlay(Overlay::Sign, cx),
+                    "signed" => self.place_signature(cx),
+                    _ => {
+                        self.place_signature(cx);
+                        self.save_document(cx);
+                    }
+                }
+            }
             "sign-type" => {
                 self.chrome.sign_tab = 1;
                 self.set_overlay(Overlay::Sign, cx);

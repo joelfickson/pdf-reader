@@ -3,6 +3,7 @@ mod canvas;
 mod dialogs;
 mod empty;
 mod floating;
+mod ink;
 mod inspector;
 mod organize;
 mod outline;
@@ -166,13 +167,19 @@ impl Render for Reader {
             )
             .on_mouse_move(
                 cx.listener(|this, event: &gpui::MouseMoveEvent, window, cx| {
-                    if event.pressed_button == Some(gpui::MouseButton::Left)
-                        && this
-                            .selection
-                            .as_ref()
-                            .is_some_and(|selection| selection.dragging)
+                    if event.pressed_button != Some(gpui::MouseButton::Left) {
+                        return;
+                    }
+                    if this.signing.drawing {
+                        this.extend_stroke(event.position, cx);
+                    } else if this
+                        .selection
+                        .as_ref()
+                        .is_some_and(|selection| selection.dragging)
                     {
                         this.drag_selection(event.position, window, cx);
+                    } else {
+                        this.placement_drag(event.position, cx);
                     }
                 }),
             )

@@ -140,6 +140,9 @@ impl Reader {
     }
 
     pub(super) fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<Self>) {
+        if self.chrome.overlay == Overlay::None && self.cancel_placement(cx) {
+            return;
+        }
         if self.chrome.overlay != Overlay::None {
             self.set_overlay(Overlay::None, cx);
         } else if matches!(self.chrome.input, Input::Page | Input::Agent) {
@@ -192,6 +195,13 @@ impl Reader {
         }
         match self.chrome.input {
             Input::None => {
+                if keystroke.key == "enter"
+                    && self.chrome.overlay == Overlay::None
+                    && self.finish_placement(cx)
+                {
+                    cx.stop_propagation();
+                    return;
+                }
                 if keystroke.key_char.as_deref() == Some("?")
                     && !keystroke.modifiers.platform
                     && !keystroke.modifiers.control

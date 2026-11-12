@@ -1,6 +1,6 @@
 use super::column::Column;
 use super::{jumps::Jumps, outline::OutlineTree};
-use crate::pdf::{PageSizes, markup::Markup};
+use crate::pdf::{PageSizes, markup::Edit};
 use gpui::{Pixels, Point, ScrollHandle, UniformListScrollHandle};
 use std::rc::Rc;
 use std::{collections::BTreeSet, ops::Range, path::PathBuf};
@@ -25,9 +25,9 @@ pub(super) struct DocumentTab {
     pub pending_anchor: Option<(f32, f32)>,
     pub outline: Option<OutlineTree>,
     pub outline_scroll: ScrollHandle,
-    pub markups: Vec<Markup>,
+    pub edits: Vec<Edit>,
     pub saved: usize,
-    pub undone: Vec<Markup>,
+    pub undone: Vec<Edit>,
     pub saving: bool,
     pub close_after_save: bool,
     pub notes_scroll: ScrollHandle,
@@ -55,7 +55,7 @@ impl DocumentTab {
             pending_anchor: None,
             outline: None,
             outline_scroll: ScrollHandle::new(),
-            markups: Vec::new(),
+            edits: Vec::new(),
             saved: 0,
             undone: Vec::new(),
             saving: false,
@@ -64,8 +64,8 @@ impl DocumentTab {
         }
     }
 
-    pub fn unsaved(&self) -> &[Markup] {
-        self.markups.get(self.saved..).unwrap_or_default()
+    pub fn unsaved(&self) -> &[Edit] {
+        self.edits.get(self.saved..).unwrap_or_default()
     }
 
     pub fn modified(&self) -> bool {
@@ -73,7 +73,7 @@ impl DocumentTab {
     }
 
     pub fn discard(&mut self) {
-        self.markups.truncate(self.saved);
+        self.edits.truncate(self.saved);
         self.undone.clear();
     }
 

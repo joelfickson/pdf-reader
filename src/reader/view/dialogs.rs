@@ -2,8 +2,9 @@ use super::super::{
     Reader,
     chrome::{Input, Overlay},
     commands::{Entry, back_forward, modifier},
+    signing::INKS,
 };
-use super::floating::field;
+use super::{floating::field, ink::paint_strokes};
 use crate::ui::{
     icon::Icon,
     kit::clickable,
@@ -14,8 +15,8 @@ use crate::ui::{
     theme::{Paper, Theme},
 };
 use gpui::{
-    AnyElement, Context, Div, FontWeight, IntoElement, MouseButton, SharedString, Window, div,
-    prelude::*, px,
+    AnyElement, Context, CursorStyle, Div, FontWeight, Hsla, IntoElement, MouseButton,
+    MouseDownEvent, MouseMoveEvent, SharedString, Window, canvas, div, point, prelude::*, px,
 };
 
 pub(super) fn form_row(theme: &Theme, key: &str, value: impl IntoElement) -> Div {
@@ -137,6 +138,7 @@ impl Reader {
         note: Option<AnyElement>,
         primary: &'static str,
         feature: &'static str,
+        action: Option<fn(&mut Self, &mut Context<Self>)>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.chrome.theme;
@@ -163,9 +165,12 @@ impl Reader {
             )
             .child(
                 text_button("dialog-primary", primary, &theme, Kind::Primary).on_click(
-                    cx.listener(move |this, _, _, cx| {
-                        this.chrome.overlay = Overlay::None;
-                        this.unavailable(feature, cx)
+                    cx.listener(move |this, _, _, cx| match action {
+                        Some(action) => action(this, cx),
+                        None => {
+                            this.chrome.overlay = Overlay::None;
+                            this.unavailable(feature, cx)
+                        }
                     }),
                 ),
             )
@@ -264,13 +269,103 @@ impl Reader {
             .into_any_element()
     }
 
+    fn draw_pad(&self, cx: &mut Context<Self>) -> AnyElement {
+        let area = self.signing.pad.clone();
+        let strokes = self.signing.strokes.clone();
+        let ink: Hsla = gpui::rgb(INKS[self.chrome.sign_ink % INKS.len()]).into();
+        let empty = strokes.is_empty();
+        clickable("signature-pad")
+            .relative()
+            .h(px(170.0))
+            .rounded(px(RADIUS))
+            .bg(Paper::base())
+            .cursor(CursorStyle::Crosshair)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                    this.begin_stroke(event.position, cx);
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
+                if event.pressed_button == Some(MouseButton::Left) && this.signing.drawing {
+                    this.extend_stroke(event.position, cx);
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| this.release_pointer(cx)),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| this.release_pointer(cx)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(32.0))
+                    .right(px(32.0))
+                    .bottom(px(38.0))
+                    .h(px(1.0))
+                    .bg(Paper::rule()),
+            )
+            .when(empty, |pad| {
+                pad.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_color(Paper::muted())
+                        .child("Draw your signature here"),
+                )
+            })
+            .child(
+                canvas(
+                    move |bounds, _, _| area.set(bounds),
+                    move |bounds, _, window, _| {
+                        paint_strokes(
+                            window,
+                            &strokes,
+                            |position| bounds.origin + point(px(position[0]), px(position[1])),
+                            px(2.6),
+                            ink,
+                        )
+                    },
+                )
+                .absolute()
+                .inset_0()
+                .size_full(),
+            )
+            .when(!empty, |pad| {
+                pad.child(
+                    clickable("signature-clear")
+                        .absolute()
+                        .top(px(8.0))
+                        .right(px(8.0))
+                        .h(px(26.0))
+                        .px(px(8.0))
+                        .flex()
+                        .items_center()
+                        .rounded(px(RADIUS))
+                        .text_size(px(12.0))
+                        .text_color(Paper::muted())
+                        .cursor_pointer()
+                        .hover(|style| style.bg(Paper::rule()))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(cx.listener(|this, _, _, cx| this.clear_pad(cx)))
+                        .child("Clear"),
+                )
+            })
+            .into_any_element()
+    }
+
     fn sign_dialog(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.chrome.theme;
         let tabs = ["Draw", "Type", "Image"];
         let pad = match self.chrome.sign_tab {
-            0 => div()
-                .text_color(Paper::muted())
-                .child("Drawing a signature is not available yet"),
+            0 => div(),
             1 => div()
                 .font_family(Theme::script_font())
                 .text_size(px(44.0))
@@ -315,7 +410,9 @@ impl Reader {
                                 ))
                             })),
                     )
-                    .child(
+                    .child(if self.chrome.sign_tab == 0 {
+                        self.draw_pad(cx)
+                    } else {
                         clickable("signature-pad")
                             .h(px(170.0))
                             .rounded(px(RADIUS))
@@ -326,8 +423,9 @@ impl Reader {
                             .justify_center()
                             .gap(px(12.0))
                             .child(pad)
-                            .child(div().w(px(420.0)).max_w_full().h(px(1.0)).bg(Paper::rule())),
-                    )
+                            .child(div().w(px(420.0)).max_w_full().h(px(1.0)).bg(Paper::rule()))
+                            .into_any_element()
+                    })
                     .child(
                         div()
                             .flex()
@@ -336,36 +434,31 @@ impl Reader {
                             .text_size(px(12.0))
                             .text_color(theme.muted)
                             .child(div().mr(px(4.0)).child("Ink"))
-                            .children(
-                                [0x1c3d8f_u32, 0x1d2024, 0xb42318]
-                                    .into_iter()
-                                    .enumerate()
-                                    .map(|(index, color)| {
-                                        let selected = self.chrome.sign_ink == index;
-                                        let hover = theme.hover;
-                                        clickable(("sign-ink", index))
-                                            .size(px(28.0))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .rounded(px(RADIUS))
-                                            .when(selected, |swatch| swatch.bg(theme.hover))
-                                            .cursor_pointer()
-                                            .hover(move |style| style.bg(hover))
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.chrome.sign_ink = index;
-                                                cx.notify();
-                                            }))
-                                            .child(
-                                                div()
-                                                    .size(px(14.0))
-                                                    .rounded_full()
-                                                    .bg(gpui::rgb(color))
-                                                    .border_1()
-                                                    .border_color(theme.hairline),
-                                            )
-                                    }),
-                            ),
+                            .children(INKS.into_iter().enumerate().map(|(index, color)| {
+                                let selected = self.chrome.sign_ink == index;
+                                let hover = theme.hover;
+                                clickable(("sign-ink", index))
+                                    .size(px(28.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(RADIUS))
+                                    .when(selected, |swatch| swatch.bg(theme.hover))
+                                    .cursor_pointer()
+                                    .hover(move |style| style.bg(hover))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.chrome.sign_ink = index;
+                                        cx.notify();
+                                    }))
+                                    .child(
+                                        div()
+                                            .size(px(14.0))
+                                            .rounded_full()
+                                            .bg(gpui::rgb(color))
+                                            .border_1()
+                                            .border_color(theme.hairline),
+                                    )
+                            })),
                     )
                     .child(
                         div()
@@ -395,7 +488,10 @@ impl Reader {
                             .into_any_element(),
                     ),
                     "Place on page",
-                    "Signatures",
+                    ["Signatures", "Typed signatures", "Image signatures"]
+                        [self.chrome.sign_tab.min(2)],
+                    (self.chrome.sign_tab == 0)
+                        .then_some(Self::place_signature as fn(&mut Self, &mut Context<Self>)),
                     cx,
                 ),
             )
@@ -505,7 +601,7 @@ impl Reader {
                         mono(downloads).text_color(theme.muted).truncate(),
                     )),
             )
-            .child(self.dialog_footer(None, "Export", "Exporting", cx))
+            .child(self.dialog_footer(None, "Export", "Exporting", None, cx))
             .into_any_element()
     }
 
@@ -605,6 +701,7 @@ impl Reader {
                     ),
                     "Combine",
                     "Combining files",
+                    None,
                     cx,
                 ),
             )
@@ -756,6 +853,7 @@ impl Reader {
                     ),
                     "Print",
                     "Printing",
+                    None,
                     cx,
                 ),
             )

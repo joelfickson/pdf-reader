@@ -16,6 +16,7 @@ mod preview;
 mod scheduling;
 mod search;
 mod selection;
+mod signing;
 mod tabs;
 #[cfg(test)]
 mod tests;
@@ -78,6 +79,7 @@ pub(crate) struct Reader {
     agent: agent::AgentPanel,
     updates: updates::Updates,
     scroll_probe: Option<crate::bench::ScrollProbe>,
+    signing: signing::Signing,
 }
 
 impl Reader {
@@ -174,6 +176,7 @@ impl Reader {
             agent: agent::AgentPanel::default(),
             updates,
             scroll_probe: crate::bench::scrolling().then(Default::default),
+            signing: signing::Signing::default(),
         };
         reader.notice = recent_error;
         if let Some(error) = updates_error {
