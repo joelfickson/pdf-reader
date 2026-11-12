@@ -4,6 +4,7 @@ use super::super::{
     chrome::{Input, Layout, Mode, Overlay, Panel, Tool},
     commands::modifier,
 };
+use crate::pdf::markup::MarkupKind;
 use crate::ui::{
     field::TextField,
     icon::Icon,
@@ -591,10 +592,14 @@ impl Reader {
                 true,
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.chrome.tool = value;
                 if value == Tool::Stamp {
+                    this.chrome.tool = value;
                     this.set_overlay(Overlay::Stamps, cx);
+                } else if value == Tool::Select || value.markup().is_some() {
+                    this.chrome.overlay = Overlay::None;
+                    this.choose_tool(value, cx);
                 } else {
+                    this.chrome.tool = value;
                     this.chrome.overlay = Overlay::None;
                     this.unavailable(value.name(), cx);
                 }
@@ -655,11 +660,11 @@ impl Reader {
             .child(separator(&theme))
             .child(
                 icon_button("undo", Icon::Undo, &theme, Tone::Plain, true)
-                    .on_click(cx.listener(|this, _, _, cx| this.unavailable("Undo", cx))),
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(Undo), cx)),
             )
             .child(
                 icon_button("redo", Icon::Redo, &theme, Tone::Plain, true)
-                    .on_click(cx.listener(|this, _, _, cx| this.unavailable("Redo", cx))),
+                    .on_click(|_, window, cx| window.dispatch_action(Box::new(Redo), cx)),
             )
             .child(
                 icon_button("annotate-done", Icon::Check, &theme, Tone::Plain, true)
@@ -772,7 +777,9 @@ impl Reader {
                 .rounded(px(RADIUS))
                 .cursor_pointer()
                 .hover(move |style| style.bg(hover))
-                .on_click(cx.listener(|this, _, _, cx| this.unavailable("Highlighting", cx)))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.mark_selection(MarkupKind::Highlight, index, cx)
+                }))
                 .child(dot(Marker::color(index), 12.0))
         });
         let bar = floating(&theme)
@@ -792,7 +799,9 @@ impl Reader {
                     Tone::Plain,
                     true,
                 )
-                .on_click(cx.listener(|this, _, _, cx| this.unavailable("Underlining", cx))),
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.mark_selection(MarkupKind::Underline, this.chrome.marker, cx)
+                })),
             )
             .child(
                 icon_button("quick-note", Icon::Note, &theme, Tone::Plain, true)

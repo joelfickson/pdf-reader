@@ -3,6 +3,7 @@ use super::{
     actions::*,
     chrome::{InspectorTab, Mode, Overlay},
 };
+use crate::pdf::markup::MarkupKind;
 use crate::ui::icon::Icon;
 use gpui::{Context, Window};
 
@@ -333,14 +334,16 @@ impl Reader {
             Command::CheckForUpdates => window.dispatch_action(Box::new(CheckForUpdates), cx),
             Command::Shortcuts => self.set_overlay(Overlay::Shortcuts, cx),
             Command::Bookmark => self.unavailable("Bookmarking pages", cx),
-            Command::Highlight => self.unavailable("Highlighting", cx),
+            Command::Highlight => {
+                self.mark_selection(MarkupKind::Highlight, self.chrome.marker, cx)
+            }
             Command::RotatePage => self.unavailable("Rotating pages", cx),
             Command::TwoPages => self.unavailable("Two-page view", cx),
             Command::SplitView => self.unavailable("Split view", cx),
             Command::NightPages => self.unavailable("Night pages", cx),
             Command::Magnifier => self.unavailable("The magnifier", cx),
             Command::Presentation => self.unavailable("Presentation mode", cx),
-            Command::Save => self.unavailable("Saving", cx),
+            Command::Save => self.save_document(cx),
         }
     }
 }

@@ -1,4 +1,5 @@
 mod library;
+pub(crate) mod markup;
 pub(crate) mod search;
 pub(crate) mod text;
 pub(crate) mod tools;
@@ -53,7 +54,17 @@ pub struct SearchJob {
     pub query: search::Query,
 }
 
+pub struct SaveJob {
+    pub session: u64,
+    pub path: PathBuf,
+    pub markups: Vec<markup::Markup>,
+}
+
 pub enum Event {
+    Saved {
+        session: u64,
+        result: Result<(), String>,
+    },
     SearchBatch {
         search: u64,
         scanned: usize,
@@ -105,7 +116,8 @@ pub enum Event {
 impl Event {
     pub fn generation(&self) -> Option<u64> {
         match self {
-            Self::SearchBatch { .. }
+            Self::Saved { .. }
+            | Self::SearchBatch { .. }
             | Self::SearchDone { .. }
             | Self::SearchFailed { .. }
             | Self::Outline { .. } => None,

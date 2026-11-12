@@ -7,7 +7,7 @@ use super::super::{
 use crate::ui::{
     icon::Icon,
     kit::clickable,
-    kit::{RADIUS, Tone, icon, icon_button, kbd},
+    kit::{RADIUS, Tone, dot, icon, icon_button, kbd},
 };
 use gpui::{Context, IntoElement, MouseButton, Window, div, prelude::*, px};
 
@@ -48,22 +48,50 @@ impl Reader {
                 )
                 .child(div().flex_1().min_w_0().truncate().child(tab.title()))
                 .child(
-                    icon_button(
-                        ("close", tab.session),
-                        Icon::Close,
-                        &theme,
-                        Tone::Plain,
-                        true,
-                    )
-                    .w(px(22.0))
-                    .min_w(px(22.0))
-                    .h(px(22.0))
-                    .px(px(3.0))
-                    .when(!active, |button| {
-                        button
-                            .invisible()
-                            .group_hover("tab", |style| style.visible())
-                    })
+                    if tab.modified() {
+                        clickable(("close", tab.session))
+                            .relative()
+                            .w(px(22.0))
+                            .min_w(px(22.0))
+                            .h(px(22.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(RADIUS))
+                            .cursor_pointer()
+                            .child(
+                                dot(theme.accent, 8.0)
+                                    .group_hover("tab", |style| style.invisible()),
+                            )
+                            .child(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .invisible()
+                                    .group_hover("tab", |style| style.visible())
+                                    .child(icon(Icon::Close, theme.faint)),
+                            )
+                    } else {
+                        icon_button(
+                            ("close", tab.session),
+                            Icon::Close,
+                            &theme,
+                            Tone::Plain,
+                            true,
+                        )
+                        .w(px(22.0))
+                        .min_w(px(22.0))
+                        .h(px(22.0))
+                        .px(px(3.0))
+                        .when(!active, |button| {
+                            button
+                                .invisible()
+                                .group_hover("tab", |style| style.visible())
+                        })
+                    }
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
                         this.close_tab(index, window, cx)

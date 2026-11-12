@@ -95,6 +95,9 @@ pub(crate) fn menus(recent: &[RecentFile]) -> Vec<Menu> {
         Menu {
             name: "Edit".into(),
             items: vec![
+                MenuItem::action("Undo", Undo),
+                MenuItem::action("Redo", Redo),
+                MenuItem::separator(),
                 MenuItem::action("Copy", CopyText),
                 MenuItem::action("Select All on Page", SelectAll),
                 MenuItem::separator(),
@@ -170,6 +173,8 @@ pub(crate) fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new(&format!("{m}-e"), ShowExport, any),
         KeyBinding::new(&format!("{m}-p"), ShowPrint, any),
         KeyBinding::new(&format!("{m}-s"), Save, any),
+        KeyBinding::new(&format!("{m}-z"), Undo, reading),
+        KeyBinding::new(&format!("{m}-shift-z"), Redo, reading),
         KeyBinding::new(&format!("{m}-d"), Bookmark, any),
         KeyBinding::new(&format!("{m}-,"), ShowSettings, any),
         KeyBinding::new(&format!("{m}-\\"), ToggleSplit, any),
