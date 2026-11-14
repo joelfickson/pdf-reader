@@ -41,7 +41,9 @@ actions!(
         GoForward,
         ToggleAgent,
         Undo,
-        Redo
+        Redo,
+        FitPage,
+        ActualSize
     ]
 );
 

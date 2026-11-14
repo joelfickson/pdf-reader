@@ -167,6 +167,7 @@ impl Reader {
                 }
                 self.selection = None;
                 self.copied = false;
+                self.schedule_autosave(cx);
                 cx.notify();
             }
             Err(refusal) => self.show_toast(refusal.status, refusal.title, &refusal.message, cx),
@@ -222,6 +223,7 @@ impl Reader {
         }
         if let Some(edit) = tab.undone.pop() {
             tab.edits.push(edit);
+            self.schedule_autosave(cx);
             cx.notify();
         }
     }
@@ -239,7 +241,7 @@ impl Reader {
         self.save_tab(self.tabs.active, cx);
     }
 
-    fn save_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+    pub(super) fn save_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(tab) = self.tabs.entries.get_mut(index) else {
             return;
         };

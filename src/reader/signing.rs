@@ -387,6 +387,7 @@ impl Reader {
     pub(super) fn finish_placement(&mut self, cx: &mut Context<Self>) -> bool {
         let finished = self.signing.placing.take().is_some();
         if finished {
+            self.schedule_autosave(cx);
             cx.notify();
         }
         finished

@@ -250,10 +250,20 @@ fn palette_find_and_dismiss_keyboard_flow(cx: &mut TestAppContext) {
 
     cx.simulate_keystrokes(&format!("{modifier}-d"));
     cx.read(|cx| {
-        let toast = reader.read(cx).chrome.toast.clone().unwrap();
-        assert_eq!(
-            toast.title.as_ref(),
-            "Bookmarking pages is not available yet"
+        let reader = reader.read(cx);
+        let tab = reader.tabs.current().unwrap();
+        assert_eq!(reader.bookmarks.of(&tab.path)[0].page, 4);
+        assert_eq!(reader.bookmarks.of(&tab.path)[0].title, "Page 5");
+        assert_eq!(reader.chrome.panel, chrome::Panel::Bookmarks);
+    });
+    cx.simulate_keystrokes(&format!("{modifier}-d"));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(
+            reader
+                .bookmarks
+                .of(&reader.tabs.current().unwrap().path)
+                .is_empty()
         );
     });
 }
@@ -896,6 +906,163 @@ fn draws_places_adjusts_and_saves_a_signature(cx: &mut TestAppContext) {
     });
 }
 
+#[gpui::test]
+fn preferences_drive_opening_zoom_fit_page_bookmarks_and_autosave(cx: &mut TestAppContext) {
+    use crate::pdf::markup::MarkupKind;
+    use crate::preferences::DefaultZoom;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            assert!(reader.preferences.last_page);
+            assert!(!reader.preferences.autosave);
+            reader.update_preferences(
+                |preferences| preferences.default_zoom = DefaultZoom::Actual,
+                cx,
+            );
+            reader.open_paths(vec![root.join("tests/fixtures/links.pdf")], window, cx);
+            assert_eq!(reader.tabs.current().unwrap().zoom, Some(100));
+            reader.close_tab_now(0, window, cx);
+
+            reader.update_preferences(
+                |preferences| preferences.default_zoom = DefaultZoom::FitPage,
+                cx,
+            );
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+        })
+    });
+    cx.run_until_parked();
+    let fitted = cx.read(|cx| {
+        let reader = reader.read(cx);
+        let tab = reader.tabs.current().unwrap();
+        assert!(!tab.fit_page_pending);
+        tab.zoom
+            .expect("fit page sets a zoom once the page is known")
+    });
+    assert!((25..=400).contains(&fitted));
+
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    cx.simulate_keystrokes(&format!("{modifier}-1"));
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.current().unwrap().zoom, Some(100)));
+    cx.simulate_keystrokes(&format!("{modifier}-9"));
+    cx.read(|cx| {
+        let zoom = reader.read(cx).tabs.current().unwrap().zoom;
+        assert!(zoom.is_some_and(|zoom| (25..=400).contains(&zoom)));
+    });
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader
+                .recent
+                .update(&reader.tabs.entries[0].path.clone(), 2, Some(150));
+            reader.close_tab_now(0, window, cx);
+            reader.update_preferences(|preferences| preferences.last_page = false, cx);
+            load_document(reader, window, cx, 3);
+            let tab = reader.tabs.current().unwrap();
+            assert_eq!(tab.page, 0);
+            assert_ne!(tab.zoom, Some(150));
+
+            reader.toggle_bookmark(cx);
+            let path = reader.tabs.entries[0].path.clone();
+            assert_eq!(
+                reader.bookmarks.of(&path)[0].title,
+                "Selected words on the page"
+            );
+            assert_eq!(reader.chrome.panel, chrome::Panel::Bookmarks);
+
+            reader.selection = Some(selection::Selection::within(0, 0..8));
+            reader.mark_selection(MarkupKind::Highlight, 0, cx);
+        })
+    });
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(3));
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(!reader.tabs.entries[0].saving);
+        assert!(reader.worker.queued_saves().is_empty());
+    });
+    cx.update(|_, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.update_preferences(|preferences| preferences.autosave = true, cx);
+            reader.selection = Some(selection::Selection::within(0, 9..14));
+            reader.mark_selection(MarkupKind::Underline, 0, cx);
+            assert!(!reader.tabs.entries[0].saving);
+        })
+    });
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(1));
+    cx.run_until_parked();
+    cx.read(|cx| assert!(!reader.read(cx).tabs.entries[0].saving));
+    cx.executor()
+        .advance_clock(std::time::Duration::from_secs(2));
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.tabs.entries[0].saving);
+        assert_eq!(reader.worker.queued_saves(), [2]);
+    });
+}
+
+#[gpui::test]
+fn last_session_tabs_reopen_only_when_asked_and_skip_missing_files(cx: &mut TestAppContext) {
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let store = std::env::temp_dir().join(format!("agenticpdf-session-ui-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&store);
+    let fixtures = [
+        root.join("tests/fixtures/reading.pdf"),
+        root.join("tests/fixtures/links.pdf"),
+        root.join("tests/fixtures/outline.pdf"),
+    ];
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.data = Some(store.clone());
+            reader.open_paths(fixtures.to_vec(), window, cx);
+            reader.activate_tab(1, window, cx);
+            reader.save_session().unwrap();
+            assert!(!store.join("session.tsv").exists());
+
+            reader.update_preferences(|preferences| preferences.reopen_tabs = true, cx);
+            assert!(store.join("preferences.conf").exists());
+            reader.save_session().unwrap();
+            let saved = std::fs::read_to_string(store.join("session.tsv")).unwrap();
+            let listed = format!(
+                "{saved}tab\t{}\n",
+                root.join("tests/fixtures/gone.pdf").display()
+            );
+            std::fs::write(store.join("session.tsv"), listed).unwrap();
+            while !reader.tabs.entries.is_empty() {
+                reader.close_tab_now(0, window, cx);
+            }
+
+            reader.restore_session(window, cx);
+            assert_eq!(reader.tabs.entries.len(), 3);
+            assert_eq!(reader.tabs.active, 1);
+            assert!(reader.tabs.current().unwrap().path.ends_with("links.pdf"));
+
+            while !reader.tabs.entries.is_empty() {
+                reader.close_tab_now(0, window, cx);
+            }
+            reader.update_preferences(|preferences| preferences.reopen_tabs = false, cx);
+            reader.restore_session(window, cx);
+            assert!(reader.tabs.entries.is_empty());
+        })
+    });
+    std::fs::remove_dir_all(&store).unwrap();
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);
@@ -965,6 +1132,14 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
             r.signing.strokes = vec![vec![[40.0, 90.0], [120.0, 50.0], [220.0, 96.0]]];
             r.place_signature(cx);
             assert!(r.placing_signature().is_some());
+        }),
+        ("bookmarks", |r, _, cx| {
+            let path = r.tabs.current().unwrap().path.clone();
+            if r.bookmarks.of(&path).is_empty() {
+                r.toggle_bookmark(cx);
+            }
+            r.chrome.panel = Panel::Bookmarks;
+            assert_eq!(r.bookmarks.of(&path).len(), 1);
         }),
         ("stamps", |r, w, cx| {
             r.set_mode(Mode::Annotate, w, cx);

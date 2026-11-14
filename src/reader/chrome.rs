@@ -232,7 +232,7 @@ impl Reader {
             tab.restore_scroll = None;
         }
         self.request(window);
-        cx.notify();
+        self.update_preferences(|_| {}, cx);
     }
 
     pub(super) fn set_inspector(
@@ -353,6 +353,6 @@ impl Reader {
     ) {
         self.chrome.theme_choice = choice;
         self.chrome.theme = Theme::resolve(choice, window.appearance());
-        cx.notify();
+        self.update_preferences(|_| {}, cx);
     }
 }

@@ -40,6 +40,8 @@ impl Reader {
         cx: &mut Context<Self>,
     ) {
         self.notice = None;
+        let opening = self.opening_zoom();
+        let remember = self.preferences.last_page;
         let mut target = None;
         for path in paths {
             if !path
@@ -55,9 +57,14 @@ impl Reader {
             let index = self.tabs.open(path);
             let opened = self.tabs.entries.len() > existing;
             let tab = &mut self.tabs.entries[index];
-            if opened && let Some(entry) = self.recent.get(&tab.path) {
-                tab.page = entry.page;
-                tab.zoom = entry.zoom;
+            if opened {
+                match self.recent.get(&tab.path).filter(|_| remember) {
+                    Some(entry) => {
+                        tab.page = entry.page;
+                        tab.zoom = entry.zoom;
+                    }
+                    None => (tab.zoom, tab.fit_page_pending) = opening,
+                }
             }
             let path = tab.path.clone();
             self.recent.touch(&path);

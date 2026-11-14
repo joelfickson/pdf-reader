@@ -3,7 +3,7 @@ use crate::reader::chrome::Panel;
 use crate::ui::{
     icon::Icon,
     kit::clickable,
-    kit::{RADIUS, dot, empty_state, icon, label, mono},
+    kit::{RADIUS, Tone, dot, empty_state, icon, icon_button, label, mono},
     theme::Paper,
 };
 use gpui::{AnyElement, Context, IntoElement, div, img, prelude::*, px, uniform_list};
@@ -52,8 +52,8 @@ impl Panel {
                 "The table of contents built into the PDF will appear here.",
             ),
             Self::Bookmarks => (
-                "Bookmarks are not available yet",
-                "Pages you bookmark will be listed here.",
+                "No bookmarks yet",
+                "Bookmark the page you are on to find it again here.",
             ),
             Self::Notes => (
                 "No notes yet",
@@ -170,6 +170,13 @@ impl Reader {
                     )
                 },
             )
+            .when(panel == Panel::Bookmarks, |header| {
+                header.child(
+                    icon_button("add-bookmark", Icon::Plus, &theme, Tone::Plain, count > 0)
+                        .child("Add")
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_bookmark(cx))),
+                )
+            })
             .when(panel == Panel::Pages, |header| {
                 header.child(
                     mono(count.to_string())
@@ -195,6 +202,13 @@ impl Reader {
             self.results(cx)
         } else if panel == Panel::Outline {
             self.outline_panel(cx)
+        } else if panel == Panel::Bookmarks
+            && self
+                .tabs
+                .current()
+                .is_some_and(|tab| !self.bookmarks.of(&tab.path).is_empty())
+        {
+            self.bookmark_list(cx)
         } else if panel == Panel::Notes
             && self.tabs.current().is_some_and(|tab| !tab.edits.is_empty())
         {
@@ -216,6 +230,62 @@ impl Reader {
             .child(rail)
             .child(header)
             .child(body)
+    }
+
+    fn bookmark_list(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = self.chrome.theme;
+        let Some(tab) = self.tabs.current() else {
+            return div().into_any_element();
+        };
+        let hover = theme.hover;
+        let rows = self.bookmarks.of(&tab.path).iter().map(|bookmark| {
+            let page = bookmark.page;
+            let current = page == tab.page;
+            clickable(("bookmark", page))
+                .h(px(30.0))
+                .px(px(8.0))
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .rounded(px(RADIUS))
+                .text_color(theme.ink)
+                .cursor_pointer()
+                .when(current, |row| row.bg(theme.raised))
+                .when(!current, |row| row.hover(move |style| style.bg(hover)))
+                .on_click(cx.listener(move |this, _, window, cx| this.jump(page, None, window, cx)))
+                .child(icon(Icon::Bookmark, theme.accent))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(bookmark.title.clone()),
+                )
+                .child(
+                    mono((page + 1).to_string())
+                        .text_size(px(11.0))
+                        .text_color(theme.faint),
+                )
+        });
+        div()
+            .id("bookmarks")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .px(px(6.0))
+            .pb(px(16.0))
+            .flex()
+            .flex_col()
+            .children(rows)
+            .child(
+                div()
+                    .px(px(8.0))
+                    .py(px(10.0))
+                    .text_size(px(12.0))
+                    .text_color(theme.faint)
+                    .child("Bookmarks are yours. They are kept on this computer, not in the PDF."),
+            )
+            .into_any_element()
     }
 
     fn notes(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -293,6 +363,13 @@ impl Reader {
                 let theme = this.chrome.theme;
                 let session = this.tabs.current().map_or(0, |tab| tab.session);
                 let current_page = this.tabs.current().map_or(0, |tab| tab.page);
+                let marked: Vec<usize> = this.tabs.current().map_or(Vec::new(), |tab| {
+                    this.bookmarks
+                        .of(&tab.path)
+                        .iter()
+                        .map(|bookmark| bookmark.page)
+                        .collect()
+                });
                 range
                     .map(|index| {
                         this.thumbnails.get(&(session, index));
@@ -334,13 +411,25 @@ impl Reader {
                                             .child(preview),
                                     )
                                     .child(
-                                        mono((index + 1).to_string())
-                                            .text_size(px(11.0))
-                                            .text_color(if current {
-                                                theme.accent
-                                            } else {
-                                                theme.faint
-                                            }),
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(4.0))
+                                            .when(marked.contains(&index), |row| {
+                                                row.child(
+                                                    icon(Icon::Bookmark, theme.accent)
+                                                        .size(px(12.0)),
+                                                )
+                                            })
+                                            .child(
+                                                mono((index + 1).to_string())
+                                                    .text_size(px(11.0))
+                                                    .text_color(if current {
+                                                        theme.accent
+                                                    } else {
+                                                        theme.faint
+                                                    }),
+                                            ),
                                     ),
                             )
                     })
