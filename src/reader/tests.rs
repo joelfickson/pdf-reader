@@ -1326,6 +1326,174 @@ fn view_modes_switch_layout_colour_presentation_and_magnifier(cx: &mut TestAppCo
     });
 }
 
+#[gpui::test]
+fn export_combine_and_print_queue_the_right_file_tasks(cx: &mut TestAppContext) {
+    use crate::pdf::export::{FileTask, Format};
+    use crate::pdf::markup::MarkupKind;
+
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let toast = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| {
+            reader
+                .read(cx)
+                .chrome
+                .toast
+                .as_ref()
+                .unwrap()
+                .title
+                .to_string()
+        })
+    };
+    let has_downloads = filing::downloads().is_some_and(|folder| folder.is_dir());
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.selection = Some(selection::Selection::within(0, 0..8));
+            reader.mark_selection(MarkupKind::Highlight, 0, cx);
+
+            reader.chrome.export_format = 1;
+            reader.chrome.export_pages = 1;
+            reader.chrome.export_dpi = 2;
+            reader.chrome.include_notes = true;
+            reader.set_overlay(chrome::Overlay::Export, cx);
+            reader.export_document(cx);
+        })
+    });
+    if has_downloads {
+        cx.read(|cx| {
+            let reader = reader.read(cx);
+            assert_eq!(reader.chrome.overlay, chrome::Overlay::None);
+            let FileTask::Export(export) = reader.worker.queued_files().pop().unwrap() else {
+                panic!("expected an export");
+            };
+            assert_eq!(export.format, Format::Flattened);
+            assert_eq!(
+                (export.page, export.dpi, export.marks),
+                (Some(0), 300, true)
+            );
+            assert_eq!(export.edits.len(), 1);
+            assert!(export.source.ends_with("reading.pdf"));
+            let name = export
+                .to
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            assert!(name.starts_with("reading flattened") && name.ends_with(".pdf"));
+            assert!(!export.to.exists());
+        });
+        cx.update(|window, cx| {
+            reader.update(cx, |reader, cx| {
+                let id = reader.next_file;
+                reader.receive(
+                    Event::Filed {
+                        id,
+                        result: Ok(vec![
+                            PathBuf::from("/out/a 1.png"),
+                            PathBuf::from("/out/a 2.png"),
+                        ]),
+                    },
+                    window,
+                    cx,
+                );
+                assert!(reader.filings.is_empty());
+            })
+        });
+        assert_eq!(toast(cx), "Exported 2 files");
+        cx.update(|_, cx| {
+            reader.update(cx, |reader, cx| {
+                reader.chrome.export_format = 2;
+                reader.chrome.export_pages = 0;
+                reader.chrome.include_notes = false;
+                reader.export_document(cx);
+                let FileTask::Export(export) = reader.worker.queued_files().pop().unwrap() else {
+                    panic!("expected an export");
+                };
+                assert_eq!(
+                    (export.format, export.page, export.marks),
+                    (Format::Png, None, false)
+                );
+                assert!(export.edits.is_empty());
+            })
+        });
+    } else {
+        assert_eq!(toast(cx), "The Downloads folder was not found");
+    }
+
+    let queued = cx.read(|cx| reader.read(cx).worker.queued_files().len());
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.combine_to(PathBuf::from("/out/combined.pdf"), cx);
+            assert_eq!(reader.worker.queued_files().len(), queued);
+            reader.add_combine_files(
+                vec![
+                    root.join("tests/fixtures/links.pdf"),
+                    root.join("README.md"),
+                    root.join("tests/fixtures/reading.pdf"),
+                    root.join("tests/fixtures/links.pdf"),
+                ],
+                cx,
+            );
+            assert_eq!(reader.combine_extra.len(), 1);
+            assert_eq!(reader.combine_sources().len(), 2);
+            reader.set_overlay(chrome::Overlay::Combine, cx);
+            reader.combine_to(PathBuf::from("/out/combined.pdf"), cx);
+            let FileTask::Combine { files, to } = reader.worker.queued_files().pop().unwrap()
+            else {
+                panic!("expected a combine");
+            };
+            assert_eq!(files.len(), 2);
+            assert!(files[0].ends_with("reading.pdf") && files[1].ends_with("links.pdf"));
+            assert_eq!(to, PathBuf::from("/out/combined.pdf"));
+            let id = reader.next_file;
+            reader.receive(
+                Event::Filed {
+                    id,
+                    result: Err("The disk is full.".into()),
+                },
+                window,
+                cx,
+            );
+            assert_eq!(reader.combine_extra.len(), 1);
+        })
+    });
+    assert_eq!(toast(cx), "The files could not be combined");
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.chrome.print_pages = 1;
+            reader.chrome.include_notes = true;
+            let before = reader.worker.queued_files().len();
+            reader.print_document(cx);
+            if cfg!(target_os = "macos") {
+                let FileTask::Export(export) = reader.worker.queued_files().pop().unwrap() else {
+                    panic!("expected a print copy");
+                };
+                assert_eq!((export.format, export.page), (Format::Pdf, Some(0)));
+                assert!(export.to.starts_with(std::env::temp_dir()));
+                assert_eq!(export.edits.len(), 1);
+                let id = reader.next_file;
+                reader.receive(
+                    Event::Filed {
+                        id,
+                        result: Err("unreadable".into()),
+                    },
+                    window,
+                    cx,
+                );
+            } else {
+                assert_eq!(reader.worker.queued_files().len(), before);
+            }
+        })
+    });
+    if cfg!(target_os = "macos") {
+        assert_eq!(toast(cx), "The document could not be prepared for printing");
+    }
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);

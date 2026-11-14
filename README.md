@@ -6,7 +6,7 @@ A fast, native PDF reader for macOS and Windows, built with Rust, GPUI, and PDFi
 
 Website and downloads: <https://agentic-pdf-eta.vercel.app>
 
-This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, highlighting, underlining, and striking through selected text, adding a drawn signature, and saving those into the PDF, searching the whole document, opening PDFs from Finder, and reopening recent files at the page and zoom you left them. OCR, notes, drawing, stamps, typed, image, and certificate signatures, password entry, editing, and the agent panel are not implemented yet.
+This is an early development build. It supports dropping or opening multiple PDFs in tabs, viewing one page at a time, page navigation, zoom, fit to width, a collapsible thumbnail sidebar, selecting and copying text, highlighting, underlining, and striking through selected text, adding a drawn signature, and saving those into the PDF, searching the whole document, opening PDFs from Finder, and reopening recent files at the page and zoom you left them. OCR, notes, drawing, stamps, typed, image, and certificate signatures, form filling, split view, password entry, and the agent panel are not implemented yet.
 
 ## Run
 

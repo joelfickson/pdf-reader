@@ -138,7 +138,7 @@ impl Reader {
         note: Option<AnyElement>,
         primary: &'static str,
         feature: &'static str,
-        action: Option<fn(&mut Self, &mut Context<Self>)>,
+        action: Option<fn(&mut Self, &mut Window, &mut Context<Self>)>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = self.chrome.theme;
@@ -165,8 +165,8 @@ impl Reader {
             )
             .child(
                 text_button("dialog-primary", primary, &theme, Kind::Primary).on_click(
-                    cx.listener(move |this, _, _, cx| match action {
-                        Some(action) => action(this, cx),
+                    cx.listener(move |this, _, window, cx| match action {
+                        Some(action) => action(this, window, cx),
                         None => {
                             this.chrome.overlay = Overlay::None;
                             this.unavailable(feature, cx)
@@ -490,8 +490,7 @@ impl Reader {
                     "Place on page",
                     ["Signatures", "Typed signatures", "Image signatures"]
                         [self.chrome.sign_tab.min(2)],
-                    (self.chrome.sign_tab == 0)
-                        .then_some(Self::place_signature as fn(&mut Self, &mut Context<Self>)),
+                    (self.chrome.sign_tab == 0).then_some(|this, _, cx| this.place_signature(cx)),
                     cx,
                 ),
             )
@@ -601,13 +600,45 @@ impl Reader {
                         mono(downloads).text_color(theme.muted).truncate(),
                     )),
             )
-            .child(self.dialog_footer(None, "Export", "Exporting", None, cx))
+            .child(self.dialog_footer(
+                None,
+                "Export",
+                "Exporting",
+                Some(|this, _, cx| this.export_document(cx)),
+                cx,
+            ))
             .into_any_element()
     }
 
     fn combine_dialog(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.chrome.theme;
-        let files: Vec<_> = self
+        let open = self.tabs.entries.len();
+        let added: Vec<_> = self
+            .combine_extra
+            .iter()
+            .enumerate()
+            .map(|(index, file)| {
+                div()
+                    .h(px(36.0))
+                    .px(px(10.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .child(
+                        mono((open + index + 1).to_string())
+                            .w(px(16.0))
+                            .text_color(theme.faint),
+                    )
+                    .child(icon(Icon::File, theme.muted))
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .child(crate::app::recent_title(file)),
+                    )
+            })
+            .collect();
+        let mut files: Vec<_> = self
             .tabs
             .entries
             .iter()
@@ -636,6 +667,7 @@ impl Reader {
                     )
             })
             .collect();
+        files.extend(added);
         let empty = files.is_empty();
         div()
             .flex()
@@ -662,8 +694,8 @@ impl Reader {
                         div().flex().child(
                             icon_button("combine-add", Icon::Plus, &theme, Tone::Plain, true)
                                 .child("Add files")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.unavailable("Adding files", cx)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.choose_combine_files(window, cx)
                                 })),
                         ),
                     )
@@ -701,7 +733,7 @@ impl Reader {
                     ),
                     "Combine",
                     "Combining files",
-                    None,
+                    Some(|this, window, cx| this.choose_combine_destination(window, cx)),
                     cx,
                 ),
             )
@@ -853,7 +885,7 @@ impl Reader {
                     ),
                     "Print",
                     "Printing",
-                    None,
+                    Some(|this, _, cx| this.print_document(cx)),
                     cx,
                 ),
             )

@@ -4,6 +4,7 @@ mod cache;
 mod chrome;
 mod column;
 mod commands;
+mod filing;
 mod handlers;
 mod history;
 mod images;
@@ -88,6 +89,9 @@ pub(crate) struct Reader {
     data: Option<PathBuf>,
     autosave_edits: u64,
     presenting: Option<viewing::Presenting>,
+    filings: BTreeMap<u64, filing::Filing>,
+    next_file: u64,
+    combine_extra: Vec<PathBuf>,
     pointer: Option<gpui::Point<gpui::Pixels>>,
 }
 
@@ -217,6 +221,9 @@ impl Reader {
             data,
             autosave_edits: 0,
             presenting: None,
+            filings: BTreeMap::new(),
+            next_file: 0,
+            combine_extra: Vec::new(),
             pointer: None,
         };
         reader.chrome.theme_choice = preferences.theme;
@@ -260,6 +267,8 @@ impl Reader {
                     self.finish_save(session, result, window, cx);
                 } else if let Event::Organized { session, result } = event {
                     self.finish_page_op(session, result, window, cx);
+                } else if let Event::Filed { id, result } = event {
+                    self.finish_file(id, result, cx);
                 } else {
                     self.receive_search(event, window, cx);
                 }
@@ -340,7 +349,8 @@ impl Reader {
                 tab.error = Some(message);
                 self.busy = false;
             }
-            Event::Organized { .. }
+            Event::Filed { .. }
+            | Event::Organized { .. }
             | Event::Saved { .. }
             | Event::SearchBatch { .. }
             | Event::SearchDone { .. }

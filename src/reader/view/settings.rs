@@ -100,9 +100,9 @@ impl Reader {
     fn layout_choices(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.chrome.theme;
         let options = [
-            ("Single page", Some(Layout::Single)),
-            ("Continuous", Some(Layout::Continuous)),
-            ("Two pages", Some(Layout::TwoPages)),
+            ("Single page", Layout::Single),
+            ("Continuous", Layout::Continuous),
+            ("Two pages", Layout::TwoPages),
         ];
         div()
             .flex()
@@ -112,11 +112,12 @@ impl Reader {
                     .into_iter()
                     .enumerate()
                     .map(|(index, (text, layout))| {
-                        let selected = layout == Some(self.chrome.layout);
+                        let selected = layout == self.chrome.layout
+                            || (layout == Layout::TwoPages
+                                && self.chrome.layout == Layout::CoverFirst);
                         pill(("default-layout", index), text, selected, &theme).on_click(
-                            cx.listener(move |this, _, window, cx| match layout {
-                                Some(layout) => this.set_layout(layout, window, cx),
-                                None => this.unavailable("Two-page view", cx),
+                            cx.listener(move |this, _, window, cx| {
+                                this.set_layout(layout, window, cx)
                             }),
                         )
                     }),

@@ -1,5 +1,6 @@
 use super::{
     Event, Job, OrganizeJob, SaveJob, SearchJob,
+    export::{self, FileJob, FileTask},
     library::bind,
     markup,
     pages::{self, PageOp},
@@ -28,6 +29,7 @@ struct Queue {
     search: Mutex<Option<SearchJob>>,
     saves: Mutex<VecDeque<SaveJob>>,
     organizing: Mutex<VecDeque<OrganizeJob>>,
+    filing: Mutex<VecDeque<FileJob>>,
     closed: Mutex<Vec<u64>>,
     ready: Condvar,
     generation: AtomicU64,
@@ -42,6 +44,7 @@ impl Queue {
             search: Mutex::new(None),
             saves: Mutex::new(VecDeque::new()),
             organizing: Mutex::new(VecDeque::new()),
+            filing: Mutex::new(VecDeque::new()),
             closed: Mutex::new(Vec::new()),
             ready: Condvar::new(),
             generation: AtomicU64::new(0),
@@ -108,6 +111,22 @@ impl Worker {
         let _pending = self.0.pending.lock();
         self.0.saves.lock().push_back(job);
         self.0.ready.notify_one();
+    }
+
+    pub fn file(&self, job: FileJob) {
+        let _pending = self.0.pending.lock();
+        self.0.filing.lock().push_back(job);
+        self.0.ready.notify_one();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn queued_files(&self) -> Vec<FileTask> {
+        self.0
+            .filing
+            .lock()
+            .iter()
+            .map(|job| job.task.clone())
+            .collect()
     }
 
     pub fn organize(&self, job: OrganizeJob) {
@@ -235,6 +254,8 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
     let engine = bind();
     let mut documents = Open::default();
     let mut active: Option<ActiveSearch> = None;
+    let mut exporting: Option<export::Active<'_>> = None;
+    let mut backlog: VecDeque<FileJob> = VecDeque::new();
     loop {
         let (job, closed, search, saves, organizing) = {
             let mut pending = queue.pending.lock();
@@ -243,6 +264,9 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
                 && queue.search.lock().is_none()
                 && queue.saves.lock().is_empty()
                 && queue.organizing.lock().is_empty()
+                && queue.filing.lock().is_empty()
+                && exporting.is_none()
+                && backlog.is_empty()
                 && queue.closed.lock().is_empty()
                 && queue.running()
             {
@@ -254,6 +278,7 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
             let closed = std::mem::take(&mut *queue.closed.lock());
             let saves = std::mem::take(&mut *queue.saves.lock());
             let organizing = std::mem::take(&mut *queue.organizing.lock());
+            backlog.extend(std::mem::take(&mut *queue.filing.lock()));
             (
                 pending.take(),
                 closed,
@@ -298,6 +323,17 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
                     if sender
                         .send_blocking(Event::Organized {
                             session: job.session,
+                            result: Err(message.clone()),
+                        })
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                for job in backlog.drain(..) {
+                    if sender
+                        .send_blocking(Event::Filed {
+                            id: job.id,
                             result: Err(message.clone()),
                         })
                         .is_err()
@@ -392,6 +428,48 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
                     {
                         return;
                     }
+                }
+            }
+        }
+        if exporting.is_none()
+            && let Some(job) = backlog.pop_front()
+        {
+            let started = match job.task {
+                FileTask::Combine { files, to } => Err(export::combine(engine, &files, &to)),
+                FileTask::Export(export) => {
+                    export::Active::start(engine, job.id, export).map_err(Err)
+                }
+            };
+            match started {
+                Ok(started) => exporting = Some(started),
+                Err(result) => {
+                    if sender
+                        .send_blocking(Event::Filed {
+                            id: job.id,
+                            result: result.map_err(|error| format!("{error:#}")),
+                        })
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+        if let Some(running) = exporting.as_mut() {
+            let id = running.id;
+            let finished = match running.step() {
+                Ok(None) => None,
+                Ok(Some(written)) => Some(Ok(written)),
+                Err(error) => Some(Err(format!("{error:#}"))),
+            };
+            if let Some(result) = finished {
+                if let Some(stopped) = exporting.take()
+                    && result.is_err()
+                {
+                    stopped.abandon();
+                }
+                if sender.send_blocking(Event::Filed { id, result }).is_err() {
+                    return;
                 }
             }
         }
@@ -988,6 +1066,167 @@ mod tests {
         let first = pulled.pages().get(0).unwrap();
         assert!(first.width().value > first.height().value);
         drop(pulled);
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn exports_and_combines_files_without_blocking_renders() {
+        use crate::pdf::{
+            export::{Export, FileJob, FileTask, Format},
+            markup::{Edit, Signature},
+            text::TextRect,
+        };
+
+        let directory =
+            std::env::temp_dir().join(format!("agenticpdf-export-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let source = fixtures.join("reading.pdf");
+        let (worker, events) = Worker::start().unwrap();
+        let mut next = 0;
+        let mut file = |task: FileTask| {
+            next += 1;
+            worker.file(FileJob { id: next, task });
+            loop {
+                if let Event::Filed { id, result } = next_event(&events) {
+                    assert_eq!(id, next);
+                    return result;
+                }
+            }
+        };
+        let signature = Edit::Signature(Signature {
+            page: 0,
+            bounds: TextRect {
+                left: 0.3,
+                top: 0.8,
+                right: 0.6,
+                bottom: 0.9,
+            },
+            color: 0x1c3d8f,
+            strokes: Arc::new(vec![vec![[0.0, 0.0], [1.0, 1.0]]]),
+        });
+        let export = |format: Format, page: Option<usize>, marks: bool, name: &str| Export {
+            source: source.clone(),
+            format,
+            page,
+            dpi: 72,
+            edits: vec![signature.clone()],
+            marks,
+            to: directory.join(name),
+        };
+        let original = std::fs::read(&source).unwrap();
+
+        let copy = export(Format::Pdf, None, true, "copy.pdf");
+        assert_eq!(
+            file(FileTask::Export(copy.clone())),
+            Ok(vec![copy.to.clone()])
+        );
+        assert!(file(FileTask::Export(copy.clone())).is_err());
+        let flat = export(Format::Flattened, Some(0), true, "flat.pdf");
+        assert_eq!(
+            file(FileTask::Export(flat.clone())),
+            Ok(vec![flat.to.clone()])
+        );
+        let plain = export(Format::Pdf, Some(0), false, "plain.pdf");
+        file(FileTask::Export(plain.clone())).unwrap();
+
+        let images = export(Format::Png, None, true, "pages.png");
+        let written = file(FileTask::Export(images)).unwrap();
+        assert_eq!(
+            written,
+            (1..=3)
+                .map(|page| directory.join(format!("pages {page}.png")))
+                .collect::<Vec<_>>()
+        );
+        let single = export(Format::Jpeg, Some(1), false, "second.jpg");
+        assert_eq!(
+            file(FileTask::Export(single.clone())),
+            Ok(vec![single.to.clone()])
+        );
+        let png = std::fs::read(&written[0]).unwrap();
+        assert_eq!(png[..8], [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), 612);
+        assert_eq!(std::fs::read(&single.to).unwrap()[..3], [0xff, 0xd8, 0xff]);
+
+        let text = export(Format::Text, None, true, "all.txt");
+        file(FileTask::Export(text.clone())).unwrap();
+        let content = std::fs::read_to_string(&text.to).unwrap();
+        assert!(content.contains("Leave room in the margins"));
+        assert!(content.contains("\n\n"));
+        assert!(
+            file(FileTask::Export(export(
+                Format::Text,
+                Some(9),
+                true,
+                "missing.txt"
+            )))
+            .is_err()
+        );
+
+        let combined = directory.join("combined.pdf");
+        assert_eq!(
+            file(FileTask::Combine {
+                files: vec![
+                    source.clone(),
+                    fixtures.join("selection.pdf"),
+                    copy.to.clone()
+                ],
+                to: combined.clone()
+            }),
+            Ok(vec![combined.clone()])
+        );
+        assert!(
+            file(FileTask::Combine {
+                files: vec![source.clone()],
+                to: directory.join("one.pdf")
+            })
+            .is_err()
+        );
+        assert!(
+            file(FileTask::Combine {
+                files: vec![source.clone(), fixtures.join("missing.pdf")],
+                to: directory.join("broken.pdf")
+            })
+            .is_err()
+        );
+        assert_eq!(std::fs::read(&source).unwrap(), original);
+        drop(worker);
+
+        let engine = bind().unwrap();
+        let kinds = |path: &PathBuf| {
+            let document = engine.load_pdf_from_file(path, None).unwrap();
+            let count = document.pages().len();
+            let first = document.pages().get(0).unwrap();
+            let kinds: Vec<_> = first
+                .annotations()
+                .iter()
+                .map(|annotation| annotation.annotation_type())
+                .collect();
+            (count, kinds)
+        };
+        assert_eq!(kinds(&copy.to), (3, vec![PdfPageAnnotationType::Stamp]));
+        assert_eq!(kinds(&flat.to), (1, vec![]));
+        assert_eq!(kinds(&plain.to), (1, vec![]));
+        assert_eq!(kinds(&combined).0, 9);
+        let flattened = engine.load_pdf_from_file(&flat.to, None).unwrap();
+        let raster = render(&flattened.pages().get(0).unwrap(), 800.0, 1.0, 4096).unwrap();
+        let inked = (0..raster.width * raster.height)
+            .filter(|index| {
+                let x = index % raster.width;
+                let y = index / raster.width;
+                let inside = (0.3..0.6).contains(&(x as f32 / raster.width as f32))
+                    && (0.8..0.9).contains(&(y as f32 / raster.height as f32));
+                let pixel = &raster.bytes[(*index * 4) as usize..(*index * 4 + 3) as usize];
+                inside && pixel.iter().max().unwrap() - pixel.iter().min().unwrap() > 60
+            })
+            .count();
+        assert!(
+            inked > 20,
+            "the flattened signature must still be drawn: {inked}"
+        );
+        drop(flattened);
         std::fs::remove_dir_all(&directory).unwrap();
     }
 

@@ -1,3 +1,4 @@
+pub(crate) mod export;
 mod library;
 pub(crate) mod markup;
 pub(crate) mod pages;
@@ -68,6 +69,10 @@ pub struct OrganizeJob {
 }
 
 pub enum Event {
+    Filed {
+        id: u64,
+        result: Result<Vec<PathBuf>, String>,
+    },
     Organized {
         session: u64,
         result: Result<usize, String>,
@@ -127,7 +132,8 @@ pub enum Event {
 impl Event {
     pub fn generation(&self) -> Option<u64> {
         match self {
-            Self::Organized { .. }
+            Self::Filed { .. }
+            | Self::Organized { .. }
             | Self::Saved { .. }
             | Self::SearchBatch { .. }
             | Self::SearchDone { .. }
