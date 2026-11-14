@@ -371,14 +371,19 @@ impl Reader {
                 .text_size(px(44.0))
                 .text_color(Paper::signature())
                 .child("Your name"),
-            _ => div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .gap(px(8.0))
-                .text_color(Paper::muted())
-                .child(icon(Icon::Image, Paper::muted()).size(px(24.0)))
-                .child("Drop a PNG or JPEG of your signature"),
+            _ => match &self.signing.picture {
+                Some(picture) => div().child(gpui::img(picture.preview.clone()).h(px(110.0)).w(
+                    px((110.0 * picture.width as f32 / picture.height as f32).min(420.0)),
+                )),
+                None => div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(8.0))
+                    .text_color(Paper::muted())
+                    .child(icon(Icon::Image, Paper::muted()).size(px(24.0)))
+                    .child("Click to choose a PNG or JPEG of your signature"),
+            },
         };
         div()
             .flex()
@@ -417,6 +422,12 @@ impl Reader {
                             .h(px(170.0))
                             .rounded(px(RADIUS))
                             .bg(Paper::base())
+                            .when(self.chrome.sign_tab == 2, |pad| {
+                                pad.cursor_pointer()
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.choose_signature_image(window, cx)
+                                    }))
+                            })
                             .flex()
                             .flex_col()
                             .items_center()
@@ -490,7 +501,15 @@ impl Reader {
                     "Place on page",
                     ["Signatures", "Typed signatures", "Image signatures"]
                         [self.chrome.sign_tab.min(2)],
-                    (self.chrome.sign_tab == 0).then_some(|this, _, cx| this.place_signature(cx)),
+                    match self.chrome.sign_tab {
+                        0 => Some(|this: &mut Self, _: &mut Window, cx: &mut Context<Self>| {
+                            this.place_signature(cx)
+                        }),
+                        2 => Some(|this: &mut Self, _: &mut Window, cx: &mut Context<Self>| {
+                            this.place_signature_image(cx)
+                        }),
+                        _ => None,
+                    },
                     cx,
                 ),
             )

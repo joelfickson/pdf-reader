@@ -37,6 +37,7 @@ impl Reader {
             .map(|signature| signature.bounds);
         let mut signatures = Vec::new();
         let mut stamps = Vec::new();
+        let mut pictures = Vec::new();
         for edit in self.tabs.current().map_or(&[][..], |tab| tab.unsaved()) {
             let markup = match edit {
                 Edit::Markup(markup) => markup,
@@ -54,6 +55,14 @@ impl Reader {
                 Edit::Stamp(stamp) => {
                     if stamp.page == page {
                         stamps.push(stamp.clone());
+                    }
+                    continue;
+                }
+                Edit::Picture(picture) => {
+                    if picture.page == page
+                        && let Some(preview) = self.preview_of(&picture.pixels)
+                    {
+                        pictures.push((picture.bounds, preview));
                     }
                     continue;
                 }
@@ -205,6 +214,14 @@ impl Reader {
                 }),
             )
             .child(img(image.image.clone()).size_full().rounded(px(2.0)))
+            .children(pictures.into_iter().map(|(bounds, preview)| {
+                img(preview)
+                    .absolute()
+                    .left(px(image.width * bounds.left))
+                    .top(px(image.height * bounds.top))
+                    .w(px(image.width * (bounds.right - bounds.left)))
+                    .h(px(image.height * (bounds.bottom - bounds.top)))
+            }))
             .children(stamps.into_iter().map(|stamp| {
                 let color: gpui::Hsla = gpui::rgb(stamp.color).into();
                 let bounds = stamp.bounds;

@@ -1,10 +1,11 @@
 use super::{Reader, chrome::Overlay};
 use crate::pdf::{
-    markup::{Edit, Signature, SketchKind, Stamp},
+    markup::{Edit, Picture, Signature, SketchKind, Stamp},
     text::TextRect,
 };
 use crate::ui::kit::Status;
-use gpui::{Bounds, Context, Pixels, Point, px};
+use gpui::{Bounds, Context, PathPromptOptions, Pixels, Point, RenderImage, Window, px};
+use std::path::Path;
 use std::{cell::Cell, rc::Rc, sync::Arc};
 
 pub(super) const INKS: [u32; 3] = [0x1c3d8f, 0x1d2024, 0xb42318];
@@ -17,6 +18,8 @@ const PLACED_MAX_HEIGHT: f32 = 0.25;
 const MIN_PLACED_WIDTH: f32 = 0.04;
 const STAMP_WIDTH: f32 = 0.24;
 const STAMP_SHAPE: f32 = 3.2;
+const MAX_PICTURE_SIDE: u32 = 1_600;
+const MAX_PLACED_PICTURES: usize = 8;
 const HANDLE_REACH: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,8 +41,55 @@ pub(super) struct Placed {
     pub bounds: TextRect,
 }
 
+#[derive(Clone)]
+pub(super) struct LoadedPicture {
+    pub pixels: Arc<Vec<u8>>,
+    pub width: u32,
+    pub height: u32,
+    pub preview: Arc<RenderImage>,
+}
+
+pub(super) fn load_picture(path: &Path) -> anyhow::Result<LoadedPicture> {
+    use anyhow::Context as _;
+    let decoded = image::open(path)
+        .with_context(|| format!("{} is not a PNG or JPEG that can be read.", path.display()))?
+        .to_rgba8();
+    let longest = decoded.width().max(decoded.height());
+    let pixels = if longest > MAX_PICTURE_SIDE {
+        let scale = MAX_PICTURE_SIDE as f32 / longest as f32;
+        image::imageops::thumbnail(
+            &decoded,
+            ((decoded.width() as f32 * scale).round() as u32).max(1),
+            ((decoded.height() as f32 * scale).round() as u32).max(1),
+        )
+    } else {
+        decoded
+    };
+    if pixels.width() == 0 || pixels.height() == 0 {
+        anyhow::bail!("The image is empty.");
+    }
+    let (width, height) = pixels.dimensions();
+    let rgba = pixels.into_raw();
+    let mut shown = rgba.clone();
+    for pixel in shown.as_chunks_mut::<4>().0 {
+        pixel.swap(0, 2);
+    }
+    let frame = image::RgbaImage::from_raw(width, height, shown)
+        .context("The image could not be prepared for display.")?;
+    Ok(LoadedPicture {
+        pixels: Arc::new(rgba),
+        width,
+        height,
+        preview: Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(
+            frame
+        )])),
+    })
+}
+
 #[derive(Default)]
 pub(super) struct Signing {
+    pub picture: Option<LoadedPicture>,
+    pub placed_pictures: Vec<LoadedPicture>,
     pub strokes: Vec<Vec<[f32; 2]>>,
     pub drawing: bool,
     pub pad: Rc<Cell<Bounds<Pixels>>>,
@@ -294,6 +344,134 @@ impl Reader {
             }
         });
         (width / height, center)
+    }
+
+    pub(super) fn preview_of(&self, pixels: &Arc<Vec<u8>>) -> Option<Arc<RenderImage>> {
+        self.signing
+            .placed_pictures
+            .iter()
+            .chain(&self.signing.picture)
+            .find(|picture| Arc::ptr_eq(&picture.pixels, pixels))
+            .map(|picture| picture.preview.clone())
+    }
+
+    pub(super) fn use_signature_image(&mut self, path: &Path, cx: &mut Context<Self>) {
+        match load_picture(path) {
+            Ok(picture) => self.signing.picture = Some(picture),
+            Err(error) => self.show_toast(
+                Status::Warn,
+                "The image could not be used",
+                &format!("{error:#}"),
+                cx,
+            ),
+        }
+        cx.notify();
+    }
+
+    pub(super) fn choose_signature_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.picker_open {
+            return;
+        }
+        self.picker_open = true;
+        let chosen = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Use image".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = chosen.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.picker_open = false;
+                match result {
+                    Ok(Ok(Some(paths))) => {
+                        if let Some(path) = paths.first() {
+                            this.use_signature_image(path, cx);
+                        }
+                    }
+                    Ok(Ok(None)) => {}
+                    _ => this.show_toast(
+                        Status::Warn,
+                        "The file picker could not be opened",
+                        "Please try again.",
+                        cx,
+                    ),
+                }
+                this.focus.focus(window);
+            });
+        })
+        .detach();
+    }
+
+    pub(super) fn place_signature_image(&mut self, cx: &mut Context<Self>) {
+        let Some(picture) = self.signing.picture.clone() else {
+            self.show_toast(
+                Status::Info,
+                "Choose an image first",
+                "Click the pad to pick a PNG or JPEG of your signature.",
+                cx,
+            );
+            return;
+        };
+        if self.signing.placed_pictures.len() >= MAX_PLACED_PICTURES
+            && !self
+                .signing
+                .placed_pictures
+                .iter()
+                .any(|placed| Arc::ptr_eq(&placed.pixels, &picture.pixels))
+        {
+            self.show_toast(
+                Status::Warn,
+                "Too many signature images",
+                &format!("At most {MAX_PLACED_PICTURES} different images can be placed at once."),
+                cx,
+            );
+            return;
+        }
+        let Some(page) = self.tabs.current().map(|tab| tab.page) else {
+            return;
+        };
+        let (page_shape, center) = self.placement_center(page);
+        let shape = picture.width as f32 / picture.height as f32;
+        let mut width = PLACED_WIDTH;
+        let mut height = width * page_shape / shape;
+        if height > PLACED_MAX_HEIGHT {
+            width *= PLACED_MAX_HEIGHT / height;
+            height = PLACED_MAX_HEIGHT;
+        }
+        let left = (1.0 - width) / 2.0;
+        let top = (center - height / 2.0).clamp(0.0, 1.0 - height);
+        let placed = self.begin_placing(
+            Edit::Picture(Picture {
+                page,
+                bounds: TextRect {
+                    left,
+                    top,
+                    right: left + width,
+                    bottom: top + height,
+                },
+                pixels: picture.pixels.clone(),
+                width: picture.width,
+                height: picture.height,
+            }),
+            cx,
+        );
+        if placed {
+            if !self
+                .signing
+                .placed_pictures
+                .iter()
+                .any(|known| Arc::ptr_eq(&known.pixels, &picture.pixels))
+            {
+                self.signing.placed_pictures.push(picture);
+            }
+            self.show_toast(
+                Status::Info,
+                &format!("Signature added to page {}", page + 1),
+                "Drag it into place or drag a corner to resize it. Press Enter when it is right.",
+                cx,
+            );
+        }
     }
 
     pub(super) fn place_signature(&mut self, cx: &mut Context<Self>) {

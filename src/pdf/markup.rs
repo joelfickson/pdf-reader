@@ -86,10 +86,20 @@ pub(crate) struct Stamp {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Picture {
+    pub page: usize,
+    pub bounds: TextRect,
+    pub pixels: Arc<Vec<u8>>,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Edit {
     Markup(Markup),
     Signature(Signature),
     Stamp(Stamp),
+    Picture(Picture),
 }
 
 impl Edit {
@@ -98,6 +108,7 @@ impl Edit {
             Self::Markup(markup) => markup.first_page(),
             Self::Signature(signature) => signature.page,
             Self::Stamp(stamp) => stamp.page,
+            Self::Picture(picture) => picture.page,
         }
     }
 
@@ -106,6 +117,7 @@ impl Edit {
             Self::Markup(markup) => markup.color,
             Self::Signature(signature) => signature.color,
             Self::Stamp(stamp) => stamp.color,
+            Self::Picture(_) => 0x1c3d8f,
         }
     }
 
@@ -118,6 +130,7 @@ impl Edit {
                 SketchKind::Rectangle => "Shape",
             },
             Self::Stamp(_) => "Stamp",
+            Self::Picture(_) => "Signature",
         }
     }
 
@@ -127,6 +140,7 @@ impl Edit {
                 Some((signature.page, signature.bounds))
             }
             Self::Stamp(stamp) => Some((stamp.page, stamp.bounds)),
+            Self::Picture(picture) => Some((picture.page, picture.bounds)),
             _ => None,
         }
     }
@@ -135,6 +149,7 @@ impl Edit {
         match self {
             Self::Signature(signature) => signature.bounds = bounds,
             Self::Stamp(stamp) => stamp.bounds = bounds,
+            Self::Picture(picture) => picture.bounds = bounds,
             Self::Markup(_) => {}
         }
     }
@@ -148,6 +163,7 @@ impl Edit {
                 SketchKind::Rectangle => "Rectangle",
             },
             Self::Stamp(stamp) => &stamp.label,
+            Self::Picture(_) => "Signature image",
         }
     }
 }
@@ -395,6 +411,43 @@ fn stamp(document: &mut PdfDocument<'_>, stamp: &Stamp) -> Result<()> {
     Ok(())
 }
 
+fn picture(document: &PdfDocument<'_>, picture: &Picture) -> Result<()> {
+    let mut page = document
+        .pages()
+        .get(picture.page as i32)
+        .with_context(|| format!("Page {} is no longer in this PDF.", picture.page + 1))?;
+    let geometry = Geometry::of(&page)?;
+    let frame = quad(&geometry, &picture.bounds).with_context(|| {
+        format!(
+            "The signature on page {} has no usable position.",
+            picture.page + 1
+        )
+    })?;
+    let pixels = image::RgbaImage::from_raw(
+        picture.width,
+        picture.height,
+        picture.pixels.as_ref().clone(),
+    )
+    .context("The signature image is damaged.")?;
+    let mut object = PdfPageImageObject::new_with_size(
+        document,
+        &image::DynamicImage::ImageRgba8(pixels),
+        PdfPoints::new(frame.right - frame.left),
+        PdfPoints::new(frame.top - frame.bottom),
+    )?;
+    object.translate(PdfPoints::new(frame.left), PdfPoints::new(frame.bottom))?;
+    let mut annotation = page.annotations_mut().create_stamp_annotation()?;
+    annotation.set_bounds(PdfRect::new_from_values(
+        frame.bottom,
+        frame.left,
+        frame.top,
+        frame.right,
+    ))?;
+    annotation.set_is_printed(true)?;
+    annotation.objects_mut().add_image_object(object)?;
+    Ok(())
+}
+
 pub(super) fn apply(document: &mut PdfDocument<'_>, edits: &[Edit]) -> Result<()> {
     for edit in edits {
         let markup = match edit {
@@ -405,6 +458,10 @@ pub(super) fn apply(document: &mut PdfDocument<'_>, edits: &[Edit]) -> Result<()
             }
             Edit::Stamp(placed) => {
                 stamp(document, placed)?;
+                continue;
+            }
+            Edit::Picture(placed) => {
+                picture(document, placed)?;
                 continue;
             }
         };
@@ -856,6 +913,71 @@ mod tests {
             tint(&raster, &inner) > 0.05,
             "the label must be drawn inside the border"
         );
+        assert_eq!(tint(&raster, &beside), before);
+        drop(page);
+        drop(document);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn saved_signature_images_fill_their_bounds() {
+        let engine = crate::pdf::bind().unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("agenticpdf-picture-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("pictured.pdf");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/selection.pdf"),
+            &path,
+        )
+        .unwrap();
+        let bounds = TextRect {
+            left: 0.4,
+            top: 0.8,
+            right: 0.6,
+            bottom: 0.88,
+        };
+        let beside = TextRect {
+            left: 0.05,
+            top: 0.8,
+            right: 0.3,
+            bottom: 0.88,
+        };
+        let before = {
+            let document = engine.load_pdf_from_file(&path, None).unwrap();
+            let raster =
+                crate::pdf::render(&document.pages().get(0).unwrap(), 800.0, 1.0, 4096).unwrap();
+            assert_eq!(tint(&raster, &bounds), 0.0);
+            tint(&raster, &beside)
+        };
+        let pixels: Vec<u8> = (0..40 * 16)
+            .flat_map(|_| [0x1c, 0x3d, 0x8f, 0xff])
+            .collect();
+        save(
+            &engine,
+            &path,
+            &[Edit::Picture(Picture {
+                page: 0,
+                bounds,
+                pixels: Arc::new(pixels),
+                width: 40,
+                height: 16,
+            })],
+        )
+        .unwrap();
+        let document = engine.load_pdf_from_file(&path, None).unwrap();
+        let page = document.pages().get(0).unwrap();
+        assert_eq!(
+            page.annotations()
+                .iter()
+                .map(|annotation| annotation.annotation_type())
+                .collect::<Vec<_>>(),
+            [PdfPageAnnotationType::Stamp]
+        );
+        let raster = crate::pdf::render(&page, 800.0, 1.0, 4096).unwrap();
+        let filled = tint(&raster, &bounds);
+        assert!(filled > 0.9, "the image must fill its bounds: {filled}");
         assert_eq!(tint(&raster, &beside), before);
         drop(page);
         drop(document);
