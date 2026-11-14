@@ -20,6 +20,13 @@ pub(crate) struct TextField {
 }
 
 impl TextField {
+    pub fn limited(limit: usize) -> Self {
+        Self {
+            limit: Some(limit),
+            ..Self::default()
+        }
+    }
+
     pub fn digits(limit: usize) -> Self {
         Self {
             limit: Some(limit),

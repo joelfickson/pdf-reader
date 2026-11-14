@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "agenticpdf"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -86,6 +86,7 @@ dependencies = [
  "gpui",
  "image",
  "parking_lot 0.13.0",
+ "pathfinder_geometry",
  "pdfium-render",
  "rmcp",
  "schemars 1.2.3",
@@ -96,6 +97,7 @@ dependencies = [
  "tokio",
  "ureq",
  "winresource",
+ "zed-font-kit",
 ]
 
 [[package]]
@@ -4207,6 +4209,7 @@ dependencies = [
  "chrono",
  "console_error_panic_hook",
  "console_log",
+ "image",
  "itertools 0.15.0",
  "js-sys",
  "libloading 0.9.0",

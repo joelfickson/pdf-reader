@@ -200,6 +200,7 @@ impl Reader {
                     Input::Find => self.chrome.find.insert(&line),
                     Input::Page => self.chrome.page_input.insert(&line),
                     Input::Agent => self.agent.composer.insert(&line),
+                    Input::SignName => self.chrome.sign_name.insert(&line),
                     Input::None => false,
                 };
                 if edited && self.chrome.input == Input::Palette {
@@ -285,6 +286,21 @@ impl Reader {
                     cx.stop_propagation();
                 }
             }
+            Input::SignName => match self.chrome.sign_name.handle(keystroke) {
+                FieldKey::Ignored => {}
+                FieldKey::Submit => {
+                    self.place_typed_signature(cx);
+                    cx.stop_propagation();
+                }
+                FieldKey::Cancel => {
+                    self.set_overlay(Overlay::None, cx);
+                    cx.stop_propagation();
+                }
+                _ => {
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            },
             Input::Page => match self.chrome.page_input.handle(keystroke) {
                 FieldKey::Ignored => {}
                 FieldKey::Submit => {

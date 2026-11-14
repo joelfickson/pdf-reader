@@ -20,9 +20,11 @@ mod scheduling;
 mod search;
 mod selection;
 mod signing;
+mod sketching;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod typeset;
 mod updates;
 mod view;
 mod viewing;
@@ -92,6 +94,7 @@ pub(crate) struct Reader {
     filings: BTreeMap<u64, filing::Filing>,
     next_file: u64,
     combine_extra: Vec<PathBuf>,
+    sketch: Option<sketching::Sketch>,
     pointer: Option<gpui::Point<gpui::Pixels>>,
 }
 
@@ -224,6 +227,7 @@ impl Reader {
             filings: BTreeMap::new(),
             next_file: 0,
             combine_extra: Vec::new(),
+            sketch: None,
             pointer: None,
         };
         reader.chrome.theme_choice = preferences.theme;

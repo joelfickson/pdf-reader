@@ -1106,6 +1106,8 @@ mod tests {
             },
             color: 0x1c3d8f,
             strokes: Arc::new(vec![vec![[0.0, 0.0], [1.0, 1.0]]]),
+            kind: crate::pdf::markup::SketchKind::Signature,
+            weight: None,
         });
         let export = |format: Format, page: Option<usize>, marks: bool, name: &str| Export {
             source: source.clone(),

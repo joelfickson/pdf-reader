@@ -1494,6 +1494,227 @@ fn export_combine_and_print_queue_the_right_file_tasks(cx: &mut TestAppContext) 
     }
 }
 
+#[gpui::test]
+fn draw_and_shape_tools_add_ink_and_rectangles_by_dragging(cx: &mut TestAppContext) {
+    use crate::pdf::markup::{Edit, SketchKind};
+    use crate::ui::theme::Marker;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+            reader.set_mode(chrome::Mode::Annotate, window, cx);
+            reader.chrome.marker = 2;
+            reader.choose_tool(chrome::Tool::Draw, cx);
+        })
+    });
+    cx.run_until_parked();
+    let frame = cx.read(|cx| reader.read(cx).page_bounds.get());
+    assert!(frame.size.width > px(0.0));
+    let at = |x: f32, y: f32| frame.origin + point(frame.size.width * x, frame.size.height * y);
+    cx.simulate_mouse_down(at(0.2, 0.5), MouseButton::Left, Default::default());
+    cx.simulate_mouse_move(at(0.3, 0.6), MouseButton::Left, Default::default());
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.live_sketch(0).is_some());
+        assert!(reader.selection.is_none());
+        assert!(reader.tabs.entries[0].edits.is_empty());
+    });
+    cx.simulate_mouse_move(at(0.4, 0.5), MouseButton::Left, Default::default());
+    cx.simulate_mouse_up(at(0.4, 0.5), MouseButton::Left, Default::default());
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.sketch.is_none());
+        let Edit::Signature(ink) = &reader.tabs.entries[0].edits[0] else {
+            panic!("expected ink");
+        };
+        assert_eq!((ink.kind, ink.color), (SketchKind::Ink, Marker::ALL[2]));
+        assert_eq!(ink.strokes[0].len(), 3);
+        assert!((ink.strokes[0][1][0] - 0.3).abs() < 0.01);
+        assert!(reader.placing_signature().is_none());
+        assert_eq!(reader.tabs.entries[0].edits[0].label(), "Ink");
+    });
+
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.choose_tool(chrome::Tool::Shape, cx)));
+    cx.simulate_mouse_down(at(0.6, 0.7), MouseButton::Left, Default::default());
+    cx.simulate_mouse_move(at(0.3, 0.55), MouseButton::Left, Default::default());
+    cx.simulate_mouse_up(at(0.3, 0.55), MouseButton::Left, Default::default());
+    cx.simulate_mouse_down(at(0.1, 0.1), MouseButton::Left, Default::default());
+    cx.simulate_mouse_up(at(0.1, 0.1), MouseButton::Left, Default::default());
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.tabs.entries[0].edits.len(), 2);
+        let Edit::Signature(shape) = &reader.tabs.entries[0].edits[1] else {
+            panic!("expected a shape");
+        };
+        assert_eq!(shape.kind, SketchKind::Rectangle);
+        assert!((shape.bounds.left - 0.3).abs() < 0.01 && (shape.bounds.right - 0.6).abs() < 0.01);
+        assert!((shape.bounds.top - 0.55).abs() < 0.01 && (shape.bounds.bottom - 0.7).abs() < 0.01);
+    });
+
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    cx.simulate_keystrokes(&format!("{modifier}-z"));
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.entries[0].edits.len(), 1));
+
+    cx.update(|_, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.place_stamp("REVIEWED", 0x1c3d8f, cx)
+        })
+    });
+    cx.run_until_parked();
+    let placed = cx.read(|cx| reader.read(cx).placing_signature().unwrap());
+    assert_eq!(placed.page, 0);
+    let centre = (
+        (placed.bounds.left + placed.bounds.right) / 2.0,
+        (placed.bounds.top + placed.bounds.bottom) / 2.0,
+    );
+    cx.simulate_mouse_down(
+        at(centre.0, centre.1),
+        MouseButton::Left,
+        Default::default(),
+    );
+    cx.simulate_mouse_move(
+        at(centre.0 - 0.1, centre.1 + 0.1),
+        MouseButton::Left,
+        Default::default(),
+    );
+    cx.simulate_mouse_up(
+        at(centre.0 - 0.1, centre.1 + 0.1),
+        MouseButton::Left,
+        Default::default(),
+    );
+    cx.simulate_keystrokes("enter");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.placing_signature().is_none());
+        let Edit::Stamp(stamp) = &reader.tabs.entries[0].edits[1] else {
+            panic!("expected a stamp");
+        };
+        assert_eq!((stamp.label.as_str(), stamp.color), ("REVIEWED", 0x1c3d8f));
+        assert!((stamp.bounds.left - (placed.bounds.left - 0.1)).abs() < 0.01);
+        assert!((stamp.bounds.top - (placed.bounds.top + 0.1)).abs() < 0.01);
+        assert!(reader.sketch.is_none());
+    });
+    cx.dispatch_action(Save);
+    cx.read(|cx| assert_eq!(reader.read(cx).worker.queued_saves(), [2]));
+}
+
+#[gpui::test]
+fn image_signatures_load_scale_down_place_and_reject_other_files(cx: &mut TestAppContext) {
+    use crate::pdf::markup::Edit;
+
+    let folder = std::env::temp_dir().join(format!("agenticpdf-sign-image-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    let small = folder.join("small.png");
+    image::RgbaImage::from_pixel(60, 20, image::Rgba([28, 61, 143, 255]))
+        .save(&small)
+        .unwrap();
+    let large = folder.join("large.jpg");
+    image::RgbImage::from_pixel(3200, 800, image::Rgb([10, 10, 10]))
+        .save(&large)
+        .unwrap();
+    let scaled = signing::load_picture(&large).unwrap();
+    assert_eq!((scaled.width, scaled.height), (1600, 400));
+    assert_eq!(scaled.pixels.len(), 1600 * 400 * 4);
+
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.chrome.sign_tab = 2;
+            reader.set_overlay(chrome::Overlay::Sign, cx);
+            reader.place_signature_image(cx);
+            assert_eq!(
+                reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+                "Choose an image first"
+            );
+            reader.use_signature_image(&root.join("README.md"), cx);
+            assert!(reader.signing.picture.is_none());
+            assert_eq!(
+                reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+                "The image could not be used"
+            );
+            reader.use_signature_image(&small, cx);
+            let picture = reader.signing.picture.clone().unwrap();
+            assert_eq!((picture.width, picture.height), (60, 20));
+            assert_eq!(picture.pixels[..4], [28, 61, 143, 255]);
+
+            reader.place_signature_image(cx);
+            assert_eq!(reader.chrome.overlay, chrome::Overlay::None);
+            let Edit::Picture(placed) = &reader.tabs.entries[0].edits[0] else {
+                panic!("expected a signature image");
+            };
+            assert_eq!((placed.page, placed.width, placed.height), (0, 60, 20));
+            assert!((placed.bounds.right - placed.bounds.left - 0.32).abs() < 1e-5);
+            assert!(reader.placing_signature().is_some());
+            assert!(reader.preview_of(&placed.pixels).is_some());
+            assert_eq!(reader.tabs.entries[0].edits[0].label(), "Signature");
+        })
+    });
+    cx.run_until_parked();
+    sweep_mouse(cx);
+    cx.dispatch_action(Save);
+    cx.read(|cx| assert_eq!(reader.read(cx).worker.queued_saves(), [1]));
+    std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[gpui::test]
+fn typed_signatures_take_keystrokes_and_place_the_drawn_name(cx: &mut TestAppContext) {
+    use crate::pdf::markup::Edit;
+
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+            reader.chrome.sign_tab = 1;
+            reader.chrome.sign_ink = 2;
+            reader.set_overlay(chrome::Overlay::Sign, cx);
+            assert_eq!(reader.chrome.input, chrome::Input::SignName);
+            reader.place_typed_signature(cx);
+            assert_eq!(
+                reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+                "The signature could not be made"
+            );
+            assert_eq!(reader.chrome.overlay, chrome::Overlay::Sign);
+        })
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("shift-a l e x space shift-m backspace shift-m enter");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.chrome.sign_name.text, "Alex M");
+        assert_eq!(reader.chrome.overlay, chrome::Overlay::None);
+        assert_eq!(reader.chrome.input, chrome::Input::None);
+        let Edit::Picture(placed) = &reader.tabs.entries[0].edits[0] else {
+            panic!("expected a typed signature");
+        };
+        assert!(placed.width > placed.height);
+        assert_eq!(placed.pixels[..3], [0xb4, 0x23, 0x18]);
+        assert!(reader.placing_signature().is_some());
+    });
+    cx.simulate_keystrokes("enter");
+    cx.read(|cx| assert!(reader.read(cx).placing_signature().is_none()));
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);
@@ -1574,6 +1795,11 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
         ("presentation", |r, w, cx| {
             r.toggle_presentation(w, cx);
             assert!(r.presenting.is_some());
+        }),
+        ("placing stamp", |r, _, cx| {
+            r.place_stamp("APPROVED", 0x1f883d, cx);
+            assert!(r.placing_signature().is_some());
+            assert_eq!(r.tabs.current().unwrap().edits[0].label(), "Stamp");
         }),
         ("bookmarks", |r, _, cx| {
             let path = r.tabs.current().unwrap().path.clone();
