@@ -985,6 +985,69 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn transparent_signature_pixels_leave_the_page_showing_through() {
+        let engine = crate::pdf::bind().unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("agenticpdf-clear-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("clear.pdf");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/selection.pdf"),
+            &path,
+        )
+        .unwrap();
+        let dark = |raster: &crate::pdf::Raster, rect: &TextRect| {
+            let columns =
+                (rect.left * raster.width as f32) as u32..(rect.right * raster.width as f32) as u32;
+            let rows = (rect.top * raster.height as f32) as u32
+                ..(rect.bottom * raster.height as f32) as u32;
+            rows.flat_map(|y| columns.clone().map(move |x| (x, y)))
+                .filter(|(x, y)| {
+                    let offset = ((y * raster.width + x) * 4) as usize;
+                    raster.bytes[offset..offset + 3]
+                        .iter()
+                        .all(|channel| *channel < 120)
+                })
+                .count()
+        };
+        let (over_text, before) = {
+            let document = engine.load_pdf_from_file(&path, None).unwrap();
+            let page = document.pages().get(0).unwrap();
+            let text = crate::pdf::text::extract(&page, || true).unwrap();
+            let line = lines(&text.glyphs[..text.glyphs.len().min(20)])[0];
+            let raster = crate::pdf::render(&page, 800.0, 1.0, 4096).unwrap();
+            let before = dark(&raster, &line);
+            assert!(before > 20);
+            (line, before)
+        };
+        save(
+            &engine,
+            &path,
+            &[Edit::Picture(Picture {
+                page: 0,
+                bounds: over_text,
+                pixels: Arc::new([0x1c, 0x3d, 0x8f, 0x00].repeat(32 * 8)),
+                width: 32,
+                height: 8,
+            })],
+        )
+        .unwrap();
+        let document = engine.load_pdf_from_file(&path, None).unwrap();
+        let page = document.pages().get(0).unwrap();
+        let raster = crate::pdf::render(&page, 800.0, 1.0, 4096).unwrap();
+        let after = dark(&raster, &over_text);
+        assert!(
+            after * 10 >= before * 9,
+            "text under a transparent image must stay visible: {before} -> {after}"
+        );
+        assert!(tint(&raster, &over_text) < 0.1);
+        drop(page);
+        drop(document);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
     fn page_points_invert_the_display_mapping() {
         let geometry = Geometry::UNIT;
         let (x, y) = geometry.page_point(0.25, 0.1).unwrap();

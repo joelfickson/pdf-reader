@@ -86,6 +86,7 @@ dependencies = [
  "gpui",
  "image",
  "parking_lot 0.13.0",
+ "pathfinder_geometry",
  "pdfium-render",
  "rmcp",
  "schemars 1.2.3",
@@ -96,6 +97,7 @@ dependencies = [
  "tokio",
  "ureq",
  "winresource",
+ "zed-font-kit",
 ]
 
 [[package]]

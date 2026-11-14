@@ -69,6 +69,7 @@ pub(super) enum Input {
     Find,
     Page,
     Agent,
+    SignName,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -110,6 +111,7 @@ pub(super) struct Chrome {
     pub palette: TextField,
     pub palette_index: usize,
     pub page_input: TextField,
+    pub sign_name: TextField,
     pub input: Input,
     pub toast: Option<Toast>,
     toast_counter: u64,
@@ -149,6 +151,7 @@ impl Chrome {
             palette: TextField::default(),
             palette_index: 0,
             page_input: TextField::digits(6),
+            sign_name: TextField::limited(super::typeset::MAX_NAME_CHARACTERS),
             input: Input::None,
             toast: None,
             toast_counter: 0,
@@ -184,6 +187,11 @@ impl Reader {
             self.chrome.palette_index = 0;
             self.chrome.input = Input::Palette;
         } else if self.chrome.input == Input::Palette {
+            self.chrome.input = Input::None;
+        }
+        if self.chrome.overlay == Overlay::Sign && self.chrome.sign_tab == 1 {
+            self.chrome.input = Input::SignName;
+        } else if self.chrome.input == Input::SignName {
             self.chrome.input = Input::None;
         }
         cx.notify();

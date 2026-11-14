@@ -279,6 +279,9 @@ impl Reader {
         });
         self.selection = None;
         self.chrome.overlay = Overlay::None;
+        if self.chrome.input == super::chrome::Input::SignName {
+            self.chrome.input = super::chrome::Input::None;
+        }
         true
     }
 
@@ -401,6 +404,26 @@ impl Reader {
             });
         })
         .detach();
+    }
+
+    pub(super) fn place_typed_signature(&mut self, cx: &mut Context<Self>) {
+        let ink = INKS[self.chrome.sign_ink % INKS.len()];
+        match super::typeset::signature(
+            &self.chrome.sign_name.text,
+            crate::ui::theme::Theme::script_font(),
+            ink,
+        ) {
+            Ok(picture) => {
+                self.signing.picture = Some(picture);
+                self.place_signature_image(cx);
+            }
+            Err(error) => self.show_toast(
+                Status::Info,
+                "The signature could not be made",
+                &format!("{error:#}"),
+                cx,
+            ),
+        }
     }
 
     pub(super) fn place_signature_image(&mut self, cx: &mut Context<Self>) {

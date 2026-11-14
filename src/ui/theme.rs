@@ -52,9 +52,6 @@ impl Paper {
     pub fn muted() -> Hsla {
         rgb(0x5b6168).into()
     }
-    pub fn signature() -> Hsla {
-        rgb(0x1c3d8f).into()
-    }
 }
 
 pub(crate) struct Marker;

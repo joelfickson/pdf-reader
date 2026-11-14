@@ -1670,6 +1670,51 @@ fn image_signatures_load_scale_down_place_and_reject_other_files(cx: &mut TestAp
     std::fs::remove_dir_all(&folder).unwrap();
 }
 
+#[gpui::test]
+fn typed_signatures_take_keystrokes_and_place_the_drawn_name(cx: &mut TestAppContext) {
+    use crate::pdf::markup::Edit;
+
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+            reader.chrome.sign_tab = 1;
+            reader.chrome.sign_ink = 2;
+            reader.set_overlay(chrome::Overlay::Sign, cx);
+            assert_eq!(reader.chrome.input, chrome::Input::SignName);
+            reader.place_typed_signature(cx);
+            assert_eq!(
+                reader.chrome.toast.as_ref().unwrap().title.as_ref(),
+                "The signature could not be made"
+            );
+            assert_eq!(reader.chrome.overlay, chrome::Overlay::Sign);
+        })
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("shift-a l e x space shift-m backspace shift-m enter");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.chrome.sign_name.text, "Alex M");
+        assert_eq!(reader.chrome.overlay, chrome::Overlay::None);
+        assert_eq!(reader.chrome.input, chrome::Input::None);
+        let Edit::Picture(placed) = &reader.tabs.entries[0].edits[0] else {
+            panic!("expected a typed signature");
+        };
+        assert!(placed.width > placed.height);
+        assert_eq!(placed.pixels[..3], [0xb4, 0x23, 0x18]);
+        assert!(reader.placing_signature().is_some());
+    });
+    cx.simulate_keystrokes("enter");
+    cx.read(|cx| assert!(reader.read(cx).placing_signature().is_none()));
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);

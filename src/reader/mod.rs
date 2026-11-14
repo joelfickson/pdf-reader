@@ -24,6 +24,7 @@ mod sketching;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod typeset;
 mod updates;
 mod view;
 mod viewing;
