@@ -134,6 +134,8 @@ impl Render for Reader {
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::fit))
+            .on_action(cx.listener(Self::fit_page))
+            .on_action(cx.listener(Self::actual_size))
             .on_action(cx.listener(Self::toggle_sidebar))
             .on_action(cx.listener(Self::close))
             .on_action(cx.listener(Self::next_tab))

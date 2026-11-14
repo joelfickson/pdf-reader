@@ -31,6 +31,7 @@ pub(super) struct DocumentTab {
     pub saving: bool,
     pub close_after_save: bool,
     pub notes_scroll: ScrollHandle,
+    pub fit_page_pending: bool,
 }
 
 impl DocumentTab {
@@ -61,6 +62,7 @@ impl DocumentTab {
             saving: false,
             close_after_save: false,
             notes_scroll: ScrollHandle::new(),
+            fit_page_pending: false,
         }
     }
 

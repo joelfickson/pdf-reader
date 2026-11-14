@@ -3,6 +3,7 @@ use super::super::{
     chrome::{Layout, Overlay},
 };
 use super::dialogs::form_row;
+use crate::preferences::{DefaultZoom, Preferences};
 use crate::ui::{
     kit::clickable,
     kit::{RADIUS, Status, label, pill, status, toggle},
@@ -19,23 +20,52 @@ const SECTIONS: [&str; 5] = [
 ];
 
 impl Reader {
-    fn placeholder_toggle(
+    fn preference_toggle(
         &self,
         id: &'static str,
         text: &'static str,
         on: bool,
-        feature: &'static str,
+        set: fn(&mut Preferences, bool),
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         div()
             .flex()
             .items_center()
             .gap(px(10.0))
-            .child(
-                toggle(id, on, &self.chrome.theme)
-                    .on_click(cx.listener(move |this, _, _, cx| this.unavailable(feature, cx))),
-            )
+            .child(toggle(id, on, &self.chrome.theme).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    this.update_preferences(|preferences| set(preferences, !on), cx)
+                },
+            )))
             .child(text)
+    }
+
+    fn default_zoom_choices(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.chrome.theme;
+        let options = [
+            ("Fit width", DefaultZoom::FitWidth),
+            ("Fit page", DefaultZoom::FitPage),
+            ("100%", DefaultZoom::Actual),
+        ];
+        div()
+            .flex()
+            .gap(px(2.0))
+            .children(
+                options
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (text, zoom))| {
+                        let selected = self.preferences.default_zoom == zoom;
+                        pill(("default-zoom", index), text, selected, &theme).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                this.update_preferences(
+                                    |preferences| preferences.default_zoom = zoom,
+                                    cx,
+                                )
+                            },
+                        ))
+                    }),
+            )
     }
 
     fn layout_choices(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -147,22 +177,22 @@ impl Reader {
                 .child(form_row(
                     &theme,
                     "On launch",
-                    self.placeholder_toggle(
+                    self.preference_toggle(
                         "reopen-tabs",
                         "Reopen last session's tabs",
-                        false,
-                        "Restoring sessions",
+                        self.preferences.reopen_tabs,
+                        |preferences, on| preferences.reopen_tabs = on,
                         cx,
                     ),
                 ))
                 .child(form_row(
                     &theme,
                     "Each file",
-                    self.placeholder_toggle(
+                    self.preference_toggle(
                         "last-page",
                         "Open at the last page read",
-                        false,
-                        "Remembering your place",
+                        self.preferences.last_page,
+                        |preferences, on| preferences.last_page = on,
                         cx,
                     ),
                 ))
@@ -186,12 +216,7 @@ impl Reader {
                 .child(form_row(
                     &theme,
                     "Default zoom",
-                    self.placeholder_choices(
-                        "default-zoom",
-                        &["Fit width", "Fit page", "100%"],
-                        "Default zoom",
-                        cx,
-                    ),
+                    self.default_zoom_choices(cx),
                 ))
                 .child(form_row(&theme, "Layout", self.layout_choices(cx)))
                 .child(form_row(
@@ -214,11 +239,11 @@ impl Reader {
                 .child(form_row(
                     &theme,
                     "Saving",
-                    self.placeholder_toggle(
+                    self.preference_toggle(
                         "autosave",
                         "Save notes automatically",
-                        false,
-                        "Saving notes",
+                        self.preferences.autosave,
+                        |preferences, on| preferences.autosave = on,
                         cx,
                     ),
                 ))

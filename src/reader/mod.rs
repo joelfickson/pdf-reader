@@ -13,6 +13,7 @@ mod navigation;
 mod outline;
 #[cfg(debug_assertions)]
 mod preview;
+mod reading;
 mod scheduling;
 mod search;
 mod selection;
@@ -80,6 +81,10 @@ pub(crate) struct Reader {
     updates: updates::Updates,
     scroll_probe: Option<crate::bench::ScrollProbe>,
     signing: signing::Signing,
+    preferences: crate::preferences::Preferences,
+    bookmarks: crate::preferences::Bookmarks,
+    data: Option<PathBuf>,
+    autosave_edits: u64,
 }
 
 impl Reader {
@@ -129,6 +134,9 @@ impl Reader {
         });
         cx.on_app_quit(|this, cx| {
             this.persist_recent(cx);
+            if let Err(error) = this.save_session() {
+                eprintln!("Agentic PDF could not remember the open tabs. {error:#}");
+            }
             this.updates.install_on_quit();
             async {}
         })
@@ -147,7 +155,23 @@ impl Reader {
             ),
         };
         let (updates, updates_error) = updates::Updates::load();
-        let theme = Theme::resolve(Default::default(), window.appearance());
+        let data = if cfg!(test) {
+            None
+        } else {
+            crate::recent::data_dir()
+        };
+        let mut stores_error = None;
+        let preferences =
+            crate::preferences::Preferences::load(data.as_deref()).unwrap_or_else(|error| {
+                stores_error = Some(format!("Settings could not be loaded. {error:#}"));
+                Default::default()
+            });
+        let bookmarks =
+            crate::preferences::Bookmarks::load(data.as_deref()).unwrap_or_else(|error| {
+                stores_error = Some(format!("Bookmarks could not be loaded. {error:#}"));
+                Default::default()
+            });
+        let theme = Theme::resolve(preferences.theme, window.appearance());
         let focus = cx.focus_handle();
         focus.focus(window);
         let mut reader = Self {
@@ -183,8 +207,16 @@ impl Reader {
             updates,
             scroll_probe: crate::bench::scrolling().then(Default::default),
             signing: signing::Signing::default(),
+            preferences,
+            bookmarks,
+            data,
+            autosave_edits: 0,
         };
-        reader.notice = recent_error;
+        reader.chrome.theme_choice = preferences.theme;
+        if !preferences.continuous {
+            reader.chrome.layout = chrome::Layout::Single;
+        }
+        reader.notice = recent_error.or(stores_error);
         if let Some(error) = updates_error {
             reader.show_toast(
                 crate::ui::kit::Status::Warn,
@@ -197,7 +229,11 @@ impl Reader {
         cx.set_menus(crate::app::menus(reader.recent.entries()));
         #[cfg(debug_assertions)]
         reader.preview_theme(window, cx);
-        reader.open_paths(paths, window, cx);
+        if paths.is_empty() {
+            reader.restore_session(window, cx);
+        } else {
+            reader.open_paths(paths, window, cx);
+        }
         reader
     }
 
@@ -298,6 +334,9 @@ impl Reader {
             | Event::SearchDone { .. }
             | Event::SearchFailed { .. }
             | Event::Outline { .. } => {}
+        }
+        if self.image.is_some() && self.tabs.current().is_some_and(|tab| tab.fit_page_pending) {
+            self.fit_page_now(window, cx);
         }
         cx.notify();
     }

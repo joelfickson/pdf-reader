@@ -352,9 +352,10 @@ impl Reader {
                     Some(format!("{m} 9")),
                     &theme,
                 )
-                .on_click(cx.listener(|this, _, _, cx| {
+                .on_click(cx.listener(|this, _, window, cx| {
                     this.chrome.overlay = Overlay::None;
-                    this.unavailable("Fit page", cx)
+                    window.dispatch_action(Box::new(FitPage), cx);
+                    cx.notify();
                 })),
             )
             .child(
@@ -893,7 +894,7 @@ impl Reader {
         )
     }
 
-    pub(super) fn set_zoom(
+    pub(in crate::reader) fn set_zoom(
         &mut self,
         zoom: Option<u32>,
         window: &mut Window,

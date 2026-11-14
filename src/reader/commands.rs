@@ -333,7 +333,7 @@ impl Reader {
             Command::Settings => self.set_overlay(Overlay::Settings, cx),
             Command::CheckForUpdates => window.dispatch_action(Box::new(CheckForUpdates), cx),
             Command::Shortcuts => self.set_overlay(Overlay::Shortcuts, cx),
-            Command::Bookmark => self.unavailable("Bookmarking pages", cx),
+            Command::Bookmark => self.toggle_bookmark(cx),
             Command::Highlight => {
                 self.mark_selection(MarkupKind::Highlight, self.chrome.marker, cx)
             }

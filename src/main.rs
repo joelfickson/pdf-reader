@@ -6,6 +6,7 @@ mod bench;
 mod cli;
 mod mcp;
 mod pdf;
+mod preferences;
 mod reader;
 mod recent;
 mod ui;
