@@ -91,6 +91,10 @@ impl Reader {
         {
             tab.restore_scroll = Some(tab.scroll.offset());
         }
+        if self.chrome.mode == super::chrome::Mode::Organize && index != self.tabs.active {
+            self.cancel_page_changes(cx);
+            self.chrome.mode = super::chrome::Mode::Read;
+        }
         self.sync_recent();
         self.reset_request(window);
         self.tabs.active = index;

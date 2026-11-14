@@ -245,7 +245,7 @@ impl Reader {
         let Some(tab) = self.tabs.entries.get_mut(index) else {
             return;
         };
-        if tab.saving || !tab.modified() {
+        if tab.saving || !tab.modified() || tab.page_changes > 0 || !tab.page_ops.is_empty() {
             return;
         }
         tab.saving = true;

@@ -4,7 +4,7 @@ use crate::ui::{
     kit::clickable,
     kit::{Kind, Tone, icon, icon_button, mono, separator, text_button},
 };
-use gpui::{Context, FontWeight, IntoElement, div, prelude::*, px};
+use gpui::{Context, FontWeight, IntoElement, Window, div, prelude::*, px};
 
 impl Reader {
     pub(in crate::reader) fn organize(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -15,19 +15,20 @@ impl Reader {
         let session = tab.session;
         let count = tab.count;
         let selected = self.chrome.organize_selection.len();
-        let action = |id: &'static str,
-                      glyph: Icon,
-                      text: Option<&'static str>,
-                      tone: Tone,
-                      feature: &'static str| {
-            icon_button(id, glyph, &theme, tone, selected > 0)
-                .children(text)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if !this.chrome.organize_selection.is_empty() {
-                        this.unavailable(feature, cx)
-                    }
-                }))
-        };
+        let action =
+            |id: &'static str,
+             glyph: Icon,
+             text: Option<&'static str>,
+             tone: Tone,
+             run: fn(&mut Reader, &mut Window, &mut Context<Reader>)| {
+                icon_button(id, glyph, &theme, tone, selected > 0)
+                    .children(text)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        if !this.chrome.organize_selection.is_empty() {
+                            run(this, window, cx)
+                        }
+                    }))
+            };
         let toolbar =
             div()
                 .h(px(52.0))
@@ -53,35 +54,35 @@ impl Reader {
                     Icon::RotateLeft,
                     None,
                     Tone::Plain,
-                    "Rotating pages",
+                    |this, _, cx| this.rotate_selected(3, cx),
                 ))
                 .child(action(
                     "rotate-right",
                     Icon::RotateRight,
                     None,
                     Tone::Plain,
-                    "Rotating pages",
+                    |this, _, cx| this.rotate_selected(1, cx),
                 ))
                 .child(action(
                     "extract",
                     Icon::Extract,
                     Some("Extract"),
                     Tone::Plain,
-                    "Extracting pages",
+                    |this, window, cx| this.choose_extract_destination(window, cx),
                 ))
                 .child(
                     icon_button("insert", Icon::Plus, &theme, Tone::Plain, true)
                         .child("Insert file")
-                        .on_click(
-                            cx.listener(|this, _, _, cx| this.unavailable("Inserting pages", cx)),
-                        ),
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.choose_file_to_insert(window, cx)
+                        })),
                 )
                 .child(action(
                     "delete",
                     Icon::Trash,
                     Some("Delete"),
                     Tone::Danger,
-                    "Deleting pages",
+                    |this, _, cx| this.delete_selected(cx),
                 ))
                 .child(separator(&theme))
                 .child(
@@ -94,9 +95,9 @@ impl Reader {
                 .child(
                     text_button("organize-apply", "Apply", &theme, Kind::Primary)
                         .h(px(28.0))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.unavailable("Applying page changes", cx)
-                        })),
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.apply_page_changes(window, cx)),
+                        ),
                 );
         let pages = (0..count).map(|index| {
             let checked = self.chrome.organize_selection.contains(&index);
@@ -186,8 +187,8 @@ impl Reader {
                                     .flex()
                                     .justify_center()
                                     .cursor_pointer()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.unavailable("Inserting pages", cx)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.choose_file_to_insert(window, cx)
                                     }))
                                     .child(
                                         div()

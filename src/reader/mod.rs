@@ -10,6 +10,7 @@ mod images;
 mod jumps;
 mod markup;
 mod navigation;
+mod organizing;
 mod outline;
 #[cfg(debug_assertions)]
 mod preview;
@@ -252,6 +253,8 @@ impl Reader {
                     }
                 } else if let Event::Saved { session, result } = event {
                     self.finish_save(session, result, window, cx);
+                } else if let Event::Organized { session, result } = event {
+                    self.finish_page_op(session, result, window, cx);
                 } else {
                     self.receive_search(event, window, cx);
                 }
@@ -329,7 +332,8 @@ impl Reader {
                 tab.error = Some(message);
                 self.busy = false;
             }
-            Event::Saved { .. }
+            Event::Organized { .. }
+            | Event::Saved { .. }
             | Event::SearchBatch { .. }
             | Event::SearchDone { .. }
             | Event::SearchFailed { .. }

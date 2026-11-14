@@ -1,9 +1,13 @@
 use super::column::Column;
 use super::{jumps::Jumps, outline::OutlineTree};
-use crate::pdf::{PageSizes, markup::Edit};
+use crate::pdf::{PageSizes, markup::Edit, pages::PageOp};
 use gpui::{Pixels, Point, ScrollHandle, UniformListScrollHandle};
 use std::rc::Rc;
-use std::{collections::BTreeSet, ops::Range, path::PathBuf};
+use std::{
+    collections::{BTreeSet, VecDeque},
+    ops::Range,
+    path::PathBuf,
+};
 
 pub(super) struct DocumentTab {
     pub session: u64,
@@ -32,6 +36,8 @@ pub(super) struct DocumentTab {
     pub close_after_save: bool,
     pub notes_scroll: ScrollHandle,
     pub fit_page_pending: bool,
+    pub page_ops: VecDeque<PageOp>,
+    pub page_changes: usize,
 }
 
 impl DocumentTab {
@@ -63,6 +69,8 @@ impl DocumentTab {
             close_after_save: false,
             notes_scroll: ScrollHandle::new(),
             fit_page_pending: false,
+            page_ops: VecDeque::new(),
+            page_changes: 0,
         }
     }
 

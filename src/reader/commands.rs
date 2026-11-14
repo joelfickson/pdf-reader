@@ -337,12 +337,15 @@ impl Reader {
             Command::Highlight => {
                 self.mark_selection(MarkupKind::Highlight, self.chrome.marker, cx)
             }
-            Command::RotatePage => self.unavailable("Rotating pages", cx),
+            Command::RotatePage => self.rotate_current_page(cx),
             Command::TwoPages => self.unavailable("Two-page view", cx),
             Command::SplitView => self.unavailable("Split view", cx),
             Command::NightPages => self.unavailable("Night pages", cx),
             Command::Magnifier => self.unavailable("The magnifier", cx),
             Command::Presentation => self.unavailable("Presentation mode", cx),
+            Command::Save if self.chrome.mode == Mode::Organize => {
+                self.apply_page_changes(window, cx)
+            }
             Command::Save => self.save_document(cx),
         }
     }

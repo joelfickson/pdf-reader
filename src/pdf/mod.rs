@@ -1,5 +1,6 @@
 mod library;
 pub(crate) mod markup;
+pub(crate) mod pages;
 pub(crate) mod search;
 pub(crate) mod text;
 pub(crate) mod tools;
@@ -60,7 +61,17 @@ pub struct SaveJob {
     pub edits: Vec<markup::Edit>,
 }
 
+pub struct OrganizeJob {
+    pub session: u64,
+    pub path: PathBuf,
+    pub op: pages::PageOp,
+}
+
 pub enum Event {
+    Organized {
+        session: u64,
+        result: Result<usize, String>,
+    },
     Saved {
         session: u64,
         result: Result<(), String>,
@@ -116,7 +127,8 @@ pub enum Event {
 impl Event {
     pub fn generation(&self) -> Option<u64> {
         match self {
-            Self::Saved { .. }
+            Self::Organized { .. }
+            | Self::Saved { .. }
             | Self::SearchBatch { .. }
             | Self::SearchDone { .. }
             | Self::SearchFailed { .. }

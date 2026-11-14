@@ -199,6 +199,12 @@ impl Reader {
             self.unavailable_reason("Open a PDF first", "Page tools need an open document.", cx);
             return;
         }
+        if next == Mode::Organize && !self.can_organize(cx) {
+            return;
+        }
+        if self.chrome.mode == Mode::Organize {
+            self.cancel_page_changes(cx);
+        }
         self.chrome.mode = next;
         self.chrome.overlay = Overlay::None;
         if next == Mode::Organize {

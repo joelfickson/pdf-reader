@@ -1063,6 +1063,166 @@ fn last_session_tabs_reopen_only_when_asked_and_skip_missing_files(cx: &mut Test
     std::fs::remove_dir_all(&store).unwrap();
 }
 
+#[gpui::test]
+fn organize_queues_page_changes_and_applies_or_discards_them(cx: &mut TestAppContext) {
+    use crate::pdf::{markup::MarkupKind, pages::PageOp};
+    use chrome::Mode;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let last = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| reader.read(cx).worker.queued_page_ops().pop().unwrap())
+    };
+    let finish = |cx: &mut gpui::VisualTestContext, result: Result<usize, String>| {
+        cx.update(|window, cx| {
+            reader.update(cx, |reader, cx| {
+                let session = reader.tabs.entries[0].session;
+                reader.receive(Event::Organized { session, result }, window, cx)
+            })
+        });
+    };
+    let select = |cx: &mut gpui::VisualTestContext, pages: &[usize]| {
+        cx.update(|_, cx| {
+            reader.update(cx, |reader, _| {
+                reader.chrome.organize_selection = pages.iter().copied().collect()
+            })
+        });
+    };
+    let toast = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| {
+            reader
+                .read(cx)
+                .chrome
+                .toast
+                .as_ref()
+                .unwrap()
+                .title
+                .to_string()
+        })
+    };
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+            reader.selection = Some(selection::Selection::within(0, 0..8));
+            reader.mark_selection(MarkupKind::Highlight, 0, cx);
+            reader.set_mode(Mode::Organize, window, cx);
+            assert_eq!(reader.chrome.mode, Mode::Read);
+        })
+    });
+    assert_eq!(toast(cx), "Save your changes first");
+    cx.simulate_keystrokes(&format!("{modifier}-z {modifier}-shift-o"));
+    cx.read(|cx| assert_eq!(reader.read(cx).chrome.mode, Mode::Organize));
+
+    select(cx, &[0, 1]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.rotate_selected(1, cx)));
+    assert_eq!(
+        last(cx),
+        PageOp::Rotate {
+            pages: vec![0, 1],
+            turns: 1
+        }
+    );
+    finish(cx, Ok(3));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.tabs.entries[0].page_changes, 1);
+        assert!(reader.chrome.organize_selection.is_empty());
+    });
+
+    select(cx, &[0, 1, 2]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.delete_selected(cx)));
+    assert_eq!(toast(cx), "A PDF needs at least one page");
+    cx.read(|cx| assert_eq!(reader.read(cx).worker.queued_page_ops().len(), 1));
+    select(cx, &[2]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.delete_selected(cx)));
+    assert_eq!(last(cx), PageOp::Delete { pages: vec![2] });
+    finish(cx, Ok(2));
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.entries[0].count, 2));
+
+    select(cx, &[0]);
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.choose_extract_destination(window, cx)
+        })
+    });
+    assert!(cx.did_prompt_for_new_path());
+    cx.simulate_new_path_selection(|folder| Some(folder.join("pulled.pdf")));
+    cx.run_until_parked();
+    assert!(matches!(
+        last(cx),
+        PageOp::Extract { pages, to } if pages == [0] && to.ends_with("pulled.pdf")
+    ));
+    finish(cx, Ok(2));
+    assert_eq!(toast(cx), "Extracted 1 page");
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.entries[0].page_changes, 2));
+
+    cx.dispatch_action(Save);
+    assert_eq!(last(cx), PageOp::Apply);
+    finish(cx, Err("The disk is full.".into()));
+    assert_eq!(toast(cx), "Page changes could not be saved");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.chrome.mode, Mode::Organize);
+        assert_eq!(reader.tabs.entries[0].page_changes, 2);
+    });
+
+    cx.simulate_keystrokes("escape");
+    assert_eq!(last(cx), PageOp::Cancel);
+    cx.read(|cx| assert_eq!(reader.read(cx).chrome.mode, Mode::Read));
+    finish(cx, Ok(3));
+    cx.read(|cx| {
+        let tab = &reader.read(cx).tabs.entries[0];
+        assert_eq!((tab.count, tab.page_changes), (3, 0));
+        assert!(tab.page_ops.is_empty());
+    });
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-o"));
+    select(cx, &[1]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.rotate_selected(3, cx)));
+    finish(cx, Err("unreadable".into()));
+    assert_eq!(toast(cx), "Pages could not be rotated");
+    cx.update(|_, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.insert_pages_from(PathBuf::from("/docs/more.pdf"), cx)
+        })
+    });
+    finish(cx, Ok(5));
+    cx.update(|window, cx| reader.update(cx, |reader, cx| reader.apply_page_changes(window, cx)));
+    assert_eq!(last(cx), PageOp::Apply);
+    finish(cx, Ok(5));
+    assert_eq!(toast(cx), "Pages saved");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.chrome.mode, Mode::Read);
+        assert_eq!(reader.tabs.entries[0].count, 5);
+        assert_eq!(reader.tabs.entries[0].page_changes, 0);
+    });
+
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.rotate_current_page(cx)));
+    cx.read(|cx| {
+        let queued = reader.read(cx).worker.queued_page_ops();
+        assert_eq!(
+            queued[queued.len() - 2..],
+            [
+                PageOp::Rotate {
+                    pages: vec![0],
+                    turns: 1
+                },
+                PageOp::Apply
+            ]
+        );
+    });
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);

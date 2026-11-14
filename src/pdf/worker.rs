@@ -1,7 +1,9 @@
 use super::{
-    Event, Job, SaveJob, SearchJob,
+    Event, Job, OrganizeJob, SaveJob, SearchJob,
     library::bind,
-    markup, render,
+    markup,
+    pages::{self, PageOp},
+    render,
     search::{self, MAX_HITS},
 };
 use anyhow::{Context, Result, bail};
@@ -25,6 +27,7 @@ struct Queue {
     pending: Mutex<Option<Job>>,
     search: Mutex<Option<SearchJob>>,
     saves: Mutex<VecDeque<SaveJob>>,
+    organizing: Mutex<VecDeque<OrganizeJob>>,
     closed: Mutex<Vec<u64>>,
     ready: Condvar,
     generation: AtomicU64,
@@ -38,6 +41,7 @@ impl Queue {
             pending: Mutex::new(None),
             search: Mutex::new(None),
             saves: Mutex::new(VecDeque::new()),
+            organizing: Mutex::new(VecDeque::new()),
             closed: Mutex::new(Vec::new()),
             ready: Condvar::new(),
             generation: AtomicU64::new(0),
@@ -106,6 +110,22 @@ impl Worker {
         self.0.ready.notify_one();
     }
 
+    pub fn organize(&self, job: OrganizeJob) {
+        let _pending = self.0.pending.lock();
+        self.0.organizing.lock().push_back(job);
+        self.0.ready.notify_one();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn queued_page_ops(&self) -> Vec<PageOp> {
+        self.0
+            .organizing
+            .lock()
+            .iter()
+            .map(|job| job.op.clone())
+            .collect()
+    }
+
     #[cfg(test)]
     pub(crate) fn queued_saves(&self) -> Vec<usize> {
         self.0
@@ -133,12 +153,58 @@ impl Drop for Worker {
 
 type Documents<'a> = VecDeque<(u64, PdfDocument<'a>)>;
 
+#[derive(Default)]
+struct Open<'a> {
+    cached: Documents<'a>,
+    edited: Documents<'a>,
+}
+
+impl<'a> Open<'a> {
+    fn forget(&mut self, session: u64) {
+        self.cached.retain(|(open, _)| *open != session);
+        self.edited.retain(|(open, _)| *open != session);
+    }
+
+    fn edit(
+        &mut self,
+        engine: &'a Pdfium,
+        session: u64,
+        path: &Path,
+    ) -> Result<&mut PdfDocument<'a>> {
+        if !self.edited.iter().any(|(open, _)| *open == session) {
+            let entry = match self.cached.iter().position(|(open, _)| *open == session) {
+                Some(index) => self.cached.remove(index),
+                None => None,
+            };
+            let entry = match entry {
+                Some(entry) => entry,
+                None => (
+                    session,
+                    engine.load_pdf_from_file(path, None).context(
+                        "Could not open this PDF. It may be damaged, password-protected, or inaccessible.",
+                    )?,
+                ),
+            };
+            self.edited.push_back(entry);
+        }
+        self.edited
+            .iter_mut()
+            .find(|(open, _)| *open == session)
+            .map(|(_, document)| document)
+            .context("No PDF document is open")
+    }
+}
+
 fn document<'a, 'b>(
     engine: &'a Pdfium,
-    documents: &'b mut Documents<'a>,
+    open: &'b mut Open<'a>,
     session: u64,
     path: &Path,
 ) -> Result<&'b PdfDocument<'a>> {
+    if let Some(index) = open.edited.iter().position(|(known, _)| *known == session) {
+        return Ok(&open.edited[index].1);
+    }
+    let documents = &mut open.cached;
     if let Some(index) = documents.iter().position(|(open, _)| *open == session) {
         if let Some(entry) = documents.remove(index) {
             documents.push_back(entry);
@@ -167,15 +233,16 @@ struct ActiveSearch {
 
 fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
     let engine = bind();
-    let mut documents = VecDeque::new();
+    let mut documents = Open::default();
     let mut active: Option<ActiveSearch> = None;
     loop {
-        let (job, closed, search, saves) = {
+        let (job, closed, search, saves, organizing) = {
             let mut pending = queue.pending.lock();
             while pending.is_none()
                 && active.is_none()
                 && queue.search.lock().is_none()
                 && queue.saves.lock().is_empty()
+                && queue.organizing.lock().is_empty()
                 && queue.closed.lock().is_empty()
                 && queue.running()
             {
@@ -186,9 +253,18 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
             }
             let closed = std::mem::take(&mut *queue.closed.lock());
             let saves = std::mem::take(&mut *queue.saves.lock());
-            (pending.take(), closed, queue.search.lock().take(), saves)
+            let organizing = std::mem::take(&mut *queue.organizing.lock());
+            (
+                pending.take(),
+                closed,
+                queue.search.lock().take(),
+                saves,
+                organizing,
+            )
         };
-        documents.retain(|(session, _)| !closed.contains(session));
+        for session in &closed {
+            documents.forget(*session);
+        }
         if let Some(job) = search {
             active = Some(ActiveSearch {
                 job,
@@ -211,6 +287,17 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
                     if sender
                         .send_blocking(Event::Saved {
                             session: save.session,
+                            result: Err(message.clone()),
+                        })
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+                for job in organizing {
+                    if sender
+                        .send_blocking(Event::Organized {
+                            session: job.session,
                             result: Err(message.clone()),
                         })
                         .is_err()
@@ -241,8 +328,21 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
                 continue;
             }
         };
+        for job in organizing {
+            let result =
+                organize(engine, &mut documents, &job).map_err(|error| format!("{error:#}"));
+            if sender
+                .send_blocking(Event::Organized {
+                    session: job.session,
+                    result,
+                })
+                .is_err()
+            {
+                return;
+            }
+        }
         for save in saves {
-            documents.retain(|(session, _)| *session != save.session);
+            documents.forget(save.session);
             let result =
                 markup::save(engine, &save.path, &save.edits).map_err(|error| format!("{error:#}"));
             if sender
@@ -298,6 +398,35 @@ fn run(queue: Arc<Queue>, sender: async_channel::Sender<Event>) {
     }
 }
 
+fn organize<'a>(engine: &'a Pdfium, open: &mut Open<'a>, job: &OrganizeJob) -> Result<usize> {
+    let session = job.session;
+    match &job.op {
+        PageOp::Cancel => open.edited.retain(|(known, _)| *known != session),
+        PageOp::Apply => {
+            let index = open
+                .edited
+                .iter()
+                .position(|(known, _)| *known == session)
+                .context("There are no page changes to apply.")?;
+            let staged = pages::write(&open.edited[index].1, &job.path)?;
+            open.forget(session);
+            staged.commit(&job.path)?;
+        }
+        PageOp::Extract { pages, to } => {
+            let document = document(engine, open, session, &job.path)?;
+            pages::extract(engine, document, pages, to)?;
+        }
+        PageOp::Rotate { pages, turns } => {
+            pages::rotate(open.edit(engine, session, &job.path)?, pages, *turns)?
+        }
+        PageOp::Delete { pages } => pages::delete(open.edit(engine, session, &job.path)?, pages)?,
+        PageOp::Insert { file } => {
+            pages::insert(engine, open.edit(engine, session, &job.path)?, file)?
+        }
+    }
+    Ok(document(engine, open, session, &job.path)?.pages().len() as usize)
+}
+
 fn render_view(document: &PdfDocument<'_>, view: &super::ViewKey) -> Result<super::Raster> {
     let page = document.pages().get(view.page as i32)?;
     let base_width = page.width().value * 96.0 / 72.0;
@@ -319,7 +448,7 @@ fn page_sizes(document: &PdfDocument<'_>) -> Result<Vec<(f32, f32)>> {
 
 fn render_job<'a>(
     engine: &'a Pdfium,
-    documents: &mut Documents<'a>,
+    documents: &mut Open<'a>,
     job: Job,
     current: &dyn Fn() -> bool,
     sender: &async_channel::Sender<Event>,
@@ -447,7 +576,7 @@ fn render_job<'a>(
 
 fn search_slice<'a>(
     engine: &'a Pdfium,
-    documents: &mut Documents<'a>,
+    documents: &mut Open<'a>,
     state: &mut ActiveSearch,
     current: &dyn Fn() -> bool,
     yielded: &dyn Fn() -> bool,
@@ -726,6 +855,139 @@ mod tests {
                 break;
             }
         }
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn page_changes_stay_in_memory_until_applied_and_cancel_discards_them() {
+        use crate::pdf::OrganizeJob;
+
+        let directory =
+            std::env::temp_dir().join(format!("agenticpdf-organize-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let path = directory.join("pages.pdf");
+        std::fs::copy(fixtures.join("reading.pdf"), &path).unwrap();
+        let original = std::fs::read(&path).unwrap();
+        let (worker, events) = Worker::start().unwrap();
+        let run = |op: PageOp| {
+            worker.organize(OrganizeJob {
+                session: 6,
+                path: path.clone(),
+                op,
+            });
+            loop {
+                if let Event::Organized { session, result } = next_event(&events) {
+                    assert_eq!(session, 6);
+                    return result;
+                }
+            }
+        };
+        let shape = |page: usize| {
+            let generation = worker.submit(Job {
+                generation: 0,
+                path: path.clone(),
+                view: ViewKey {
+                    session: 6,
+                    page,
+                    available_width: 400,
+                    zoom: None,
+                    scale: 100,
+                },
+                render_page: true,
+                extract_text: false,
+                thumbnails: vec![],
+                outline: false,
+                sizes: false,
+                nearby: vec![],
+                nearby_text: vec![],
+            });
+            loop {
+                match next_event(&events) {
+                    Event::Page {
+                        generation: page,
+                        raster,
+                        ..
+                    } if page == generation => return raster.width > raster.height,
+                    Event::Error { message, .. } => panic!("{message}"),
+                    _ => {}
+                }
+            }
+        };
+        assert!(!shape(0));
+        assert_eq!(
+            run(PageOp::Rotate {
+                pages: vec![0],
+                turns: 1
+            }),
+            Ok(3)
+        );
+        assert!(shape(0));
+        assert!(!shape(1));
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert_eq!(run(PageOp::Cancel), Ok(3));
+        assert!(!shape(0));
+
+        assert!(run(PageOp::Apply).is_err());
+        assert!(
+            run(PageOp::Delete {
+                pages: vec![0, 1, 2]
+            })
+            .is_err()
+        );
+        assert!(run(PageOp::Delete { pages: vec![7] }).is_err());
+        assert_eq!(run(PageOp::Cancel), Ok(3));
+
+        assert_eq!(run(PageOp::Delete { pages: vec![1] }), Ok(2));
+        assert_eq!(
+            run(PageOp::Insert {
+                file: fixtures.join("selection.pdf")
+            }),
+            Ok(5)
+        );
+        assert!(
+            run(PageOp::Insert {
+                file: fixtures.join("missing.pdf")
+            })
+            .is_err()
+        );
+        assert_eq!(
+            run(PageOp::Rotate {
+                pages: vec![4, 0],
+                turns: 3
+            }),
+            Ok(5)
+        );
+        let extracted = directory.join("extracted.pdf");
+        assert_eq!(
+            run(PageOp::Extract {
+                pages: vec![3, 0],
+                to: extracted.clone()
+            }),
+            Ok(5)
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert_eq!(run(PageOp::Apply), Ok(5));
+        assert_ne!(std::fs::read(&path).unwrap(), original);
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 2);
+        assert!(shape(0));
+        drop(worker);
+        let engine = bind().unwrap();
+        assert_eq!(
+            engine
+                .load_pdf_from_file(&path, None)
+                .unwrap()
+                .pages()
+                .len(),
+            5
+        );
+        let pulled = engine.load_pdf_from_file(&extracted, None).unwrap();
+        assert_eq!(pulled.pages().len(), 2);
+        let first = pulled.pages().get(0).unwrap();
+        assert!(first.width().value > first.height().value);
+        drop(pulled);
         std::fs::remove_dir_all(&directory).unwrap();
     }
 

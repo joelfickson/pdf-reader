@@ -150,6 +150,9 @@ impl Reader {
         } else if self.chrome.find_open {
             self.close_find(cx);
         } else if self.chrome.mode != Mode::Read {
+            if self.chrome.mode == Mode::Organize {
+                self.cancel_page_changes(cx);
+            }
             self.chrome.mode = Mode::Read;
             self.request(window);
         } else if self.has_selection() {
