@@ -1223,6 +1223,109 @@ fn organize_queues_page_changes_and_applies_or_discards_them(cx: &mut TestAppCon
     });
 }
 
+#[gpui::test]
+fn view_modes_switch_layout_colour_presentation_and_magnifier(cx: &mut TestAppContext) {
+    use crate::preferences::{NightPages, PageColour};
+    use chrome::Layout;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 4);
+            reader.focus.focus(window);
+            assert_eq!(reader.chrome.page_colour, PageColour::Original);
+            let cached = reader.image.is_some();
+            assert!(cached);
+
+            reader.set_page_colour(PageColour::Sepia, window, cx);
+            assert!(reader.image.is_none());
+            assert!(reader.last_request.is_some());
+            reader.update_preferences(|preferences| preferences.night = NightPages::Always, cx);
+            reader.apply_night_setting(window, cx);
+            assert_eq!(reader.chrome.page_colour, PageColour::Night);
+            reader.update_preferences(|preferences| preferences.night = NightPages::Never, cx);
+            reader.apply_night_setting(window, cx);
+            assert_eq!(reader.chrome.page_colour, PageColour::Original);
+            reader.set_page_colour(PageColour::Sepia, window, cx);
+            reader.apply_night_setting(window, cx);
+            assert_eq!(reader.chrome.page_colour, PageColour::Sepia);
+
+            reader.receive(
+                Event::Metadata {
+                    generation: reader.generation,
+                    count: 4,
+                    sizes: Some(Arc::new(vec![(612.0, 792.0); 4])),
+                },
+                window,
+                cx,
+            );
+            reader.set_layout(Layout::TwoPages, window, cx);
+            assert_eq!(reader.preferences.layout, Layout::TwoPages);
+            let column = reader.column(window).unwrap();
+            assert_eq!(column.tops[0], column.tops[1]);
+            assert!(column.lefts[1] > column.lefts[0]);
+            reader.set_layout(Layout::CoverFirst, window, cx);
+            let column = reader.column(window).unwrap();
+            assert!(column.tops[1] > column.tops[0]);
+            assert_eq!(column.tops[1], column.tops[2]);
+            reader.set_layout(Layout::Continuous, window, cx);
+            reader.tabs.current_mut().unwrap().zoom = Some(125);
+            reader.sidebar = true;
+        })
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-p"));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, _| {
+            assert!(reader.presenting.is_some());
+            assert!(window.is_fullscreen());
+            assert_eq!(reader.chrome.layout, Layout::Single);
+            assert!(!reader.sidebar);
+            assert_eq!(reader.preferences.layout, Layout::Continuous);
+        })
+    });
+    cx.simulate_keystrokes("right");
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.current().unwrap().page, 1));
+    cx.simulate_keystrokes(&format!("{modifier}-shift-m"));
+    cx.read(|cx| assert!(!reader.read(cx).chrome.magnifier));
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, _| {
+            assert!(reader.presenting.is_none());
+            assert!(!window.is_fullscreen());
+            assert_eq!(reader.chrome.layout, Layout::Continuous);
+            assert!(reader.sidebar);
+            assert_eq!(reader.tabs.current().unwrap().zoom, Some(125));
+            assert_eq!(reader.tabs.current().unwrap().page, 1);
+        })
+    });
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-m"));
+    cx.simulate_mouse_move(point(px(500.0), px(300.0)), None, Default::default());
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.chrome.magnifier);
+        assert_eq!(reader.pointer, Some(point(px(500.0), px(300.0))));
+    });
+    cx.simulate_keystrokes("escape");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(!reader.chrome.magnifier);
+        assert!(reader.pointer.is_none());
+    });
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);
@@ -1292,6 +1395,17 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
             r.signing.strokes = vec![vec![[40.0, 90.0], [120.0, 50.0], [220.0, 96.0]]];
             r.place_signature(cx);
             assert!(r.placing_signature().is_some());
+        }),
+        ("night pages", |r, w, cx| {
+            r.set_page_colour(crate::preferences::PageColour::Night, w, cx)
+        }),
+        ("magnifier", |r, _, cx| {
+            r.toggle_magnifier(cx);
+            assert!(r.chrome.magnifier);
+        }),
+        ("presentation", |r, w, cx| {
+            r.toggle_presentation(w, cx);
+            assert!(r.presenting.is_some());
         }),
         ("bookmarks", |r, _, cx| {
             let path = r.tabs.current().unwrap().path.clone();
@@ -1429,6 +1543,9 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
         for (name, setup) in &screens {
             cx.update(|window, cx| {
                 reader.update(cx, |r, cx| {
+                    if r.presenting.is_some() {
+                        r.toggle_presentation(window, cx);
+                    }
                     while !r.tabs.entries.is_empty() {
                         r.close_tab_now(0, window, cx);
                     }

@@ -57,7 +57,9 @@ impl Reader {
                 .child("Opening page")
                 .into_any_element()
         };
+        let presenting = self.presenting.is_some();
         clickable("document-canvas")
+            .when(presenting, |canvas| canvas.bg(gpui::black()))
             .flex_1()
             .min_w_0()
             .h_full()
@@ -75,11 +77,12 @@ impl Reader {
                 div()
                     .min_w_full()
                     .min_h_full()
-                    .pt(px(28.0))
+                    .pt(px(if presenting { 24.0 } else { 28.0 }))
                     .px(px(CANVAS_PADDING))
-                    .pb(px(96.0))
+                    .pb(px(if presenting { 24.0 } else { 96.0 }))
                     .flex()
-                    .items_start()
+                    .when(presenting, |stage| stage.items_center())
+                    .when(!presenting, |stage| stage.items_start())
                     .child(div().mx_auto().flex_shrink_0().child(content)),
             )
     }
@@ -125,7 +128,7 @@ impl Reader {
                 div()
                     .absolute()
                     .top(px(column.tops[page]))
-                    .left(px((column.width - width) / 2.0))
+                    .left(px(column.lefts[page]))
                     .w(px(width))
                     .h(px(height))
                     .child(content.unwrap_or_else(|| {

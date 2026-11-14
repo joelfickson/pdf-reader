@@ -1,7 +1,7 @@
 use super::super::{
     Reader,
     actions::*,
-    chrome::{Input, Layout, Mode, Overlay, Panel, Tool},
+    chrome::{Input, Layout, Mode, Overlay, PageColour, Panel, Tool},
     commands::modifier,
 };
 use crate::pdf::markup::MarkupKind;
@@ -126,6 +126,43 @@ impl Reader {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
+        if self.presenting.is_some() {
+            let theme = self.chrome.theme;
+            let (page, count) = self
+                .tabs
+                .current()
+                .map_or((0, 0), |tab| (tab.page + 1, tab.count));
+            let keys = |keys: &[&'static str], text: &'static str| {
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .children(keys.iter().map(|key| kbd(&theme, *key)))
+                    .child(text)
+            };
+            return vec![
+                layer_bottom_center(
+                    14.0,
+                    floating(&theme)
+                        .id("presentation-hint")
+                        .px(px(12.0))
+                        .py(px(6.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(16.0))
+                        .text_size(px(12.0))
+                        .text_color(theme.muted)
+                        .child(
+                            div()
+                                .font_family(Theme::mono_font())
+                                .child(format!("{page} / {count}")),
+                        )
+                        .child(keys(&["Left", "Right"], "pages"))
+                        .child(keys(&["Esc"], "exit")),
+                )
+                .into_any_element(),
+            ];
+        }
         let mut layers = Vec::new();
         let has_document = self.has_document();
         let reading = has_document && self.chrome.mode != Mode::Organize;
@@ -429,6 +466,15 @@ impl Reader {
                 },
             ))
         };
+        let colour = self.chrome.page_colour;
+        let colour_item = |id: &'static str, text: &'static str, choice: PageColour| {
+            menu_item(id, text, colour == choice, None, &theme).on_click(cx.listener(
+                move |this, _, window, cx| {
+                    this.chrome.overlay = Overlay::None;
+                    this.set_page_colour(choice, window, cx);
+                },
+            ))
+        };
         floating(&theme)
             .id("view-menu")
             .occlude()
@@ -439,13 +485,11 @@ impl Reader {
             .child(label(&theme, "Layout").px(px(8.0)).pt(px(6.0)).pb(px(4.0)))
             .child(layout_item("single", "Single page", Layout::Single))
             .child(layout_item("continuous", "Continuous", Layout::Continuous))
-            .child(item("two-pages", "Two pages", false, None, "Two-page view"))
-            .child(item(
+            .child(layout_item("two-pages", "Two pages", Layout::TwoPages))
+            .child(layout_item(
                 "cover",
                 "Two pages, cover first",
-                false,
-                None,
-                "Two-page view",
+                Layout::CoverFirst,
             ))
             .child(item(
                 "split",
@@ -461,24 +505,36 @@ impl Reader {
                     .pt(px(6.0))
                     .pb(px(4.0)),
             )
-            .child(item("original", "Original", true, None, ""))
-            .child(item("night", "Night", false, None, "Night pages"))
-            .child(item("sepia", "Sepia", false, None, "Sepia pages"))
+            .child(colour_item("original", "Original", PageColour::Original))
+            .child(colour_item("night", "Night", PageColour::Night))
+            .child(colour_item("sepia", "Sepia", PageColour::Sepia))
             .child(div().h(px(1.0)).my(px(6.0)).mx(px(4.0)).bg(theme.hairline))
-            .child(item(
-                "magnifier",
-                "Magnifier",
-                false,
-                Some(format!("{m} Shift M")),
-                "The magnifier",
-            ))
-            .child(item(
-                "present",
-                "Presentation",
-                false,
-                Some(format!("{m} Shift P")),
-                "Presentation mode",
-            ))
+            .child(
+                menu_item(
+                    "magnifier",
+                    "Magnifier",
+                    self.chrome.magnifier,
+                    Some(format!("{m} Shift M")),
+                    &theme,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.chrome.overlay = Overlay::None;
+                    this.toggle_magnifier(cx);
+                })),
+            )
+            .child(
+                menu_item(
+                    "present",
+                    "Presentation",
+                    false,
+                    Some(format!("{m} Shift P")),
+                    &theme,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.chrome.overlay = Overlay::None;
+                    this.toggle_presentation(window, cx);
+                })),
+            )
     }
 
     fn find_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {

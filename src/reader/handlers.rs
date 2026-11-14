@@ -122,6 +122,15 @@ impl Reader {
         self.run_command(Command::Presentation, window, cx);
     }
 
+    pub(super) fn magnifier(
+        &mut self,
+        _: &ToggleMagnifier,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.run_command(Command::Magnifier, window, cx);
+    }
+
     pub(super) fn first_page(
         &mut self,
         _: &FirstPage,
@@ -141,6 +150,14 @@ impl Reader {
 
     pub(super) fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<Self>) {
         if self.chrome.overlay == Overlay::None && self.cancel_placement(cx) {
+            return;
+        }
+        if self.chrome.overlay == Overlay::None && self.presenting.is_some() {
+            self.toggle_presentation(window, cx);
+            return;
+        }
+        if self.chrome.overlay == Overlay::None && self.chrome.magnifier {
+            self.toggle_magnifier(cx);
             return;
         }
         if self.chrome.overlay != Overlay::None {

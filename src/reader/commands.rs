@@ -189,6 +189,7 @@ impl Command {
             Self::ZoomOut => format!("{m} -"),
             Self::FitWidth => format!("{m} 0"),
             Self::SplitView => format!("{m} \\"),
+            Self::Magnifier => format!("{m} Shift M"),
             Self::Presentation => format!("{m} Shift P"),
             Self::Open => format!("{m} O"),
             Self::Export => format!("{m} E"),
@@ -338,11 +339,25 @@ impl Reader {
                 self.mark_selection(MarkupKind::Highlight, self.chrome.marker, cx)
             }
             Command::RotatePage => self.rotate_current_page(cx),
-            Command::TwoPages => self.unavailable("Two-page view", cx),
+            Command::TwoPages => {
+                let layout = if self.chrome.layout == super::chrome::Layout::TwoPages {
+                    super::chrome::Layout::Continuous
+                } else {
+                    super::chrome::Layout::TwoPages
+                };
+                self.set_layout(layout, window, cx)
+            }
             Command::SplitView => self.unavailable("Split view", cx),
-            Command::NightPages => self.unavailable("Night pages", cx),
-            Command::Magnifier => self.unavailable("The magnifier", cx),
-            Command::Presentation => self.unavailable("Presentation mode", cx),
+            Command::NightPages => {
+                let colour = if self.chrome.page_colour == super::chrome::PageColour::Night {
+                    super::chrome::PageColour::Original
+                } else {
+                    super::chrome::PageColour::Night
+                };
+                self.set_page_colour(colour, window, cx)
+            }
+            Command::Magnifier => self.toggle_magnifier(cx),
+            Command::Presentation => self.toggle_presentation(window, cx),
             Command::Save if self.chrome.mode == Mode::Organize => {
                 self.apply_page_changes(window, cx)
             }

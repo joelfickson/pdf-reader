@@ -154,6 +154,10 @@ impl Reader {
                 self.notice = None;
             }
         }
+        if self.tabs.current().is_none() && self.presenting.is_some() {
+            self.toggle_presentation(window, cx);
+        }
+        self.chrome.magnifier &= self.tabs.current().is_some();
         self.persist_recent(cx);
         cx.notify();
     }

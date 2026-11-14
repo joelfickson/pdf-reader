@@ -21,12 +21,45 @@ pub(crate) enum DefaultZoom {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PageLayout {
+    Single,
+    Continuous,
+    TwoPages,
+    CoverFirst,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NightPages {
+    Never,
+    FollowTheme,
+    Always,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PageColour {
+    Original,
+    Night,
+    Sepia,
+}
+
+impl NightPages {
+    pub fn colour(self, dark_theme: bool) -> PageColour {
+        match self {
+            Self::Always => PageColour::Night,
+            Self::FollowTheme if dark_theme => PageColour::Night,
+            _ => PageColour::Original,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Preferences {
     pub reopen_tabs: bool,
     pub last_page: bool,
     pub default_zoom: DefaultZoom,
     pub autosave: bool,
-    pub continuous: bool,
+    pub layout: PageLayout,
+    pub night: NightPages,
     pub theme: ThemeChoice,
 }
 
@@ -37,7 +70,8 @@ impl Default for Preferences {
             last_page: true,
             default_zoom: DefaultZoom::FitWidth,
             autosave: false,
-            continuous: true,
+            layout: PageLayout::Continuous,
+            night: NightPages::Never,
             theme: ThemeChoice::System,
         }
     }
@@ -88,8 +122,22 @@ impl Preferences {
                     preferences.last_page = switch(value).unwrap_or(preferences.last_page)
                 }
                 "autosave" => preferences.autosave = switch(value).unwrap_or(preferences.autosave),
-                "continuous" => {
-                    preferences.continuous = switch(value).unwrap_or(preferences.continuous)
+                "layout" => {
+                    preferences.layout = match value {
+                        "single" => PageLayout::Single,
+                        "continuous" => PageLayout::Continuous,
+                        "two_pages" => PageLayout::TwoPages,
+                        "cover_first" => PageLayout::CoverFirst,
+                        _ => preferences.layout,
+                    }
+                }
+                "night" => {
+                    preferences.night = match value {
+                        "never" => NightPages::Never,
+                        "follow_theme" => NightPages::FollowTheme,
+                        "always" => NightPages::Always,
+                        _ => preferences.night,
+                    }
                 }
                 "default_zoom" => {
                     preferences.default_zoom = match value {
@@ -116,11 +164,21 @@ impl Preferences {
     fn serialize(self) -> String {
         let switch = |on: bool| if on { "on" } else { "off" };
         format!(
-            "reopen_tabs={}\nlast_page={}\nautosave={}\ncontinuous={}\ndefault_zoom={}\ntheme={}\n",
+            "reopen_tabs={}\nlast_page={}\nautosave={}\nlayout={}\nnight={}\ndefault_zoom={}\ntheme={}\n",
             switch(self.reopen_tabs),
             switch(self.last_page),
             switch(self.autosave),
-            switch(self.continuous),
+            match self.layout {
+                PageLayout::Single => "single",
+                PageLayout::Continuous => "continuous",
+                PageLayout::TwoPages => "two_pages",
+                PageLayout::CoverFirst => "cover_first",
+            },
+            match self.night {
+                NightPages::Never => "never",
+                NightPages::FollowTheme => "follow_theme",
+                NightPages::Always => "always",
+            },
             match self.default_zoom {
                 DefaultZoom::FitWidth => "fit_width",
                 DefaultZoom::FitPage => "fit_page",
@@ -366,7 +424,8 @@ mod tests {
             last_page: false,
             default_zoom: DefaultZoom::FitPage,
             autosave: true,
-            continuous: false,
+            layout: PageLayout::CoverFirst,
+            night: NightPages::FollowTheme,
             theme: ThemeChoice::Dark,
         };
         chosen.save(Some(&directory)).unwrap();
@@ -381,6 +440,14 @@ mod tests {
         assert_eq!(Preferences::load(None).unwrap(), Preferences::default());
         chosen.save(None).unwrap();
         fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn night_pages_follow_the_setting_and_the_theme() {
+        assert_eq!(NightPages::Never.colour(true), PageColour::Original);
+        assert_eq!(NightPages::FollowTheme.colour(true), PageColour::Night);
+        assert_eq!(NightPages::FollowTheme.colour(false), PageColour::Original);
+        assert_eq!(NightPages::Always.colour(false), PageColour::Night);
     }
 
     #[test]

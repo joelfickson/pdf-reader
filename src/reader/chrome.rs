@@ -92,14 +92,12 @@ pub(super) struct Toast {
     pub message: SharedString,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum Layout {
-    Single,
-    Continuous,
-}
+pub(super) use crate::preferences::{PageColour, PageLayout as Layout};
 
 pub(super) struct Chrome {
     pub layout: Layout,
+    pub page_colour: PageColour,
+    pub magnifier: bool,
     pub overlay: Overlay,
     pub mode: Mode,
     pub panel: Panel,
@@ -137,6 +135,8 @@ impl Chrome {
     pub fn new(theme: Theme) -> Self {
         Self {
             layout: Layout::Continuous,
+            page_colour: PageColour::Original,
+            magnifier: false,
             overlay: Overlay::None,
             mode: Mode::Read,
             panel: Panel::Pages,
@@ -239,6 +239,36 @@ impl Reader {
         }
         self.request(window);
         self.update_preferences(|_| {}, cx);
+    }
+
+    pub(super) fn set_page_colour(
+        &mut self,
+        colour: PageColour,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.chrome.page_colour == colour {
+            return;
+        }
+        self.chrome.page_colour = colour;
+        if let Some(tab) = self.tabs.current_mut()
+            && tab.restore_scroll.is_none()
+        {
+            tab.restore_scroll = Some(tab.scroll.offset());
+        }
+        self.reset_request(window);
+        for image in self.pages.remove_where(|_| true) {
+            image.release(window);
+        }
+        self.request(window);
+        cx.notify();
+    }
+
+    pub(super) fn apply_night_setting(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let colour = self.preferences.night.colour(self.chrome.theme.dark);
+        if self.chrome.page_colour != PageColour::Sepia || colour == PageColour::Night {
+            self.set_page_colour(colour, window, cx);
+        }
     }
 
     pub(super) fn set_inspector(
@@ -360,5 +390,6 @@ impl Reader {
         self.chrome.theme_choice = choice;
         self.chrome.theme = Theme::resolve(choice, window.appearance());
         self.update_preferences(|_| {}, cx);
+        self.apply_night_setting(window, cx);
     }
 }

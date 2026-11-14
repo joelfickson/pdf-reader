@@ -88,6 +88,7 @@ impl Reader {
 impl Render for Reader {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.drive_scroll_probe(window, cx);
+        self.fit_presentation(window);
         self.request(window);
         let theme = self.chrome.theme;
         let sidebar = self
@@ -161,6 +162,7 @@ impl Render for Reader {
             .on_action(cx.listener(Self::bookmark))
             .on_action(cx.listener(Self::toggle_split))
             .on_action(cx.listener(Self::toggle_present))
+            .on_action(cx.listener(Self::magnifier))
             .on_key_down(cx.listener(Self::key_down))
             .on_drop(
                 cx.listener(|this, paths: &gpui::ExternalPaths, window, cx| {
@@ -169,6 +171,10 @@ impl Render for Reader {
             )
             .on_mouse_move(
                 cx.listener(|this, event: &gpui::MouseMoveEvent, window, cx| {
+                    if this.chrome.magnifier {
+                        this.pointer = Some(event.position);
+                        cx.notify();
+                    }
                     if event.pressed_button != Some(gpui::MouseButton::Left) {
                         return;
                     }
@@ -193,7 +199,7 @@ impl Render for Reader {
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, _, cx| this.finish_drag(cx)),
             )
-            .child(titlebar)
+            .when(self.presenting.is_none(), |root| root.child(titlebar))
             .child(
                 div()
                     .relative()
