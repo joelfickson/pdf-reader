@@ -30,11 +30,13 @@ impl Reader {
         let current = self.tabs.current().is_some_and(|tab| tab.page == page);
         let mut rects = Vec::new();
         let mut links = Vec::new();
+        let live = self.live_sketch(page);
         let placing = self
             .placing_signature()
             .filter(|signature| signature.page == page)
             .map(|signature| signature.bounds);
         let mut signatures = Vec::new();
+        let mut stamps = Vec::new();
         for edit in self.tabs.current().map_or(&[][..], |tab| tab.unsaved()) {
             let markup = match edit {
                 Edit::Markup(markup) => markup,
@@ -44,7 +46,14 @@ impl Reader {
                             signature.bounds,
                             gpui::Hsla::from(gpui::rgb(signature.color)),
                             signature.strokes.clone(),
+                            signature.weight,
                         ));
+                    }
+                    continue;
+                }
+                Edit::Stamp(stamp) => {
+                    if stamp.page == page {
+                        stamps.push(stamp.clone());
                     }
                     continue;
                 }
@@ -85,6 +94,14 @@ impl Reader {
                 let range = selection.on_page(page, text.glyphs.len());
                 rects.extend(glyphs(range).map(|rect| (rect, theme.select)));
             }
+        }
+        if let Some(live) = live {
+            signatures.push((
+                live.bounds,
+                gpui::Hsla::from(gpui::rgb(live.color)),
+                live.strokes.clone(),
+                live.weight,
+            ));
         }
         let loupe = self
             .pointer
@@ -150,7 +167,9 @@ impl Reader {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &gpui::MouseDownEvent, window, cx| {
-                    if this.placement_press(page, event.position, pressed_bounds.get(), cx) {
+                    if this.placement_press(page, event.position, pressed_bounds.get(), cx)
+                        || this.sketch_press(page, event.position, pressed_bounds.get(), cx)
+                    {
                         this.focus.focus(window);
                         cx.stop_propagation();
                         return;
@@ -186,6 +205,28 @@ impl Reader {
                 }),
             )
             .child(img(image.image.clone()).size_full().rounded(px(2.0)))
+            .children(stamps.into_iter().map(|stamp| {
+                let color: gpui::Hsla = gpui::rgb(stamp.color).into();
+                let bounds = stamp.bounds;
+                let height = image.height * (bounds.bottom - bounds.top);
+                div()
+                    .absolute()
+                    .left(px(image.width * bounds.left))
+                    .top(px(image.height * bounds.top))
+                    .w(px(image.width * (bounds.right - bounds.left)))
+                    .h(px(height))
+                    .border_color(color)
+                    .border(px((height * 0.06).max(1.0)))
+                    .rounded(px(3.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .overflow_hidden()
+                    .text_color(color)
+                    .text_size(px(height * 0.46))
+                    .font_weight(gpui::FontWeight::EXTRA_BOLD)
+                    .child(stamp.label)
+            }))
             .children(loupe)
             .child(
                 canvas(
@@ -203,9 +244,13 @@ impl Reader {
                         for (rect, color) in rects {
                             window.paint_quad(gpui::fill(place(bounds, &rect), color));
                         }
-                        for (rect, color, strokes) in &signatures {
+                        for (rect, color, strokes, weight) in &signatures {
                             let frame = place(bounds, rect);
-                            let weight = (frame.size.width * STROKE_WEIGHT).max(px(0.75));
+                            let weight = match weight {
+                                Some(weight) => bounds.size.width * *weight,
+                                None => frame.size.width * STROKE_WEIGHT,
+                            }
+                            .max(px(0.75));
                             paint_strokes(
                                 window,
                                 strokes,

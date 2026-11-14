@@ -652,7 +652,9 @@ impl Reader {
                 if value == Tool::Stamp {
                     this.chrome.tool = value;
                     this.set_overlay(Overlay::Stamps, cx);
-                } else if value == Tool::Select || value.markup().is_some() {
+                } else if matches!(value, Tool::Select | Tool::Draw | Tool::Shape)
+                    || value.markup().is_some()
+                {
                     this.chrome.overlay = Overlay::None;
                     this.choose_tool(value, cx);
                 } else {
@@ -758,8 +760,8 @@ impl Reader {
                     .flex()
                     .flex_wrap()
                     .gap(px(4.0))
-                    .children(stamps.into_iter().map(|(text, color)| {
-                        let color: Hsla = gpui::rgb(color).into();
+                    .children(stamps.into_iter().map(|(text, stamp_colour)| {
+                        let color: Hsla = gpui::rgb(stamp_colour).into();
                         let accent = theme.accent;
                         clickable(text)
                             .w(px(118.0))
@@ -773,9 +775,13 @@ impl Reader {
                             .border_color(gpui::white())
                             .cursor_pointer()
                             .hover(move |style| style.border_color(accent))
-                            .on_click(cx.listener(|this, _, _, cx| {
+                            .on_click(cx.listener(move |this, _, _, cx| {
                                 this.chrome.overlay = Overlay::None;
-                                this.unavailable("Adding stamps", cx)
+                                if text == "CUSTOM" {
+                                    this.unavailable("Custom stamps", cx)
+                                } else {
+                                    this.place_stamp(text, stamp_colour, cx)
+                                }
                             }))
                             .child(
                                 div()
@@ -866,7 +872,7 @@ impl Reader {
             )
             .child(
                 icon_button("quick-lookup", Icon::Lookup, &theme, Tone::Plain, true)
-                    .on_click(cx.listener(|this, _, _, cx| this.unavailable("Look up", cx))),
+                    .on_click(cx.listener(|this, _, _, cx| this.look_up(cx))),
             )
             .child(separator(&theme))
             .child(

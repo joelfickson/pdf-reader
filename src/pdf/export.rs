@@ -119,7 +119,7 @@ pub(super) fn combine(engine: &Pdfium, files: &[PathBuf], to: &Path) -> Result<V
 
 impl<'a> Active<'a> {
     pub(super) fn start(engine: &'a Pdfium, id: u64, export: Export) -> Result<Self> {
-        let document = engine
+        let mut document = engine
             .load_pdf_from_file(&export.source, None)
             .context("The PDF could not be opened for export.")?;
         let count = document.pages().len() as usize;
@@ -132,7 +132,7 @@ impl<'a> Active<'a> {
             bail!("This PDF has no pages to export.");
         }
         if export.marks {
-            markup::apply(&document, &export.edits)?;
+            markup::apply(&mut document, &export.edits)?;
         } else if matches!(export.format, Format::Pdf | Format::Flattened) {
             strip_marks(&document)?;
         }

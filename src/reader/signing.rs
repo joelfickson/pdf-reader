@@ -1,6 +1,6 @@
 use super::{Reader, chrome::Overlay};
 use crate::pdf::{
-    markup::{Edit, Signature},
+    markup::{Edit, Signature, SketchKind, Stamp},
     text::TextRect,
 };
 use crate::ui::kit::Status;
@@ -15,6 +15,8 @@ const MIN_INK_EXTENT: f32 = 12.0;
 const PLACED_WIDTH: f32 = 0.32;
 const PLACED_MAX_HEIGHT: f32 = 0.25;
 const MIN_PLACED_WIDTH: f32 = 0.04;
+const STAMP_WIDTH: f32 = 0.24;
+const STAMP_SHAPE: f32 = 3.2;
 const HANDLE_REACH: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,6 +30,12 @@ pub(super) struct Placing {
     pub session: u64,
     pub index: usize,
     pub drag: Option<Drag>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Placed {
+    pub page: usize,
+    pub bounds: TextRect,
 }
 
 #[derive(Default)]
@@ -191,15 +199,69 @@ impl Reader {
             && placing.index + 1 == tab.edits.len()
             && placing.index >= tab.saved
             && !tab.saving
-            && matches!(tab.edits.last(), Some(Edit::Signature(_))))
+            && tab
+                .edits
+                .last()
+                .is_some_and(|edit| edit.placement().is_some()))
         .then_some(placing)
     }
 
-    pub(super) fn placing_signature(&self) -> Option<&Signature> {
+    pub(super) fn placing_signature(&self) -> Option<Placed> {
         self.placing()?;
-        match self.tabs.current()?.edits.last()? {
-            Edit::Signature(signature) => Some(signature),
-            Edit::Markup(_) => None,
+        let (page, bounds) = self.tabs.current()?.edits.last()?.placement()?;
+        Some(Placed { page, bounds })
+    }
+
+    fn begin_placing(&mut self, edit: Edit, cx: &mut Context<Self>) -> bool {
+        if !self.can_edit(cx) {
+            return false;
+        }
+        self.finish_placement(cx);
+        let Some(tab) = self.tabs.current_mut() else {
+            return false;
+        };
+        tab.edits.push(edit);
+        tab.undone.clear();
+        self.signing.placing = Some(Placing {
+            session: tab.session,
+            index: tab.edits.len() - 1,
+            drag: None,
+        });
+        self.selection = None;
+        self.chrome.overlay = Overlay::None;
+        true
+    }
+
+    pub(super) fn place_stamp(&mut self, label: &str, color: u32, cx: &mut Context<Self>) {
+        let Some(page) = self.tabs.current().map(|tab| tab.page) else {
+            return;
+        };
+        let (page_shape, center) = self.placement_center(page);
+        let width = STAMP_WIDTH;
+        let height = (width * page_shape / STAMP_SHAPE).min(PLACED_MAX_HEIGHT);
+        let left = (1.0 - width) / 2.0;
+        let top = (center - height / 2.0).clamp(0.0, 1.0 - height);
+        let placed = self.begin_placing(
+            Edit::Stamp(Stamp {
+                page,
+                bounds: TextRect {
+                    left,
+                    top,
+                    right: left + width,
+                    bottom: top + height,
+                },
+                color,
+                label: label.to_string(),
+            }),
+            cx,
+        );
+        if placed {
+            self.show_toast(
+                Status::Info,
+                &format!("Stamp added to page {}", page + 1),
+                "Drag it into place or drag a corner to resize it. Press Enter when it is right.",
+                cx,
+            );
         }
     }
 
@@ -275,6 +337,8 @@ impl Reader {
             },
             color,
             strokes: Arc::new(strokes),
+            kind: SketchKind::Signature,
+            weight: None,
         }));
         tab.undone.clear();
         self.signing.placing = Some(Placing {
@@ -365,10 +429,8 @@ impl Reader {
             Drag::Move { grab } => moved(signature.bounds, grab, x, y),
             Drag::Resize { anchor, toward } => resized(signature.bounds, anchor, toward, x),
         };
-        if let Some(Edit::Signature(signature)) =
-            self.tabs.current_mut().and_then(|tab| tab.edits.last_mut())
-        {
-            signature.bounds = bounds;
+        if let Some(edit) = self.tabs.current_mut().and_then(|tab| tab.edits.last_mut()) {
+            edit.place(bounds);
             cx.notify();
         }
     }
@@ -377,6 +439,7 @@ impl Reader {
         if std::mem::take(&mut self.signing.drawing) {
             cx.notify();
         }
+        self.sketch_release(cx);
         if let Some(placing) = self.signing.placing.as_mut()
             && placing.drag.take().is_some()
         {

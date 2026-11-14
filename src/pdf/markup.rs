@@ -9,6 +9,10 @@ use std::{
 
 pub(crate) const STROKE_WEIGHT: f32 = 0.009;
 const MIN_STROKE_POINTS: f32 = 0.4;
+const STAMP_BORDER: f32 = 0.06;
+const STAMP_TEXT: f32 = 0.46;
+const STAMP_TEXT_ROOM: f32 = 0.84;
+const STAMP_CAP_HEIGHT: f32 = 0.72;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MarkupKind {
@@ -56,18 +60,36 @@ impl Markup {
 
 pub(crate) type Strokes = Arc<Vec<Vec<[f32; 2]>>>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SketchKind {
+    Signature,
+    Ink,
+    Rectangle,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Signature {
     pub page: usize,
     pub bounds: TextRect,
     pub color: u32,
     pub strokes: Strokes,
+    pub kind: SketchKind,
+    pub weight: Option<f32>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Stamp {
+    pub page: usize,
+    pub bounds: TextRect,
+    pub color: u32,
+    pub label: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Edit {
     Markup(Markup),
     Signature(Signature),
+    Stamp(Stamp),
 }
 
 impl Edit {
@@ -75,6 +97,7 @@ impl Edit {
         match self {
             Self::Markup(markup) => markup.first_page(),
             Self::Signature(signature) => signature.page,
+            Self::Stamp(stamp) => stamp.page,
         }
     }
 
@@ -82,20 +105,49 @@ impl Edit {
         match self {
             Self::Markup(markup) => markup.color,
             Self::Signature(signature) => signature.color,
+            Self::Stamp(stamp) => stamp.color,
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
             Self::Markup(markup) => markup.kind.label(),
-            Self::Signature(_) => "Signature",
+            Self::Signature(signature) => match signature.kind {
+                SketchKind::Signature => "Signature",
+                SketchKind::Ink => "Ink",
+                SketchKind::Rectangle => "Shape",
+            },
+            Self::Stamp(_) => "Stamp",
+        }
+    }
+
+    pub fn placement(&self) -> Option<(usize, TextRect)> {
+        match self {
+            Self::Signature(signature) if signature.kind == SketchKind::Signature => {
+                Some((signature.page, signature.bounds))
+            }
+            Self::Stamp(stamp) => Some((stamp.page, stamp.bounds)),
+            _ => None,
+        }
+    }
+
+    pub fn place(&mut self, bounds: TextRect) {
+        match self {
+            Self::Signature(signature) => signature.bounds = bounds,
+            Self::Stamp(stamp) => stamp.bounds = bounds,
+            Self::Markup(_) => {}
         }
     }
 
     pub fn summary(&self) -> &str {
         match self {
             Self::Markup(markup) => &markup.quote,
-            Self::Signature(_) => "Drawn signature, image only",
+            Self::Signature(signature) => match signature.kind {
+                SketchKind::Signature => "Drawn signature, image only",
+                SketchKind::Ink => "Freehand drawing",
+                SketchKind::Rectangle => "Rectangle",
+            },
+            Self::Stamp(stamp) => &stamp.label,
         }
     }
 }
@@ -214,7 +266,8 @@ fn sign(document: &PdfDocument<'_>, signature: &Signature) -> Result<()> {
             signature.page + 1
         )
     })?;
-    let weight = (page.width().value * width * STROKE_WEIGHT).max(MIN_STROKE_POINTS);
+    let weight = (page.width().value * signature.weight.unwrap_or(width * STROKE_WEIGHT))
+        .max(MIN_STROKE_POINTS);
     let color = PdfColor::new(
         (signature.color >> 16) as u8,
         (signature.color >> 8) as u8,
@@ -274,12 +327,84 @@ fn sign(document: &PdfDocument<'_>, signature: &Signature) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn apply(document: &PdfDocument<'_>, edits: &[Edit]) -> Result<()> {
+fn stamp(document: &mut PdfDocument<'_>, stamp: &Stamp) -> Result<()> {
+    let font = document.fonts_mut().helvetica_bold();
+    let mut page = document
+        .pages()
+        .get(stamp.page as i32)
+        .with_context(|| format!("Page {} is no longer in this PDF.", stamp.page + 1))?;
+    let geometry = Geometry::of(&page)?;
+    let frame = quad(&geometry, &stamp.bounds).with_context(|| {
+        format!(
+            "The stamp on page {} has no usable position.",
+            stamp.page + 1
+        )
+    })?;
+    let (width, height) = (frame.right - frame.left, frame.top - frame.bottom);
+    let color = PdfColor::new(
+        (stamp.color >> 16) as u8,
+        (stamp.color >> 8) as u8,
+        stamp.color as u8,
+        255,
+    );
+    let weight = (height * STAMP_BORDER).max(MIN_STROKE_POINTS);
+    let mut size = height * STAMP_TEXT;
+    let measure = |size: f32| -> Result<f32> {
+        let probe = PdfPageTextObject::new(document, &stamp.label, font, PdfPoints::new(size))?;
+        Ok(probe.bounds()?.to_rect().width().value)
+    };
+    let mut text_width = measure(size)?;
+    let room = width * STAMP_TEXT_ROOM;
+    if text_width > room && text_width > 0.0 {
+        size *= room / text_width;
+        text_width = measure(size)?;
+    }
+    let mut annotation = page.annotations_mut().create_stamp_annotation()?;
+    annotation.set_bounds(PdfRect::new_from_values(
+        frame.bottom - weight,
+        frame.left - weight,
+        frame.top + weight,
+        frame.right + weight,
+    ))?;
+    annotation.set_is_printed(true)?;
+    let mut border = PdfPagePathObject::new(
+        document,
+        PdfPoints::new(frame.left),
+        PdfPoints::new(frame.bottom),
+        Some(color),
+        Some(PdfPoints::new(weight)),
+        None,
+    )?;
+    for (x, y) in [
+        (frame.right, frame.bottom),
+        (frame.right, frame.top),
+        (frame.left, frame.top),
+    ] {
+        border.line_to(PdfPoints::new(x), PdfPoints::new(y))?;
+    }
+    border.close_path()?;
+    border.set_line_join(PdfPageObjectLineJoin::Round)?;
+    annotation.objects_mut().add_path_object(border)?;
+    let mut label = PdfPageTextObject::new(document, &stamp.label, font, PdfPoints::new(size))?;
+    label.set_fill_color(color)?;
+    label.translate(
+        PdfPoints::new(frame.left + (width - text_width) / 2.0),
+        PdfPoints::new(frame.bottom + (height - size * STAMP_CAP_HEIGHT) / 2.0),
+    )?;
+    annotation.objects_mut().add_text_object(label)?;
+    Ok(())
+}
+
+pub(super) fn apply(document: &mut PdfDocument<'_>, edits: &[Edit]) -> Result<()> {
     for edit in edits {
         let markup = match edit {
             Edit::Markup(markup) => markup,
             Edit::Signature(signature) => {
                 sign(document, signature)?;
+                continue;
+            }
+            Edit::Stamp(placed) => {
+                stamp(document, placed)?;
                 continue;
             }
         };
@@ -373,7 +498,7 @@ impl Staged {
 pub(super) fn save(engine: &Pdfium, path: &Path, edits: &[Edit]) -> Result<()> {
     let staged = stage(path)?;
     let written = (|| -> Result<()> {
-        let document = engine
+        let mut document = engine
             .load_pdf_from_file(path, None)
             .context("The PDF could not be reopened for saving.")?;
         if !document.signatures().is_empty() {
@@ -381,7 +506,7 @@ pub(super) fn save(engine: &Pdfium, path: &Path, edits: &[Edit]) -> Result<()> {
                 "This PDF is digitally signed. Saving marks would invalidate the signature, so it is left unchanged."
             );
         }
-        apply(&document, edits)?;
+        apply(&mut document, edits)?;
         document
             .save_to_file(staged.temporary())
             .context("The changes could not be written next to the PDF.")?;
@@ -627,6 +752,8 @@ mod tests {
                     bounds,
                     color: 0x1c3d8f,
                     strokes: strokes.clone(),
+                    kind: SketchKind::Signature,
+                    weight: None,
                 })
             })
             .collect();
@@ -662,6 +789,75 @@ mod tests {
                 "nothing may be drawn outside the signature on page {index}"
             );
         }
+        drop(document);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires PDFium installed by scripts/setup_pdfium.py"]
+    fn saved_stamps_draw_a_border_and_their_label_inside_their_bounds() {
+        let engine = crate::pdf::bind().unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("agenticpdf-stamp-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("stamped.pdf");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/selection.pdf"),
+            &path,
+        )
+        .unwrap();
+        let bounds = TextRect {
+            left: 0.35,
+            top: 0.8,
+            right: 0.65,
+            bottom: 0.88,
+        };
+        let inner = TextRect {
+            left: 0.4,
+            top: 0.82,
+            right: 0.6,
+            bottom: 0.86,
+        };
+        let beside = TextRect {
+            left: 0.05,
+            top: 0.8,
+            right: 0.3,
+            bottom: 0.88,
+        };
+        let before = {
+            let document = engine.load_pdf_from_file(&path, None).unwrap();
+            let raster =
+                crate::pdf::render(&document.pages().get(0).unwrap(), 800.0, 1.0, 4096).unwrap();
+            assert_eq!(tint(&raster, &bounds), 0.0);
+            tint(&raster, &beside)
+        };
+        save(
+            &engine,
+            &path,
+            &[Edit::Stamp(Stamp {
+                page: 0,
+                bounds,
+                color: 0x1f883d,
+                label: "APPROVED".into(),
+            })],
+        )
+        .unwrap();
+        let document = engine.load_pdf_from_file(&path, None).unwrap();
+        let page = document.pages().get(0).unwrap();
+        let kinds: Vec<_> = page
+            .annotations()
+            .iter()
+            .map(|annotation| annotation.annotation_type())
+            .collect();
+        assert_eq!(kinds, [PdfPageAnnotationType::Stamp]);
+        let raster = crate::pdf::render(&page, 800.0, 1.0, 4096).unwrap();
+        assert!(tint(&raster, &bounds) > 0.05, "the stamp must be drawn");
+        assert!(
+            tint(&raster, &inner) > 0.05,
+            "the label must be drawn inside the border"
+        );
+        assert_eq!(tint(&raster, &beside), before);
+        drop(page);
         drop(document);
         fs::remove_dir_all(&directory).unwrap();
     }

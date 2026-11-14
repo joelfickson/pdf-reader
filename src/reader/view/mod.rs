@@ -180,6 +180,8 @@ impl Render for Reader {
                     }
                     if this.signing.drawing {
                         this.extend_stroke(event.position, cx);
+                    } else if this.sketch.is_some() {
+                        this.sketch_drag(event.position, cx);
                     } else if this
                         .selection
                         .as_ref()
