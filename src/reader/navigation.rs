@@ -91,6 +91,10 @@ impl Reader {
         {
             tab.restore_scroll = Some(tab.scroll.offset());
         }
+        if self.chrome.mode == super::chrome::Mode::Organize && index != self.tabs.active {
+            self.cancel_page_changes(cx);
+            self.chrome.mode = super::chrome::Mode::Read;
+        }
         self.sync_recent();
         self.reset_request(window);
         self.tabs.active = index;
@@ -150,6 +154,10 @@ impl Reader {
                 self.notice = None;
             }
         }
+        if self.tabs.current().is_none() && self.presenting.is_some() {
+            self.toggle_presentation(window, cx);
+        }
+        self.chrome.magnifier &= self.tabs.current().is_some();
         self.persist_recent(cx);
         cx.notify();
     }

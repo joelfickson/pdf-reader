@@ -185,6 +185,7 @@ pub(crate) fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new(&format!("{m}-shift-a"), ToggleAnnotate, any),
         KeyBinding::new(&format!("{m}-shift-o"), ToggleOrganize, any),
         KeyBinding::new(&format!("{m}-shift-p"), TogglePresent, any),
+        KeyBinding::new(&format!("{m}-shift-m"), ToggleMagnifier, any),
         KeyBinding::new(&format!("{m}-q"), Quit, None),
     ]
 }

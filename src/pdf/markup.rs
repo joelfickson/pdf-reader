@@ -331,12 +331,47 @@ fn sibling(path: &Path) -> Result<PathBuf> {
     Ok(path.with_file_name(format!(".{name}.{}.saving", std::process::id())))
 }
 
-pub(super) fn save(engine: &Pdfium, path: &Path, edits: &[Edit]) -> Result<()> {
+pub(super) struct Staged {
+    temporary: PathBuf,
+    permissions: fs::Permissions,
+}
+
+pub(super) fn stage(path: &Path) -> Result<Staged> {
     let metadata = fs::metadata(path).context("This PDF is no longer where it was opened from.")?;
     if metadata.permissions().readonly() {
         bail!("This PDF is read-only, so changes cannot be saved to it.");
     }
-    let temporary = sibling(path)?;
+    Ok(Staged {
+        temporary: sibling(path)?,
+        permissions: metadata.permissions(),
+    })
+}
+
+impl Staged {
+    pub(super) fn temporary(&self) -> &Path {
+        &self.temporary
+    }
+
+    pub(super) fn discard(self) {
+        let _ = fs::remove_file(&self.temporary);
+    }
+
+    pub(super) fn commit(self, path: &Path) -> Result<()> {
+        let replaced = fs::set_permissions(&self.temporary, self.permissions.clone())
+            .context("The saved copy could not take the PDF's permissions.")
+            .and_then(|()| {
+                fs::rename(&self.temporary, path)
+                    .context("The saved copy could not replace the PDF.")
+            });
+        if replaced.is_err() {
+            self.discard();
+        }
+        replaced
+    }
+}
+
+pub(super) fn save(engine: &Pdfium, path: &Path, edits: &[Edit]) -> Result<()> {
+    let staged = stage(path)?;
     let written = (|| -> Result<()> {
         let document = engine
             .load_pdf_from_file(path, None)
@@ -348,19 +383,17 @@ pub(super) fn save(engine: &Pdfium, path: &Path, edits: &[Edit]) -> Result<()> {
         }
         apply(&document, edits)?;
         document
-            .save_to_file(&temporary)
+            .save_to_file(staged.temporary())
             .context("The changes could not be written next to the PDF.")?;
         Ok(())
     })();
-    let replaced = written.and_then(|()| {
-        fs::set_permissions(&temporary, metadata.permissions())
-            .context("The saved copy could not take the PDF's permissions.")?;
-        fs::rename(&temporary, path).context("The saved copy could not replace the PDF.")
-    });
-    if replaced.is_err() {
-        let _ = fs::remove_file(&temporary);
+    match written {
+        Ok(()) => staged.commit(path),
+        Err(error) => {
+            staged.discard();
+            Err(error)
+        }
     }
-    replaced
 }
 
 #[cfg(test)]

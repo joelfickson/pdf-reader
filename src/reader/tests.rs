@@ -1063,6 +1063,437 @@ fn last_session_tabs_reopen_only_when_asked_and_skip_missing_files(cx: &mut Test
     std::fs::remove_dir_all(&store).unwrap();
 }
 
+#[gpui::test]
+fn organize_queues_page_changes_and_applies_or_discards_them(cx: &mut TestAppContext) {
+    use crate::pdf::{markup::MarkupKind, pages::PageOp};
+    use chrome::Mode;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let last = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| reader.read(cx).worker.queued_page_ops().pop().unwrap())
+    };
+    let finish = |cx: &mut gpui::VisualTestContext, result: Result<usize, String>| {
+        cx.update(|window, cx| {
+            reader.update(cx, |reader, cx| {
+                let session = reader.tabs.entries[0].session;
+                reader.receive(Event::Organized { session, result }, window, cx)
+            })
+        });
+    };
+    let select = |cx: &mut gpui::VisualTestContext, pages: &[usize]| {
+        cx.update(|_, cx| {
+            reader.update(cx, |reader, _| {
+                reader.chrome.organize_selection = pages.iter().copied().collect()
+            })
+        });
+    };
+    let toast = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| {
+            reader
+                .read(cx)
+                .chrome
+                .toast
+                .as_ref()
+                .unwrap()
+                .title
+                .to_string()
+        })
+    };
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.focus.focus(window);
+            reader.selection = Some(selection::Selection::within(0, 0..8));
+            reader.mark_selection(MarkupKind::Highlight, 0, cx);
+            reader.set_mode(Mode::Organize, window, cx);
+            assert_eq!(reader.chrome.mode, Mode::Read);
+        })
+    });
+    assert_eq!(toast(cx), "Save your changes first");
+    cx.simulate_keystrokes(&format!("{modifier}-z {modifier}-shift-o"));
+    cx.read(|cx| assert_eq!(reader.read(cx).chrome.mode, Mode::Organize));
+
+    select(cx, &[0, 1]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.rotate_selected(1, cx)));
+    assert_eq!(
+        last(cx),
+        PageOp::Rotate {
+            pages: vec![0, 1],
+            turns: 1
+        }
+    );
+    finish(cx, Ok(3));
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.tabs.entries[0].page_changes, 1);
+        assert!(reader.chrome.organize_selection.is_empty());
+    });
+
+    select(cx, &[0, 1, 2]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.delete_selected(cx)));
+    assert_eq!(toast(cx), "A PDF needs at least one page");
+    cx.read(|cx| assert_eq!(reader.read(cx).worker.queued_page_ops().len(), 1));
+    select(cx, &[2]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.delete_selected(cx)));
+    assert_eq!(last(cx), PageOp::Delete { pages: vec![2] });
+    finish(cx, Ok(2));
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.entries[0].count, 2));
+
+    select(cx, &[0]);
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.choose_extract_destination(window, cx)
+        })
+    });
+    assert!(cx.did_prompt_for_new_path());
+    cx.simulate_new_path_selection(|folder| Some(folder.join("pulled.pdf")));
+    cx.run_until_parked();
+    assert!(matches!(
+        last(cx),
+        PageOp::Extract { pages, to } if pages == [0] && to.ends_with("pulled.pdf")
+    ));
+    finish(cx, Ok(2));
+    assert_eq!(toast(cx), "Extracted 1 page");
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.entries[0].page_changes, 2));
+
+    cx.dispatch_action(Save);
+    assert_eq!(last(cx), PageOp::Apply);
+    finish(cx, Err("The disk is full.".into()));
+    assert_eq!(toast(cx), "Page changes could not be saved");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.chrome.mode, Mode::Organize);
+        assert_eq!(reader.tabs.entries[0].page_changes, 2);
+    });
+
+    cx.simulate_keystrokes("escape");
+    assert_eq!(last(cx), PageOp::Cancel);
+    cx.read(|cx| assert_eq!(reader.read(cx).chrome.mode, Mode::Read));
+    finish(cx, Ok(3));
+    cx.read(|cx| {
+        let tab = &reader.read(cx).tabs.entries[0];
+        assert_eq!((tab.count, tab.page_changes), (3, 0));
+        assert!(tab.page_ops.is_empty());
+    });
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-o"));
+    select(cx, &[1]);
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.rotate_selected(3, cx)));
+    finish(cx, Err("unreadable".into()));
+    assert_eq!(toast(cx), "Pages could not be rotated");
+    cx.update(|_, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.insert_pages_from(PathBuf::from("/docs/more.pdf"), cx)
+        })
+    });
+    finish(cx, Ok(5));
+    cx.update(|window, cx| reader.update(cx, |reader, cx| reader.apply_page_changes(window, cx)));
+    assert_eq!(last(cx), PageOp::Apply);
+    finish(cx, Ok(5));
+    assert_eq!(toast(cx), "Pages saved");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert_eq!(reader.chrome.mode, Mode::Read);
+        assert_eq!(reader.tabs.entries[0].count, 5);
+        assert_eq!(reader.tabs.entries[0].page_changes, 0);
+    });
+
+    cx.update(|_, cx| reader.update(cx, |reader, cx| reader.rotate_current_page(cx)));
+    cx.read(|cx| {
+        let queued = reader.read(cx).worker.queued_page_ops();
+        assert_eq!(
+            queued[queued.len() - 2..],
+            [
+                PageOp::Rotate {
+                    pages: vec![0],
+                    turns: 1
+                },
+                PageOp::Apply
+            ]
+        );
+    });
+}
+
+#[gpui::test]
+fn view_modes_switch_layout_colour_presentation_and_magnifier(cx: &mut TestAppContext) {
+    use crate::preferences::{NightPages, PageColour};
+    use chrome::Layout;
+
+    cx.update(|cx| cx.bind_keys(crate::app::bindings()));
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let modifier = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 4);
+            reader.focus.focus(window);
+            assert_eq!(reader.chrome.page_colour, PageColour::Original);
+            let cached = reader.image.is_some();
+            assert!(cached);
+
+            reader.set_page_colour(PageColour::Sepia, window, cx);
+            assert!(reader.image.is_none());
+            assert!(reader.last_request.is_some());
+            reader.update_preferences(|preferences| preferences.night = NightPages::Always, cx);
+            reader.apply_night_setting(window, cx);
+            assert_eq!(reader.chrome.page_colour, PageColour::Night);
+            reader.update_preferences(|preferences| preferences.night = NightPages::Never, cx);
+            reader.apply_night_setting(window, cx);
+            assert_eq!(reader.chrome.page_colour, PageColour::Original);
+            reader.set_page_colour(PageColour::Sepia, window, cx);
+            reader.apply_night_setting(window, cx);
+            assert_eq!(reader.chrome.page_colour, PageColour::Sepia);
+
+            reader.receive(
+                Event::Metadata {
+                    generation: reader.generation,
+                    count: 4,
+                    sizes: Some(Arc::new(vec![(612.0, 792.0); 4])),
+                },
+                window,
+                cx,
+            );
+            reader.set_layout(Layout::TwoPages, window, cx);
+            assert_eq!(reader.preferences.layout, Layout::TwoPages);
+            let column = reader.column(window).unwrap();
+            assert_eq!(column.tops[0], column.tops[1]);
+            assert!(column.lefts[1] > column.lefts[0]);
+            reader.set_layout(Layout::CoverFirst, window, cx);
+            let column = reader.column(window).unwrap();
+            assert!(column.tops[1] > column.tops[0]);
+            assert_eq!(column.tops[1], column.tops[2]);
+            reader.set_layout(Layout::Continuous, window, cx);
+            reader.tabs.current_mut().unwrap().zoom = Some(125);
+            reader.sidebar = true;
+        })
+    });
+    cx.run_until_parked();
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-p"));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, _| {
+            assert!(reader.presenting.is_some());
+            assert!(window.is_fullscreen());
+            assert_eq!(reader.chrome.layout, Layout::Single);
+            assert!(!reader.sidebar);
+            assert_eq!(reader.preferences.layout, Layout::Continuous);
+        })
+    });
+    cx.simulate_keystrokes("right");
+    cx.read(|cx| assert_eq!(reader.read(cx).tabs.current().unwrap().page, 1));
+    cx.simulate_keystrokes(&format!("{modifier}-shift-m"));
+    cx.read(|cx| assert!(!reader.read(cx).chrome.magnifier));
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, _| {
+            assert!(reader.presenting.is_none());
+            assert!(!window.is_fullscreen());
+            assert_eq!(reader.chrome.layout, Layout::Continuous);
+            assert!(reader.sidebar);
+            assert_eq!(reader.tabs.current().unwrap().zoom, Some(125));
+            assert_eq!(reader.tabs.current().unwrap().page, 1);
+        })
+    });
+
+    cx.simulate_keystrokes(&format!("{modifier}-shift-m"));
+    cx.simulate_mouse_move(point(px(500.0), px(300.0)), None, Default::default());
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(reader.chrome.magnifier);
+        assert_eq!(reader.pointer, Some(point(px(500.0), px(300.0))));
+    });
+    cx.simulate_keystrokes("escape");
+    cx.read(|cx| {
+        let reader = reader.read(cx);
+        assert!(!reader.chrome.magnifier);
+        assert!(reader.pointer.is_none());
+    });
+}
+
+#[gpui::test]
+fn export_combine_and_print_queue_the_right_file_tasks(cx: &mut TestAppContext) {
+    use crate::pdf::export::{FileTask, Format};
+    use crate::pdf::markup::MarkupKind;
+
+    let (_sender, events) = async_channel::bounded(2);
+    let (reader, cx) = cx
+        .add_window_view(|window, cx| Reader::new(Vec::new(), Worker::idle(), events, window, cx));
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let toast = |cx: &mut gpui::VisualTestContext| {
+        cx.read(|cx| {
+            reader
+                .read(cx)
+                .chrome
+                .toast
+                .as_ref()
+                .unwrap()
+                .title
+                .to_string()
+        })
+    };
+    let has_downloads = filing::downloads().is_some_and(|folder| folder.is_dir());
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            load_document(reader, window, cx, 3);
+            reader.selection = Some(selection::Selection::within(0, 0..8));
+            reader.mark_selection(MarkupKind::Highlight, 0, cx);
+
+            reader.chrome.export_format = 1;
+            reader.chrome.export_pages = 1;
+            reader.chrome.export_dpi = 2;
+            reader.chrome.include_notes = true;
+            reader.set_overlay(chrome::Overlay::Export, cx);
+            reader.export_document(cx);
+        })
+    });
+    if has_downloads {
+        cx.read(|cx| {
+            let reader = reader.read(cx);
+            assert_eq!(reader.chrome.overlay, chrome::Overlay::None);
+            let FileTask::Export(export) = reader.worker.queued_files().pop().unwrap() else {
+                panic!("expected an export");
+            };
+            assert_eq!(export.format, Format::Flattened);
+            assert_eq!(
+                (export.page, export.dpi, export.marks),
+                (Some(0), 300, true)
+            );
+            assert_eq!(export.edits.len(), 1);
+            assert!(export.source.ends_with("reading.pdf"));
+            let name = export
+                .to
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            assert!(name.starts_with("reading flattened") && name.ends_with(".pdf"));
+            assert!(!export.to.exists());
+        });
+        cx.update(|window, cx| {
+            reader.update(cx, |reader, cx| {
+                let id = reader.next_file;
+                reader.receive(
+                    Event::Filed {
+                        id,
+                        result: Ok(vec![
+                            PathBuf::from("/out/a 1.png"),
+                            PathBuf::from("/out/a 2.png"),
+                        ]),
+                    },
+                    window,
+                    cx,
+                );
+                assert!(reader.filings.is_empty());
+            })
+        });
+        assert_eq!(toast(cx), "Exported 2 files");
+        cx.update(|_, cx| {
+            reader.update(cx, |reader, cx| {
+                reader.chrome.export_format = 2;
+                reader.chrome.export_pages = 0;
+                reader.chrome.include_notes = false;
+                reader.export_document(cx);
+                let FileTask::Export(export) = reader.worker.queued_files().pop().unwrap() else {
+                    panic!("expected an export");
+                };
+                assert_eq!(
+                    (export.format, export.page, export.marks),
+                    (Format::Png, None, false)
+                );
+                assert!(export.edits.is_empty());
+            })
+        });
+    } else {
+        assert_eq!(toast(cx), "The Downloads folder was not found");
+    }
+
+    let queued = cx.read(|cx| reader.read(cx).worker.queued_files().len());
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.combine_to(PathBuf::from("/out/combined.pdf"), cx);
+            assert_eq!(reader.worker.queued_files().len(), queued);
+            reader.add_combine_files(
+                vec![
+                    root.join("tests/fixtures/links.pdf"),
+                    root.join("README.md"),
+                    root.join("tests/fixtures/reading.pdf"),
+                    root.join("tests/fixtures/links.pdf"),
+                ],
+                cx,
+            );
+            assert_eq!(reader.combine_extra.len(), 1);
+            assert_eq!(reader.combine_sources().len(), 2);
+            reader.set_overlay(chrome::Overlay::Combine, cx);
+            reader.combine_to(PathBuf::from("/out/combined.pdf"), cx);
+            let FileTask::Combine { files, to } = reader.worker.queued_files().pop().unwrap()
+            else {
+                panic!("expected a combine");
+            };
+            assert_eq!(files.len(), 2);
+            assert!(files[0].ends_with("reading.pdf") && files[1].ends_with("links.pdf"));
+            assert_eq!(to, PathBuf::from("/out/combined.pdf"));
+            let id = reader.next_file;
+            reader.receive(
+                Event::Filed {
+                    id,
+                    result: Err("The disk is full.".into()),
+                },
+                window,
+                cx,
+            );
+            assert_eq!(reader.combine_extra.len(), 1);
+        })
+    });
+    assert_eq!(toast(cx), "The files could not be combined");
+
+    cx.update(|window, cx| {
+        reader.update(cx, |reader, cx| {
+            reader.chrome.print_pages = 1;
+            reader.chrome.include_notes = true;
+            let before = reader.worker.queued_files().len();
+            reader.print_document(cx);
+            if cfg!(target_os = "macos") {
+                let FileTask::Export(export) = reader.worker.queued_files().pop().unwrap() else {
+                    panic!("expected a print copy");
+                };
+                assert_eq!((export.format, export.page), (Format::Pdf, Some(0)));
+                assert!(export.to.starts_with(std::env::temp_dir()));
+                assert_eq!(export.edits.len(), 1);
+                let id = reader.next_file;
+                reader.receive(
+                    Event::Filed {
+                        id,
+                        result: Err("unreadable".into()),
+                    },
+                    window,
+                    cx,
+                );
+            } else {
+                assert_eq!(reader.worker.queued_files().len(), before);
+            }
+        })
+    });
+    if cfg!(target_os = "macos") {
+        assert_eq!(toast(cx), "The document could not be prepared for printing");
+    }
+}
+
 fn sweep_mouse(cx: &mut gpui::VisualTestContext) {
     let size = cx.update(|window, _| window.viewport_size());
     let mut y = px(4.0);
@@ -1132,6 +1563,17 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
             r.signing.strokes = vec![vec![[40.0, 90.0], [120.0, 50.0], [220.0, 96.0]]];
             r.place_signature(cx);
             assert!(r.placing_signature().is_some());
+        }),
+        ("night pages", |r, w, cx| {
+            r.set_page_colour(crate::preferences::PageColour::Night, w, cx)
+        }),
+        ("magnifier", |r, _, cx| {
+            r.toggle_magnifier(cx);
+            assert!(r.chrome.magnifier);
+        }),
+        ("presentation", |r, w, cx| {
+            r.toggle_presentation(w, cx);
+            assert!(r.presenting.is_some());
         }),
         ("bookmarks", |r, _, cx| {
             let path = r.tabs.current().unwrap().path.clone();
@@ -1269,6 +1711,9 @@ fn every_screen_renders_and_survives_hover_in_both_themes(cx: &mut TestAppContex
         for (name, setup) in &screens {
             cx.update(|window, cx| {
                 reader.update(cx, |r, cx| {
+                    if r.presenting.is_some() {
+                        r.toggle_presentation(window, cx);
+                    }
                     while !r.tabs.entries.is_empty() {
                         r.close_tab_now(0, window, cx);
                     }

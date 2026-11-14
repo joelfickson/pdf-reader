@@ -10,6 +10,7 @@ pub(crate) enum ThemeChoice {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Theme {
+    pub dark: bool,
     pub canvas: Hsla,
     pub chrome: Hsla,
     pub raised: Hsla,
@@ -80,6 +81,7 @@ impl Theme {
 
     pub fn dark() -> Self {
         Self {
+            dark: true,
             canvas: rgb(0x0b0d10).into(),
             chrome: rgb(0x111418).into(),
             raised: rgb(0x171b20).into(),
@@ -109,6 +111,7 @@ impl Theme {
 
     pub fn light() -> Self {
         Self {
+            dark: false,
             canvas: rgb(0xe9eaec).into(),
             chrome: rgb(0xf6f7f8).into(),
             raised: rgb(0xffffff).into(),

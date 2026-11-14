@@ -11,7 +11,7 @@ default-run = "agenticpdf"
 anyhow = "1"
 async-channel = "2"
 gpui = { version = "=0.2.2", default-features = false, features = ["font-kit", "windows-manifest"] }
-image = { version = "0.25", default-features = false }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 parking_lot = "0.13"
 pdfium-render = { version = "=0.9.5", default-features = false, features = ["pdfium_7881", "thread_safe"] }
 agent-client-protocol = { version = "5", features = ["process"] }

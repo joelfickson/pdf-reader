@@ -122,6 +122,15 @@ impl Reader {
         self.run_command(Command::Presentation, window, cx);
     }
 
+    pub(super) fn magnifier(
+        &mut self,
+        _: &ToggleMagnifier,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.run_command(Command::Magnifier, window, cx);
+    }
+
     pub(super) fn first_page(
         &mut self,
         _: &FirstPage,
@@ -143,6 +152,14 @@ impl Reader {
         if self.chrome.overlay == Overlay::None && self.cancel_placement(cx) {
             return;
         }
+        if self.chrome.overlay == Overlay::None && self.presenting.is_some() {
+            self.toggle_presentation(window, cx);
+            return;
+        }
+        if self.chrome.overlay == Overlay::None && self.chrome.magnifier {
+            self.toggle_magnifier(cx);
+            return;
+        }
         if self.chrome.overlay != Overlay::None {
             self.set_overlay(Overlay::None, cx);
         } else if matches!(self.chrome.input, Input::Page | Input::Agent) {
@@ -150,6 +167,9 @@ impl Reader {
         } else if self.chrome.find_open {
             self.close_find(cx);
         } else if self.chrome.mode != Mode::Read {
+            if self.chrome.mode == Mode::Organize {
+                self.cancel_page_changes(cx);
+            }
             self.chrome.mode = Mode::Read;
             self.request(window);
         } else if self.has_selection() {

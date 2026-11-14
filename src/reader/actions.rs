@@ -43,7 +43,8 @@ actions!(
         Undo,
         Redo,
         FitPage,
-        ActualSize
+        ActualSize,
+        ToggleMagnifier
     ]
 );
 

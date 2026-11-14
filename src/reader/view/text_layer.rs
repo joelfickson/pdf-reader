@@ -4,10 +4,17 @@ use crate::pdf::{
     markup::{Edit, MarkupKind, STROKE_WEIGHT},
     text::TextRect,
 };
-use crate::ui::{kit::clickable, theme::Paper};
+use crate::ui::{
+    kit::{RADIUS, clickable},
+    theme::Paper,
+};
+
+const LOUPE_WIDTH: f32 = 300.0;
+const LOUPE_HEIGHT: f32 = 150.0;
+const LOUPE_SCALE: f32 = 2.0;
 use gpui::{
-    Bounds, Context, CursorStyle, HitboxBehavior, IntoElement, MouseButton, Pixels, canvas, img,
-    point, prelude::*, px, size,
+    Bounds, Context, CursorStyle, HitboxBehavior, IntoElement, MouseButton, Pixels, canvas, div,
+    img, point, prelude::*, px, size,
 };
 use std::{cell::Cell, ops::Range, rc::Rc};
 
@@ -79,6 +86,51 @@ impl Reader {
                 rects.extend(glyphs(range).map(|rect| (rect, theme.select)));
             }
         }
+        let loupe = self
+            .pointer
+            .filter(|_| self.chrome.magnifier)
+            .zip(self.page_frames.borrow().get(&page).copied())
+            .filter(|(pointer, frame)| frame.contains(pointer))
+            .map(|(pointer, frame)| {
+                let x = f32::from(pointer.x - frame.origin.x);
+                let y = f32::from(pointer.y - frame.origin.y);
+                gpui::deferred(
+                    div()
+                        .absolute()
+                        .left(px(x - LOUPE_WIDTH / 2.0))
+                        .top(px(y - LOUPE_HEIGHT / 2.0))
+                        .w(px(LOUPE_WIDTH))
+                        .h(px(LOUPE_HEIGHT))
+                        .rounded(px(RADIUS))
+                        .overflow_hidden()
+                        .bg(Paper::base())
+                        .border_2()
+                        .border_color(theme.accent)
+                        .shadow(theme.floating_shadow())
+                        .child(
+                            img(image.image.clone())
+                                .absolute()
+                                .left(px(LOUPE_WIDTH / 2.0 - x * LOUPE_SCALE))
+                                .top(px(LOUPE_HEIGHT / 2.0 - y * LOUPE_SCALE))
+                                .w(px(image.width * LOUPE_SCALE))
+                                .h(px(image.height * LOUPE_SCALE)),
+                        )
+                        .child(
+                            div()
+                                .absolute()
+                                .right(px(8.0))
+                                .bottom(px(8.0))
+                                .px(px(6.0))
+                                .rounded(px(RADIUS))
+                                .bg(Paper::rule())
+                                .font_family(crate::ui::theme::Theme::mono_font())
+                                .text_size(px(11.0))
+                                .text_color(Paper::muted())
+                                .child("2x"),
+                        ),
+                )
+                .with_priority(2)
+            });
         let page_bounds = if current {
             self.page_bounds.clone()
         } else {
@@ -134,6 +186,7 @@ impl Reader {
                 }),
             )
             .child(img(image.image.clone()).size_full().rounded(px(2.0)))
+            .children(loupe)
             .child(
                 canvas(
                     move |bounds, window, _| {

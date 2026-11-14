@@ -3,7 +3,7 @@ use super::super::{
     chrome::{Layout, Overlay},
 };
 use super::dialogs::form_row;
-use crate::preferences::{DefaultZoom, Preferences};
+use crate::preferences::{DefaultZoom, NightPages, Preferences};
 use crate::ui::{
     kit::clickable,
     kit::{RADIUS, Status, label, pill, status, toggle},
@@ -68,12 +68,41 @@ impl Reader {
             )
     }
 
+    fn night_choices(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = self.chrome.theme;
+        let options = [
+            ("Never", NightPages::Never),
+            ("Follow theme", NightPages::FollowTheme),
+            ("Always", NightPages::Always),
+        ];
+        div()
+            .flex()
+            .gap(px(2.0))
+            .children(
+                options
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, (text, night))| {
+                        let selected = self.preferences.night == night;
+                        pill(("night-pages", index), text, selected, &theme).on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                this.update_preferences(
+                                    |preferences| preferences.night = night,
+                                    cx,
+                                );
+                                this.apply_night_setting(window, cx);
+                            },
+                        ))
+                    }),
+            )
+    }
+
     fn layout_choices(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = self.chrome.theme;
         let options = [
-            ("Single page", Some(Layout::Single)),
-            ("Continuous", Some(Layout::Continuous)),
-            ("Two pages", None),
+            ("Single page", Layout::Single),
+            ("Continuous", Layout::Continuous),
+            ("Two pages", Layout::TwoPages),
         ];
         div()
             .flex()
@@ -83,37 +112,16 @@ impl Reader {
                     .into_iter()
                     .enumerate()
                     .map(|(index, (text, layout))| {
-                        let selected = layout == Some(self.chrome.layout);
+                        let selected = layout == self.chrome.layout
+                            || (layout == Layout::TwoPages
+                                && self.chrome.layout == Layout::CoverFirst);
                         pill(("default-layout", index), text, selected, &theme).on_click(
-                            cx.listener(move |this, _, window, cx| match layout {
-                                Some(layout) => this.set_layout(layout, window, cx),
-                                None => this.unavailable("Two-page view", cx),
+                            cx.listener(move |this, _, window, cx| {
+                                this.set_layout(layout, window, cx)
                             }),
                         )
                     }),
             )
-    }
-
-    fn placeholder_choices(
-        &self,
-        prefix: &'static str,
-        options: &[&'static str],
-        feature: &'static str,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let theme = self.chrome.theme;
-        div()
-            .flex()
-            .gap(px(2.0))
-            .children(options.iter().enumerate().map(|(index, text)| {
-                pill((prefix, index), *text, index == 0, &theme).on_click(cx.listener(
-                    move |this, _, _, cx| {
-                        if index != 0 {
-                            this.unavailable(feature, cx)
-                        }
-                    },
-                ))
-            }))
     }
 
     pub(super) fn settings_dialog(&self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -219,16 +227,7 @@ impl Reader {
                     self.default_zoom_choices(cx),
                 ))
                 .child(form_row(&theme, "Layout", self.layout_choices(cx)))
-                .child(form_row(
-                    &theme,
-                    "Night pages",
-                    self.placeholder_choices(
-                        "night-pages",
-                        &["Never", "Follow theme", "Always"],
-                        "Night pages",
-                        cx,
-                    ),
-                )),
+                .child(form_row(&theme, "Night pages", self.night_choices(cx))),
             2 => div()
                 .child(heading("Notes"))
                 .child(form_row(

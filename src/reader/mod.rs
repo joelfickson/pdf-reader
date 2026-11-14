@@ -4,12 +4,14 @@ mod cache;
 mod chrome;
 mod column;
 mod commands;
+mod filing;
 mod handlers;
 mod history;
 mod images;
 mod jumps;
 mod markup;
 mod navigation;
+mod organizing;
 mod outline;
 #[cfg(debug_assertions)]
 mod preview;
@@ -23,6 +25,7 @@ mod tabs;
 mod tests;
 mod updates;
 mod view;
+mod viewing;
 
 use crate::pdf::{
     Event, ViewKey, Worker,
@@ -85,6 +88,11 @@ pub(crate) struct Reader {
     bookmarks: crate::preferences::Bookmarks,
     data: Option<PathBuf>,
     autosave_edits: u64,
+    presenting: Option<viewing::Presenting>,
+    filings: BTreeMap<u64, filing::Filing>,
+    next_file: u64,
+    combine_extra: Vec<PathBuf>,
+    pointer: Option<gpui::Point<gpui::Pixels>>,
 }
 
 impl Reader {
@@ -115,6 +123,7 @@ impl Reader {
         .detach();
         cx.observe_window_appearance(window, |this, window, cx| {
             this.chrome.theme = Theme::resolve(this.chrome.theme_choice, window.appearance());
+            this.apply_night_setting(window, cx);
             cx.notify();
         })
         .detach();
@@ -211,11 +220,15 @@ impl Reader {
             bookmarks,
             data,
             autosave_edits: 0,
+            presenting: None,
+            filings: BTreeMap::new(),
+            next_file: 0,
+            combine_extra: Vec::new(),
+            pointer: None,
         };
         reader.chrome.theme_choice = preferences.theme;
-        if !preferences.continuous {
-            reader.chrome.layout = chrome::Layout::Single;
-        }
+        reader.chrome.layout = preferences.layout;
+        reader.chrome.page_colour = preferences.night.colour(theme.dark);
         reader.notice = recent_error.or(stores_error);
         if let Some(error) = updates_error {
             reader.show_toast(
@@ -252,6 +265,10 @@ impl Reader {
                     }
                 } else if let Event::Saved { session, result } = event {
                     self.finish_save(session, result, window, cx);
+                } else if let Event::Organized { session, result } = event {
+                    self.finish_page_op(session, result, window, cx);
+                } else if let Event::Filed { id, result } = event {
+                    self.finish_file(id, result, cx);
                 } else {
                     self.receive_search(event, window, cx);
                 }
@@ -282,9 +299,12 @@ impl Reader {
                     self.request(window);
                 }
             }
-            Event::Page { view, raster, .. } => {
+            Event::Page {
+                view, mut raster, ..
+            } => {
                 crate::bench::mark("page_received");
                 self.busy = false;
+                images::tint(&mut raster.bytes, self.chrome.page_colour);
                 match PageImage::new(raster) {
                     Ok(image) => {
                         tab.error = None;
@@ -329,7 +349,9 @@ impl Reader {
                 tab.error = Some(message);
                 self.busy = false;
             }
-            Event::Saved { .. }
+            Event::Filed { .. }
+            | Event::Organized { .. }
+            | Event::Saved { .. }
             | Event::SearchBatch { .. }
             | Event::SearchDone { .. }
             | Event::SearchFailed { .. }
@@ -358,7 +380,10 @@ impl Reader {
     fn keep_nearby(&mut self, event: Event, window: &mut Window, cx: &mut Context<Self>) {
         let open = |session: u64| self.tabs.entries.iter().any(|tab| tab.session == session);
         match event {
-            Event::Page { view, raster, .. } if open(view.session) => {
+            Event::Page {
+                view, mut raster, ..
+            } if open(view.session) => {
+                images::tint(&mut raster.bytes, self.chrome.page_colour);
                 if let Ok(image) = PageImage::new(raster) {
                     for old in self.pages.insert(view, image) {
                         old.release(window);

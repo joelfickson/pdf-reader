@@ -1,9 +1,4 @@
-use super::{
-    Reader,
-    actions::*,
-    chrome::{Layout, Panel},
-    view,
-};
+use super::{Reader, actions::*, chrome::Panel, view};
 use crate::preferences::{DefaultZoom, Preferences, Session, bookmark_title, fit_page_zoom};
 use crate::ui::kit::Status;
 use gpui::{Context, Window};
@@ -18,7 +13,7 @@ impl Reader {
         cx: &mut Context<Self>,
     ) {
         change(&mut self.preferences);
-        self.preferences.continuous = self.chrome.layout == Layout::Continuous;
+        self.preferences.layout = self.chrome.layout;
         self.preferences.theme = self.chrome.theme_choice;
         if let Err(error) = self.preferences.save(self.data.as_deref()) {
             self.show_toast(
@@ -39,7 +34,7 @@ impl Reader {
         }
     }
 
-    fn page_points(&self) -> Option<(f32, f32)> {
+    pub(super) fn page_points(&self) -> Option<(f32, f32)> {
         let tab = self.tabs.current()?;
         if let Some(size) = tab.sizes.as_ref().and_then(|sizes| sizes.get(tab.page)) {
             return Some(*size);

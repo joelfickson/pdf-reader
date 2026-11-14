@@ -1,7 +1,7 @@
 use super::{
     Reader,
     chrome::{Layout, Mode},
-    column::{COLUMN_TOP, Column},
+    column::{COLUMN_TOP, Column, Spread},
     view,
 };
 use crate::pdf::{Job, ViewKey};
@@ -31,7 +31,7 @@ impl Reader {
     }
 
     pub(super) fn continuous(&self) -> bool {
-        self.chrome.layout == Layout::Continuous
+        self.chrome.layout != Layout::Single
             && self.chrome.mode != Mode::Organize
             && self
                 .tabs
@@ -44,11 +44,21 @@ impl Reader {
             return None;
         }
         let width = self.available_width(window).round() as u32;
+        let spread = match self.chrome.layout {
+            Layout::TwoPages => Spread::Pairs,
+            Layout::CoverFirst => Spread::CoverFirst,
+            Layout::Single | Layout::Continuous => Spread::Single,
+        };
         let tab = self.tabs.current_mut()?;
-        let key = (width.max(1), tab.zoom);
+        let key = (width.max(1), tab.zoom, spread);
         if tab.column.as_ref().is_none_or(|column| column.key != key) {
             let replaced = tab.column.is_some();
-            tab.column = Some(Rc::new(Column::new(tab.sizes.as_ref()?, width, tab.zoom)));
+            tab.column = Some(Rc::new(Column::new(
+                tab.sizes.as_ref()?,
+                width,
+                tab.zoom,
+                spread,
+            )));
             if replaced {
                 tab.pending_scroll = true;
             }
